@@ -7,9 +7,9 @@
   "scripts": {
     "dev": "concurrently -k -n api,web \"tsx watch server/src/index.ts\" \"vite --config web/vite.config.ts\"",
     "build": "vite build --config web/vite.config.ts",
-    "start": "NODE_ENV=production tsx server/src/index.ts",
+    "start": "cross-env NODE_ENV=production tsx server/src/index.ts",
     "seed": "tsx server/src/seed.ts",
-    "test": "node --import tsx --test --test-concurrency=1 server/test/*.test.ts",
+    "test": "node --import tsx --test --test-concurrency=1 \"server/test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
     "restore": "tsx server/src/restore.ts"
   },
@@ -39,6 +39,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "concurrently": "^10.0.6",
+    "cross-env": "^7.0.3",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.61.0",
     "react": "^19.3.1",
@@ -47,5 +48,8 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.5"
+  },
+  "engines": {
+    "node": ">=22.13"
   }
 }

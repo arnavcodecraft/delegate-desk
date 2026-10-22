@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'node:path';
@@ -67,7 +68,7 @@ export function boot(dbFile?: string) {
   asSystem(() => { seedChart(); seedTemplates(); });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   boot();
   if (config.jobsEnabled) startJobs();
   createApp().listen(config.port, () => console.log(`DelegateDesk running at ${config.baseUrl}`));

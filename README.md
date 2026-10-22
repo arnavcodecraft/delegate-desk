@@ -4,6 +4,8 @@ Delegate registration, instant committee/portfolio allotment, payments (Razorpay
 
 ## Quick start
 
+Needs Node.js 22.13 or newer (Windows, macOS or Linux).
+
 ```bash
 npm install
 npm run seed -- --demo     # demo organisation, event BGYS27, 45 sample delegates, payments, expenses
