@@ -44,7 +44,6 @@ export function StaffGate({ children }: { children: React.ReactNode }) {
 const NAV: { group: string; items: { to: string; label: string; perms: string[]; icon: LucideIcon }[] }[] = [
   { group: 'Overview', items: [
     { to: '/app/overview', label: 'Dashboard', perms: ['event.config', 'reg.read', 'dashboard.read'], icon: LayoutDashboard },
-    { to: '/app/dashboard', label: 'Break-even & money', perms: ['dashboard.read'], icon: TrendingUp },
   ] },
   { group: 'Manage', items: [
     { to: '/app/applications', label: 'Applications', perms: ['reg.read'], icon: Inbox },
@@ -59,6 +58,7 @@ const NAV: { group: string; items: { to: string; label: string; perms: string[];
     { to: '/app/messages', label: 'Communications', perms: ['messages.read', 'templates.manage'], icon: Mail },
   ] },
   { group: 'Money', items: [
+    { to: '/app/dashboard', label: 'Finance overview', perms: ['dashboard.read'], icon: TrendingUp },
     { to: '/app/financials', label: 'Financials', perms: ['event.config', 'settings.finance', 'payments.read'], icon: Banknote },
     { to: '/app/payments/review', label: 'Payment proofs', perms: ['payments.read'], icon: ReceiptText },
     { to: '/app/payments', label: 'Payments & refunds', perms: ['payments.read', 'refund.read'], icon: CreditCard },
@@ -228,7 +228,7 @@ export function Account() {
 
 export function Home() {
   const { can, me } = useStaff();
-  if (can('event.config') || can('reg.read')) return <Navigate to="/app/overview" replace />;
+  if (can('event.config') || can('reg.read') || can('dashboard.read')) return <Navigate to="/app/overview" replace />;
   if (can('dashboard.read')) return <Navigate to="/app/dashboard" replace />;
   if (can('reg.read')) return <Navigate to="/app/registrations" replace />;
   if (can('lists.read')) return <Navigate to="/app/lists" replace />;

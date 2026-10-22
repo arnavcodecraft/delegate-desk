@@ -13,6 +13,7 @@ import { balanceOf } from './fees.ts';
 import { consumeOtpToken } from './otp.ts';
 import { checkinCode } from './badges.ts';
 import { confirmFree, normChannel } from './conference.ts';
+import { assignApplicant } from './applications.ts';
 
 export const CLASS_OPTIONS = ['8', '9', '10', '11', '12', 'UG 1st year', 'UG 2nd year', 'UG 3rd year', 'UG 4th year', 'PG', 'Graduate', 'Faculty / Advisor'];
 
@@ -333,6 +334,11 @@ export function decideSwap(swapId: string, approve: boolean, roles: string[], se
 }
 
 export function changeAllocation(regId: string, seatId: string, reason: string, roles: string[]) {
+  // An application waiting for review is accepted by giving it a seat: one path for every screen.
+  if (one('SELECT allot_status FROM registration WHERE id = ?', regId)?.allot_status === 'applied') {
+    const seat = assignApplicant(regId, seatId, roles)!;
+    return { committee: seat.committee, portfolio: seat.portfolio, balance: balanceOf(one('SELECT * FROM registration WHERE id = ?', regId)!) };
+  }
   return tx(() => {
     const before = one('SELECT * FROM registration WHERE id = ?', regId)!;
     const r = moveToSeat(regId, seatId, reason, roles);
@@ -361,6 +367,7 @@ export function acceptApplication(regId: string) {
   const reg = one('SELECT * FROM registration WHERE id = ?', regId);
   if (!reg) throw notFound('Registration');
   if (reg.accepted) throw conflict('Already accepted');
+  if (reg.allot_status === 'applied') throw conflict('Accept this application by assigning a seat (Applications)');
   update('registration', regId, { accepted: 1, hold_expires_at: addHours(now(), eventSettings(reg.event_id).holdHours), updated_at: now() });
   audit('registration.accept', 'registration', regId);
   enqueue('payment_reminder', { to: reg.email, registrationId: regId, vars: regVars({ ...reg, accepted: 1 }) });

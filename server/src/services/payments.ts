@@ -2,6 +2,7 @@ import { all, one, run, insert, tx, update, nextCounter, scalar } from '../db.ts
 import { audit } from '../audit.ts';
 import { config } from '../config.ts';
 import { currentWorkspace } from '../platform.ts';
+import { onlyApprover } from '../auth.ts';
 import { eventSettings, getEvent, getOrg, orgSettings } from '../settings.ts';
 import { bad, conflict, ctx, forbidden, fyOf, inr, istDate, json, now, uid, notFound, addHours } from '../util.ts';
 import { post, clearingAccount } from './ledger.ts';
@@ -311,10 +312,12 @@ export async function approveRefund(refundId: string) {
   if (!r) throw notFound('Refund');
   if (r.status !== 'requested') throw conflict(`Refund is already ${r.status}`);
   const me = ctx().userId;
-  if (r.requested_by && r.requested_by === me) throw forbidden('You requested this refund, so someone else must approve it');
+  const alone = onlyApprover('refund.approve', me);
+  if (r.requested_by && r.requested_by === me && !alone) throw forbidden('You requested this refund, so someone else must approve it');
+  if (alone && r.requested_by === me) audit('refund.self_approved', 'refund', refundId, undefined, { reason: 'only approver in this organisation' });
   const reg = one('SELECT * FROM registration WHERE id = ?', r.registration_id)!;
   const s = eventSettings(reg.event_id);
-  if (r.amount_paise > s.largeRefundPaise) {
+  if (r.amount_paise > s.largeRefundPaise && !alone) {
     if (!r.approved_by) {
       update('refund', refundId, { approved_by: me });
       audit('refund.first_approval', 'refund', refundId, undefined, { by: me });

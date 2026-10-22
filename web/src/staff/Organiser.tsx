@@ -9,6 +9,7 @@ import { api } from '../api';
 import { inr, dt, date, toPaise, label } from '../format';
 import { Alert, Btn, DataTable, Field, Loading, Modal, Tabs, useAsync, useToast, usePrompt, EmptyState, LineChart, Switch, Segmented } from '../ui';
 import { PageHead, useStaff } from './Shell';
+import { FeeTiers, PaymentRules } from './Settings';
 import { PLACES } from '../data/countries';
 import { shrinkImage, dataUrlToFile, BANNER_PRESETS, bannerStyle } from '../platform/art';
 
@@ -60,7 +61,7 @@ export function Overview() {
           <div className="row between"><h3 style={{ margin: 0 }}>Set-up priorities</h3><span className="badge info">{d.done}/{d.priorities.length}</span></div>
           <p className="small muted" style={{ margin: '.25rem 0 .75rem' }}>Ordered around what you told us you need.</p>
           <div className="stack tight">
-            {d.priorities.map((p: any) => {
+            {d.priorities.filter((p: any) => p.key !== 'share').map((p: any) => {
               const Icon = ICON[p.key] ?? Check;
               const body = <><span className="avatar" style={{ borderRadius: 10, background: p.done ? 'var(--good-soft)' : 'var(--surface-2)', color: p.done ? 'var(--good)' : 'var(--text-2)' }}>{p.done ? <Check className="icon" /> : <Icon className="icon" />}</span>
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600, textDecoration: p.done ? 'line-through' : 'none', opacity: p.done ? 0.7 : 1 }}>{p.title}</div><div className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.detail}</div></div>{p.to && <ChevronRight className="icon faint" />}</>;
@@ -68,7 +69,7 @@ export function Overview() {
                 : <div key={p.key} className="row" style={{ gap: '.7rem', padding: '.55rem .5rem', borderRadius: 10, flexWrap: 'nowrap', border: '1px solid var(--border)' }}>{body}</div>;
             })}
           </div>
-          <div style={{ marginTop: '.9rem' }}><div className="small" style={{ fontWeight: 600, marginBottom: '.35rem' }}>Share your conference link</div><CopyBox value={d.links.page} />
+          <div style={{ marginTop: '.9rem' }}><div className="small row" style={{ fontWeight: 600, marginBottom: '.35rem', gap: '.35rem' }}>{d.priorities.find((p: any) => p.key === 'share')?.done && <Check className="icon" style={{ color: 'var(--good)' }} />}Share your conference link</div><CopyBox value={d.links.page} />
             <div className="small" style={{ fontWeight: 600, margin: '.6rem 0 .35rem' }}>Delegate registration form</div><CopyBox value={d.links.register} />
             {qr && <div className="row" style={{ marginTop: '.6rem' }}><img src={qr} alt="QR code for the conference page" style={{ width: 92, height: 92, borderRadius: 8, background: '#fff', padding: 4 }} /><div className="small muted">Print this on posters. Add <span className="mono">?src=instagram</span> (or whatsapp, school…) to links to see where applicants come from.<br /><a href={qr} download={`${d.event.code}-qr.png`}>Download QR</a></div></div>}
           </div>
@@ -181,7 +182,8 @@ export function Financials() {
   const { eventId, can } = useStaff();
   const fin = useAsync<any>(() => api.get(`/api/admin/events/${eventId}/financials`), [eventId]);
   const [wizard, setWizard] = useState(false);
-  const [sp] = useSearchParams();
+  const [sp, setSp] = useSearchParams();
+  const tab = (sp.get('tab') ?? 'pay') as 'pay' | 'tiers' | 'rules';
   useEffect(() => { if (sp.get('setup') === '1') setWizard(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   if (!fin.data) return <Loading />;
   const d = fin.data; const m = d.methods;
@@ -189,15 +191,18 @@ export function Financials() {
   const methods = [m.link.enabled && 'Payment link', m.qr.enabled && 'QR code / UPI', m.bank.enabled && 'Bank transfer', m.in_person.enabled && 'In person'].filter(Boolean);
   return (
     <div className="stack">
-      <PageHead title="Financials" subtitle="Fees and how delegates pay you. Money goes straight to your own account; you confirm each payment.">{can('event.config', 'settings.finance') && <Btn kind="primary" icon={Wand2} onClick={() => setWizard(true)}>{d.free || methods.length ? 'Change set-up' : 'Set up payments'}</Btn>}</PageHead>
-      <div className="grid g2">
+      <PageHead title="Financials" subtitle="Fees and how delegates pay you. Money goes straight to your own account; you confirm each payment.">{can('event.config', 'settings.finance') && tab === 'pay' && <Btn kind="primary" icon={Wand2} onClick={() => setWizard(true)}>{d.free || methods.length ? 'Change set-up' : 'Set up payments'}</Btn>}</PageHead>
+      <Tabs value={tab} onChange={(t) => setSp({ tab: t })} tabs={[{ key: 'pay', label: 'How delegates pay' }, ...(can('event.config') && !d.free ? [{ key: 'tiers' as const, label: 'Fee tiers & coupons' }, { key: 'rules' as const, label: 'Payment rules' }] : [])]} />
+      {tab === 'tiers' && <FeeTiers />}
+      {tab === 'rules' && <PaymentRules ownGateways={d.ownGateways} />}
+      {tab === 'pay' && <div className="grid g2">
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Fees</h3>
           {d.free ? <p><span className="badge good">Free</span> Delegates pay nothing; seats are confirmed as soon as they are allotted.</p> : (
             <DataTable rows={[...d.tiers].filter((t: any) => t.category !== 'international').sort((a: any, b: any) => ['school', 'college', 'advisor'].indexOf(a.category) - ['school', 'college', 'advisor'].indexOf(b.category) || a.sort - b.sort)} empty="No fees set" columns={[{ key: 'category', label: 'Who', render: (t: any) => ({ school: 'School delegates', college: 'University delegates', international: 'International', advisor: 'Faculty advisors' } as any)[t.category] ?? t.category },
               { key: 'name', label: 'Fee' }, { key: 'amount_paise', label: d.gstEnabled ? 'Amount (before GST)' : 'Amount', num: true, render: (t: any) => inr(t.amount_paise) }, { key: 'ends_at', label: 'Until', render: (t: any) => (t.ends_at ? dt(t.ends_at) : '—') }]} />
           )}
-          {!d.free && <p className="small muted">GST: {d.gstEnabled ? `${d.gstRateBp / 100}% added on top` : 'not charged'}. Detailed tiers and coupons: <Link to="/app/settings">Settings → Fees &amp; coupons</Link>.</p>}
+          {!d.free && <p className="small muted">GST: {d.gstEnabled ? `${d.gstRateBp / 100}% added on top` : 'not charged'}. Quotas, extra tiers and coupons: <Link to="/app/financials?tab=tiers">Fee tiers &amp; coupons</Link>.</p>}
           {!d.free && !tier('school').length && <Alert tone="warn">No delegate fee is active.</Alert>}
         </div>
         <div className="card">
@@ -212,8 +217,8 @@ export function Financials() {
             </div>
           )}
         </div>
-      </div>
-      {!d.free && m.in_person.enabled && can('payments.approve') && <CashPayment />}
+      </div>}
+      {tab === 'pay' && !d.free && m.in_person.enabled && can('payments.approve') && <CashPayment />}
       {wizard && <PaymentWizard data={d} onClose={() => setWizard(false)} onDone={() => { setWizard(false); fin.reload(); }} />}
     </div>
   );

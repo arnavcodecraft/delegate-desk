@@ -71,6 +71,18 @@ export function can(roles: string[], perm: string) {
   return (PERMS[perm] ?? []).some((r) => roles.includes(r));
 }
 
+/**
+ * Maker-checker rules ("someone else must approve") need a someone else. An organiser running a conference
+ * alone is the only approver, so they may approve their own items; callers record that in the audit trail.
+ */
+export function onlyApprover(perm: string, userId: string | null | undefined) {
+  const roles = PERMS[perm] ?? [];
+  if (!roles.length) return false;
+  const others = one(`SELECT COUNT(DISTINCT u.id) AS n FROM user u JOIN user_role r ON r.user_id = u.id
+    WHERE u.active = 1 AND u.id <> ? AND r.role IN (${roles.map(() => '?').join(',')})`, userId ?? '', ...roles);
+  return (others?.n ?? 0) === 0;
+}
+
 // ---------- passwords ----------
 export function hashPassword(pw: string) {
   if ((pw ?? '').length < 10) throw bad('Passwords must be at least 10 characters');

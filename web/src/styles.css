@@ -1,21 +1,30 @@
 /* DelegateDesk design system: quiet surfaces, one accent, generous spacing, tabular numbers. */
 :root {
   color-scheme: light;
-  --bg: #f7f7f5;
+  --bg: #f6f3ec;
   --surface: #ffffff;
-  --surface-2: #f4f4f2;
-  --surface-3: #ebebe7;
-  --border: #e6e5e1;
-  --border-strong: #d4d3cd;
-  --text: #18181b;
-  --text-2: #57575e;
-  --text-3: #8a8a91;
-  --brand: #1e3a5f;
-  --brand-hover: #264a78;
-  --brand-ink: #ffffff;
-  --accent: #2563c9;
-  --accent-soft: #eaf1fc;
-  --focus: #2563c9;
+  --surface-2: #f5f1e8;
+  --surface-3: #ece6d8;
+  --border: #e7e0d0;
+  --border-strong: #d4c9b2;
+  --text: #0d1b36;
+  --text-2: #4b5670;
+  --text-3: #8a90a0;
+  --brand: #0b1f44;
+  --brand-hover: #17366f;
+  --brand-ink: #f7f1e1;
+  --brand-soft: #e4e9f3;
+  --gold: #b08a35;
+  --gold-2: #d6b25e;
+  --accent: #1d4e9e;
+  --accent-soft: #e8eef8;
+  --focus: #1d4e9e;
+  --side-bg: #0b1f44;
+  --side-text: #c9d1e3;
+  --side-text-strong: #f7f1e1;
+  --side-hover: rgb(255 255 255 / .07);
+  --side-active: rgb(214 178 94 / .16);
+  --display: 'Playfair Display Variable', 'Playfair Display', Georgia, serif;
   --good: #137333;
   --good-soft: #e6f4ea;
   --warn: #8a5300;
@@ -43,9 +52,9 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #111113; --surface: #19191c; --surface-2: #202024; --surface-3: #2a2a2f; --border: #2c2c31; --border-strong: #3d3d44;
-    --text: #f2f2f3; --text-2: #b4b4bb; --text-3: #85858d; --brand: #8fb8f0; --brand-hover: #a8c8f4; --brand-ink: #0c1626;
-    --accent: #6aa4ee; --accent-soft: #1a2638; --focus: #6aa4ee;
+    --bg: #070d1b; --surface: #0f182d; --surface-2: #142039; --surface-3: #1b2846; --border: #22304f; --border-strong: #33425f;
+    --text: #f2ede0; --text-2: #b7bdcc; --text-3: #8790a5; --brand: #d6b25e; --brand-hover: #e2c47a; --brand-ink: #0b1220; --brand-soft: #1c2742;
+    --accent: #8fb3ec; --accent-soft: #17233f; --focus: #8fb3ec; --side-bg: #050a16; --side-text: #aab3c7; --side-text-strong: #f2ede0;
     --good: #6dd58c; --good-soft: #15291c; --warn: #f2c35b; --warn-soft: #2e2512; --bad: #f28b82; --bad-soft: #351b1a; --info-soft: #1a2638;
     --chart-surface: #19191c; --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --grid: #2a2a2f;
     --shadow-sm: none; --shadow: 0 1px 2px rgb(0 0 0 / 0.3); --shadow-lg: 0 12px 40px rgb(0 0 0 / 0.5);
@@ -53,9 +62,9 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #111113; --surface: #19191c; --surface-2: #202024; --surface-3: #2a2a2f; --border: #2c2c31; --border-strong: #3d3d44;
-  --text: #f2f2f3; --text-2: #b4b4bb; --text-3: #85858d; --brand: #8fb8f0; --brand-hover: #a8c8f4; --brand-ink: #0c1626;
-  --accent: #6aa4ee; --accent-soft: #1a2638; --focus: #6aa4ee;
+  --bg: #070d1b; --surface: #0f182d; --surface-2: #142039; --surface-3: #1b2846; --border: #22304f; --border-strong: #33425f;
+  --text: #f2ede0; --text-2: #b7bdcc; --text-3: #8790a5; --brand: #d6b25e; --brand-hover: #e2c47a; --brand-ink: #0b1220; --brand-soft: #1c2742;
+  --accent: #8fb3ec; --accent-soft: #17233f; --focus: #8fb3ec; --side-bg: #050a16; --side-text: #aab3c7; --side-text-strong: #f2ede0;
   --good: #6dd58c; --good-soft: #15291c; --warn: #f2c35b; --warn-soft: #2e2512; --bad: #f28b82; --bad-soft: #351b1a; --info-soft: #1a2638;
   --chart-surface: #19191c; --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --grid: #2a2a2f;
   --shadow-sm: none; --shadow: 0 1px 2px rgb(0 0 0 / 0.3); --shadow-lg: 0 12px 40px rgb(0 0 0 / 0.5);
@@ -330,3 +339,33 @@ table.t tfoot td { font-weight: 650; background: var(--surface-2); border-top: 1
 }
 .public-logo { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: #fff; border: 3px solid rgb(255 255 255 / .55); margin-bottom: .6rem; display: block; }
 .public-head .inner { position: relative; z-index: 1; }
+
+/* ---------- summit theme: navy sidebar, gold accents, serif display titles ---------- */
+.side { background: var(--side-bg); border-right: 0; color: var(--side-text); background-image: radial-gradient(140% 60% at 0% 0%, rgb(214 178 94 / .10), transparent 60%); }
+.side .brand { color: var(--side-text-strong); font-family: var(--display); font-size: 19px; font-weight: 700; letter-spacing: 0; }
+.side .brand .logo { background: linear-gradient(160deg, #e2c47a, #b08a35); color: #0b1f44; font-family: var(--font); }
+.side .group { color: rgb(214 178 94 / .85); }
+.side a.nav { color: var(--side-text); }
+.side a.nav .icon { color: rgb(201 209 227 / .7); }
+.side a.nav:hover { background: var(--side-hover); color: var(--side-text-strong); }
+.side a.nav.active { background: var(--side-active); color: var(--side-text-strong); box-shadow: inset 3px 0 0 #d6b25e; }
+.side a.nav.active .icon { color: #d6b25e; }
+.side .event-switch select { background: rgb(255 255 255 / .07); border-color: rgb(255 255 255 / .14); color: var(--side-text-strong); }
+.side .event-switch select option { color: #0d1b36; }
+.side .user-box { border-top-color: rgb(255 255 255 / .12); }
+.side .user-box .who div:first-child { color: var(--side-text-strong); }
+.side .user-box .faint { color: rgb(201 209 227 / .65); }
+.side .user-box .avatar { background: rgb(214 178 94 / .2); color: #e2c47a; }
+.side .btn.ghost { color: var(--side-text); }
+.side .btn.ghost:hover { background: var(--side-hover); color: var(--side-text-strong); }
+.side .btn.primary { background: #d6b25e; color: #0b1f44; border-color: #d6b25e; }
+.topbar h1 { font-family: var(--display); font-weight: 700; font-size: 1.85rem; letter-spacing: -0.005em; }
+.card h3, .card-head h3 { letter-spacing: -0.01em; }
+.btn.primary { box-shadow: inset 0 -2px 0 rgb(214 178 94 / .55); }
+.mobile-bar strong { font-family: var(--display); font-size: 17px; }
+
+/* Delegate pages (registration form, delegate page): the same navy and gold as the public site. */
+.public-head { background: #0b1f44; color: #f7f1e1; background-image: radial-gradient(120% 140% at 100% 0%, rgb(214 178 94 / .18), transparent 55%), radial-gradient(80% 120% at 0% 100%, rgb(42 79 143 / .5), transparent 60%); box-shadow: inset 0 -3px 0 #d6b25e; }
+.public-head .eyebrow { color: #d6b25e; opacity: 1; font-weight: 700; letter-spacing: .12em; }
+.public-head h1 { font-family: var(--display); font-size: 2rem; font-weight: 700; letter-spacing: 0; }
+.public { background: var(--bg); min-height: 100vh; }

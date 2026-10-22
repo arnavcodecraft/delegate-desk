@@ -121,7 +121,7 @@ export default function Portal() {
 
         {r.payment_status === 'submitted' && <Alert tone="info"><strong>Your payment proof is under review.</strong> The finance team checks it against the bank statement, usually within a day. Your seat stays held meanwhile.</Alert>}
 
-        <div className="card">
+        {r.allot_status !== 'applied' && !conf?.free && <div className="card">
           <h3>Payment summary</h3>
           <div className="fee-box">
             <div className="line"><span>Registration fee</span><span>{inr(r.base_paise)}</span></div>
@@ -139,7 +139,7 @@ export default function Portal() {
           </div>
           {evidence.length > 0 && <div style={{ marginTop: '.75rem' }}>{evidence.map((e: any) => <div key={e.id} className="small row"><Status value={e.status} /> UTR {e.utr} · {inr(e.amount_paise)} · {dt(e.submitted_at)}{e.reason && e.status !== 'submitted' ? <span className="muted"> — {e.reason}</span> : null}</div>)}</div>}
           {refunds.length > 0 && <div style={{ marginTop: '.5rem' }}>{refunds.map((x: any) => <div key={x.id} className="small row"><Status value={x.status} /> Refund {inr(x.amount_paise)} · {x.reason}</div>)}</div>}
-        </div>
+        </div>}
 
         <ProfileCard token={token} r={r} paid={paid} onSaved={v.reload} />
         <DetailsCard token={token} r={r} onSaved={v.reload} />

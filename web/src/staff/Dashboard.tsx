@@ -21,7 +21,7 @@ export default function Dashboard() {
   const ahead = be.resultAtCurrentPaise >= 0;
   return (
     <div className="stack">
-      <PageHead title={x.event.name} subtitle="Are we ahead of break-even today, and what would change that? Money collected, money earned and cash in the bank are shown separately.">
+      <PageHead title="Finance overview" subtitle="Are we ahead of break-even today, and what would change that? Money collected, money earned and cash in the bank are shown separately.">
         {ai.data?.enabled && <Btn icon={Sparkles} onClick={async () => { setNote({ text: '' }); try { setNote(await api.post(`/api/finance/events/${eventId}/ai/summary`)); } catch (e: any) { setNote({ text: '', error: e.message }); } }}>Write a status note</Btn>}
         <Btn icon={RefreshCw} onClick={d.reload}>Refresh</Btn>
       </PageHead>

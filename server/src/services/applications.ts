@@ -197,6 +197,7 @@ export function decideRoleApplication(id: string, d: { status: string; score?: n
   if (!['submitted', 'shortlisted', 'accepted', 'rejected'].includes(d.status)) throw bad('Unknown status');
   if (a.status === 'withdrawn') throw conflict('The applicant withdrew this application');
   if (d.score != null && (!Number.isInteger(d.score) || d.score < 1 || d.score > 10)) throw bad('Scores run from 1 to 10');
+  d = { ...d, committee_id: d.committee_id || null };   // an empty picker means "not chosen"
   if (d.committee_id && !one('SELECT 1 FROM committee WHERE id = ? AND event_id = ?', d.committee_id, a.event_id)) throw bad('Pick a committee from this conference');
   const ev = getEvent(a.event_id);
   const position = a.position_id ? one('SELECT * FROM position WHERE id = ?', a.position_id) : null;

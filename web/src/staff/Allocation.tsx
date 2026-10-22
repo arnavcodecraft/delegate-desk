@@ -11,7 +11,6 @@ export default function Allocation() {
   const inv = useAsync<any[]>(() => api.get(`/api/admin/events/${eventId}/inventory`), [eventId]);
   const [tab, setTab] = useState<'inventory' | 'simulate' | 'swaps' | 'board'>('inventory');
   const [open, setOpen] = useState<string | null>(null);
-  const [editing, setEditing] = useState<any>(null);
   const [picking, setPicking] = useState(false);
   const [editor, setEditor] = useState<CommitteeDraft | null>(null);
   const toast = useToast();
@@ -36,7 +35,6 @@ export default function Allocation() {
               </div>
               <span className="small num">{c.confirmed + c.held}/{c.seats}</span>
               {can('alloc.config') && <button className="btn sm" onClick={(e) => { e.stopPropagation(); openEditor(c.id); }}>Edit</button>}
-              {can('alloc.config') && <button className="btn sm ghost" title="Description and study guide" onClick={(e) => { e.stopPropagation(); setEditing(c); }}>Details</button>}
               {can('alloc.config') && c.held + c.confirmed === 0 && <button className="btn sm ghost" aria-label={`Delete ${c.short}`} onClick={async (e) => { e.stopPropagation(); if (await ask({ title: `Delete ${c.name}?`, message: 'Its portfolios and seats are removed. This cannot be undone.', danger: true, confirm: 'Delete' })) { try { await api.del(`/api/admin/committees/${c.id}`); inv.reload(); } catch (x: any) { toast(x.message, 'bad'); } } }}><Trash2 className="icon" /></button>}
             </div>
             {open === c.id && <div>
@@ -48,7 +46,7 @@ export default function Allocation() {
                   {p.held + p.confirmed === 0 && <button className="btn sm danger" onClick={async () => { await api.del(`/api/admin/portfolios/${p.id}`); inv.reload(); }}>Delete</button>}
                 </span> }] : []),
               ]} />
-              {can('alloc.config') && <AddPortfolios committee={c} onDone={inv.reload} />}
+              {can('alloc.config') && <p className="small muted" style={{ padding: '.6rem 1rem', margin: 0, borderTop: '1px solid var(--border)' }}>Add or remove portfolios with <b>Edit</b>; set each portfolio's tier, premium and seats here.</p>}
             </div>}
           </div>
         ))}
@@ -56,7 +54,6 @@ export default function Allocation() {
       {tab === 'simulate' && <Simulator committees={inv.data ?? []} />}
       {tab === 'swaps' && <Swaps />}
       {tab === 'board' && <Board committees={inv.data ?? []} />}
-      {editing && <CommitteeEdit c={editing} onClose={() => setEditing(null)} onDone={() => { setEditing(null); inv.reload(); }} />}
       <div className="pf pf-portal">
         {picking && <TypePicker onClose={() => setPicking(false)} onPick={(t) => { setPicking(false); setEditor(blankCommittee(t)); }} />}
         {editor && <CommitteeEditor initial={editor} onCancel={() => setEditor(null)} onSave={async (c) => {
@@ -66,38 +63,6 @@ export default function Allocation() {
         }} />}
       </div>
     </div>
-  );
-}
-
-function AddPortfolios({ committee, onDone }: any) {
-  const [text, setText] = useState('');
-  const toast = useToast();
-  return (
-    <div className="stack" style={{ padding: '1rem', borderTop: '1px solid var(--border)' }}>
-      <Field label="Add portfolios" hint="one per line: name, tier (high/standard/low), premium ₹ — e.g. “France, high, 300”"><textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={'Argentina, standard\nChina, high, 300'} /></Field>
-      <div><Btn onClick={async () => {
-        const portfolios = text.split('\n').map((l) => l.split(',').map((x) => x.trim())).filter((p) => p[0]).map(([name, tier, premium]) => ({ name, tier: tier || 'standard', premium_paise: premium ? toPaise(premium) : 0, seats: committee.kind === 'double' ? 2 : 1 }));
-        if (!portfolios.length) return;
-        await api.post(`/api/admin/committees/${committee.id}/portfolios`, { portfolios }); setText(''); toast(`${portfolios.length} added`, 'ok'); onDone();
-      }}>Add</Btn></div>
-    </div>
-  );
-}
-
-function CommitteeEdit({ c, onClose, onDone }: any) {
-  const { eventId } = useStaff();
-  const [f, setF] = useState({ ...c });
-  return (
-    <Modal title={c.id ? `Edit ${c.name}` : 'New committee'} onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><Btn kind="primary" onClick={async () => { await api.post(`/api/admin/events/${eventId}/committees`, f); onDone(); }}>Save</Btn></>}>
-      <div className="grid g2">
-        <Field label="Name"><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-        <Field label="Short code"><input value={f.short} onChange={(e) => setF({ ...f, short: e.target.value.toUpperCase() })} /></Field>
-        <Field label="Type"><select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}><option value="single">Single delegation</option><option value="double">Double delegation (2 per portfolio)</option></select></Field>
-        <Field label="Display order"><input type="number" value={f.sort} onChange={(e) => setF({ ...f, sort: Number(e.target.value) })} /></Field>
-        <Field label="Background guide URL"><input value={f.guide_url ?? ''} onChange={(e) => setF({ ...f, guide_url: e.target.value })} /></Field>
-        <Field label="Description"><input value={f.description ?? ''} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field>
-      </div>
-    </Modal>
   );
 }
 

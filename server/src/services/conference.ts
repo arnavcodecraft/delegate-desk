@@ -282,8 +282,9 @@ export function savePaymentMethods(eventId: string, m: Partial<EventSettings['pa
   if (next.qr.enabled && !next.qr.image && !next.qr.upiId) throw bad('Upload your payment QR code or enter a UPI ID');
   if (next.bank.enabled && (!next.bank.accountName.trim() || !next.bank.accountNumber.trim())) throw bad('Enter the account name and account number');
   for (const k of ['instructions'] as const) for (const x of [next.link, next.qr, next.bank, next.in_person]) if ((x as any)[k]?.length > 500) throw bad('Keep instructions under 500 characters');
+  // Proof uploads are accepted exactly when a method that needs one (link, QR, bank) is switched on.
   const anyProof = next.link.enabled || next.qr.enabled || next.bank.enabled;
-  saveEventSettings(eventId, { paymentMethods: next, screenshotEnabled: anyProof || eventSettings(eventId).screenshotEnabled });
+  saveEventSettings(eventId, { paymentMethods: next, screenshotEnabled: anyProof });
   return next;
 }
 
@@ -422,4 +423,22 @@ export function launchConference(d: Draft) {
 /** Refresh every conference's Explore entry in this workspace (run by the background jobs). */
 export function syncAllListings() {
   for (const e of all('SELECT id FROM event')) { try { syncListing(e.id); } catch (err) { console.warn('[listing]', (err as Error).message); } }
+}
+
+/**
+ * Older events kept UPI and bank details on the organisation. Payment methods now live on each conference
+ * (Financials), so copy them across once for any event that has none set up yet.
+ */
+export function migrateLegacyPaymentDetails() {
+  const org = one('SELECT * FROM organization LIMIT 1');
+  if (!org || (!org.upi_id && !org.bank_account)) return;
+  for (const e of all('SELECT id FROM event')) {
+    const m = eventSettings(e.id).paymentMethods;
+    if (Object.values(m).some((x: any) => x.enabled)) continue;
+    saveEventSettings(e.id, { paymentMethods: {
+      ...m,
+      qr: { ...m.qr, enabled: !!org.upi_id, upiId: org.upi_id ?? '' },
+      bank: { ...m.bank, enabled: !!org.bank_account, accountName: org.legal_name, accountNumber: org.bank_account ?? '', ifsc: org.bank_ifsc ?? '', bankName: org.bank_name ?? '' },
+    } });
+  }
 }

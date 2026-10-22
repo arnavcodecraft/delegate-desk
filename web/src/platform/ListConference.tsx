@@ -107,8 +107,8 @@ export default function ListConference() {
           {step === 'pay' && (
             <Frame title="How do delegates pay?" sub="You can change this later in Financials" back={back}>
               <div className="pf-choices">
-                <Choice on={d.paid === false} art={null} glyph={<span className="glyph" style={{ background: 'var(--pf-gold-soft)', color: 'var(--pf-green)' }}><Gift className="icon" /></span>} title="It's free" text="No delegate fee at all" onClick={() => set({ paid: false })} />
-                <Choice on={d.paid === true} art={null} glyph={<span className="glyph" style={{ background: 'var(--pf-green-soft)', color: 'var(--pf-green)' }}><Banknote className="icon" /></span>} title="Delegates pay a fee" text="Set up how you get paid in Financials" onClick={() => set({ paid: true })} />
+                <Choice on={d.paid === false} art={null} glyph={<span className="glyph" style={{ background: 'var(--pf-gold-soft)', color: 'var(--pf-brand)' }}><Gift className="icon" /></span>} title="It's free" text="No delegate fee at all" onClick={() => set({ paid: false })} />
+                <Choice on={d.paid === true} art={null} glyph={<span className="glyph" style={{ background: 'var(--pf-brand-soft)', color: 'var(--pf-brand)' }}><Banknote className="icon" /></span>} title="Delegates pay a fee" text="Set up how you get paid in Financials" onClick={() => set({ paid: true })} />
               </div>
               {d.paid && (
                 <div className="pf-field" style={{ marginTop: 22 }}>
@@ -281,7 +281,7 @@ function StepCommittees({ d, set, next, back }: { d: Draft; set: (p: Partial<Dra
         </div>
       )}
       <button className="pf-dropzone" style={{ width: '100%', font: 'inherit', color: 'inherit' }} onClick={() => setPicking(true)}>
-        <div><div className="plus"><Plus className="icon" /></div><b style={{ color: 'var(--pf-green)' }}>{d.committees.length ? 'Add another committee' : 'Add your first committee'}</b>
+        <div><div className="plus"><Plus className="icon" /></div><b style={{ color: 'var(--pf-brand)' }}>{d.committees.length ? 'Add another committee' : 'Add your first committee'}</b>
           {d.committees.length > 0 && <div className="pf-small pf-muted" style={{ marginTop: 4 }}>{seats} seats so far{d.expected ? ` for ${d.expected} expected delegates` : ''}</div>}</div>
       </button>
       <p className="pf-small pf-muted pf-center" style={{ marginTop: 14 }}>Chairs come later from the Job Board and Applications. Everything else is right here.</p>

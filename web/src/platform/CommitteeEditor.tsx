@@ -7,7 +7,7 @@ import { Emblem, Flag } from './art';
 export interface PortfolioDraft { name: string; code: string | null; importance: 'high' | 'standard' | 'low'; taken?: number }
 export interface CommitteeDraft {
   id?: string; type: CommitteeType; name: string; short: string; topics: string[]; difficulty: string; language: string; emblem: string;
-  perCountry: number; portfolios: PortfolioDraft[];
+  perCountry: number; portfolios: PortfolioDraft[]; description?: string;
 }
 export const blankCommittee = (type: CommitteeType): CommitteeDraft => ({ type, name: '', short: '', topics: [], difficulty: 'intermediate', language: 'English', emblem: TYPE_INFO[type].emblem, perCountry: 1, portfolios: [] });
 
@@ -155,6 +155,9 @@ export function CommitteeEditor({ initial, onSave, onCancel, busy }: { initial: 
             </div>
             {c.topics.length > 0 && <div className="pf-chips" style={{ marginTop: 8 }}>{c.topics.map((t, i) => <button key={i} className="pf-chip" onClick={() => set({ topics: c.topics.filter((_, j) => j !== i) })}>{i + 1}. {t} <X className="x" style={{ width: 12, height: 12 }} /></button>)}</div>}
 
+            <div className="pf-mini">About this committee <span className="opt">optional, shown on your public page</span></div>
+            <textarea className="pf-input" style={{ minHeight: 70 }} maxLength={600} value={c.description ?? ''} onChange={(e) => set({ description: e.target.value })} placeholder="What delegates will debate and what to prepare" />
+
             <div className="pf-sec"><span className="n">2</span>Add {info.noun}</div>
             <div className="pf-mini">Search &amp; add</div>
             <div className="pf-search" style={{ position: 'relative' }}>
@@ -202,7 +205,7 @@ export function CommitteeEditor({ initial, onSave, onCancel, busy }: { initial: 
                 {isMun ? <Flag code={p.code} round title={p.name} /> : <span className="flag blank round" title={p.name}>{p.name.slice(0, 1)}</span>}
                 <span className="name" title={p.name}>{p.name}</span>
                 <button title={`Importance: ${p.importance}. Used to place experienced delegates.`} aria-label={`Importance ${p.importance}`} onClick={() => cycleImportance(p.name)}>
-                  <span style={{ display: 'inline-flex', gap: 2, alignItems: 'flex-end', height: 14 }}>{[1, 2, 3].map((n) => <i key={n} style={{ width: 3, height: 4 + n * 3, borderRadius: 2, background: n <= ({ high: 3, standard: 2, low: 1 } as const)[p.importance] ? 'var(--pf-green-2)' : 'var(--pf-line-2)' }} />)}</span>
+                  <span style={{ display: 'inline-flex', gap: 2, alignItems: 'flex-end', height: 14 }}>{[1, 2, 3].map((n) => <i key={n} style={{ width: 3, height: 4 + n * 3, borderRadius: 2, background: n <= ({ high: 3, standard: 2, low: 1 } as const)[p.importance] ? 'var(--pf-brand-2)' : 'var(--pf-line-2)' }} />)}</span>
                 </button>
                 {p.taken ? <span className="pf-tag" title="A delegate holds this seat">taken</span> : <button onClick={() => remove(p.name)} aria-label={`Remove ${p.name}`}><Trash2 style={{ width: 15, height: 15 }} /></button>}
               </div>
@@ -223,11 +226,11 @@ export function shortFrom(name: string) {
 
 /** Convert the editor's draft into the API shape. */
 export const toApi = (c: CommitteeDraft) => ({
-  type: c.type, name: c.name, short: c.short, topics: c.topics, difficulty: c.difficulty, language: c.language, emblem: c.emblem, perCountry: c.perCountry,
+  type: c.type, name: c.name, short: c.short, topics: c.topics, difficulty: c.difficulty, language: c.language, emblem: c.emblem, perCountry: c.perCountry, description: c.description ?? '',
   portfolios: c.portfolios.map((p) => ({ name: p.name, code: p.code, importance: p.importance })),
 });
 /** And back, from the committee detail endpoint. */
 export const fromApi = (d: any): CommitteeDraft => ({
   id: d.id, type: d.type ?? 'mun', name: d.name, short: d.short, topics: d.topics ?? [], difficulty: d.difficulty ?? 'intermediate', language: d.language ?? 'English', emblem: d.emblem ?? 'globe',
-  perCountry: d.perCountry ?? 1, portfolios: (d.portfolios ?? []).map((p: any) => ({ name: p.name, code: p.code, importance: p.tier, taken: p.taken })),
+  perCountry: d.perCountry ?? 1, description: d.description ?? '', portfolios: (d.portfolios ?? []).map((p: any) => ({ name: p.name, code: p.code, importance: p.tier, taken: p.taken })),
 });

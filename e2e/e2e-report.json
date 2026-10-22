@@ -1,0 +1,153 @@
+{
+ "results": [
+  [
+   "PASS",
+   "wizard: create Test Model United Nations"
+  ],
+  [
+   "PASS",
+   "dashboard shows draft and priorities"
+  ],
+  [
+   "PASS",
+   "committees page lists the three committees with portfolios"
+  ],
+  [
+   "PASS",
+   "conference page settings save"
+  ],
+  [
+   "PASS",
+   "financials wizard: fees + bank, QR, link, in person"
+  ],
+  [
+   "PASS",
+   "fee tiers tab: add coupon TEST10"
+  ],
+  [
+   "PASS",
+   "payment rules tab: saves, no platform gateways for organisers"
+  ],
+  [
+   "PASS",
+   "applications settings: advisors, observers, chairs, position papers"
+  ],
+  [
+   "PASS",
+   "publish"
+  ],
+  [
+   "PASS",
+   "job board: post a director role for each committee"
+  ],
+  [
+   "PASS",
+   "public: Explore, conference page and Job Board show TMUN"
+  ],
+  [
+   "PASS",
+   "delegate A registers (instant allotment) and sees bank, QR, link, in person"
+  ],
+  [
+   "PASS",
+   "delegate A uploads payment proof"
+  ],
+  [
+   "PASS",
+   "organiser approves the proof → delegate A confirmed"
+  ],
+  [
+   "PASS",
+   "delegate A uploads a position paper"
+  ],
+  [
+   "PASS",
+   "delegate B registers with coupon, pays in person, organiser records cash"
+  ],
+  [
+   "PASS",
+   "review mode: delegate C applies, organiser scores and assigns"
+  ],
+  [
+   "PASS",
+   "faculty advisor applies; organiser accepts"
+  ],
+  [
+   "PASS",
+   "chair applies from the Job Board with a CV; organiser accepts with an account"
+  ],
+  [
+   "PASS",
+   "chair signs in, reviews the position paper and runs a live session"
+  ],
+  [
+   "PASS",
+   "documents: upload a study guide PDF"
+  ],
+  [
+   "PASS",
+   "check-in delegate A at the door"
+  ],
+  [
+   "PASS",
+   "lists, exports, badges and certificates"
+  ],
+  [
+   "PASS",
+   "communications: templates and a bulk email"
+  ],
+  [
+   "PASS",
+   "refund delegate B, approve and record the bank reference"
+  ],
+  [
+   "PASS",
+   "expenses: create, approve, pay"
+  ],
+  [
+   "PASS",
+   "books: trial balance balances"
+  ],
+  [
+   "PASS",
+   "settings: every tab loads; invite a team member; back up now"
+  ],
+  [
+   "PASS",
+   "every organiser screen opens without errors"
+  ],
+  [
+   "PASS",
+   "organiser cannot see the demo organiser's conference"
+  ],
+  [
+   "PASS",
+   "anyone can run a session at /session; a delegate joins and asks to speak"
+  ],
+  [
+   "PASS",
+   "demo admin@example.org: every screen in the menu opens"
+  ],
+  [
+   "PASS",
+   "demo cfo@example.org: every screen in the menu opens"
+  ],
+  [
+   "PASS",
+   "demo accounts@example.org: every screen in the menu opens"
+  ],
+  [
+   "PASS",
+   "demo desk@example.org: every screen in the menu opens"
+  ],
+  [
+   "PASS",
+   "demo chair.unsc@example.org: every screen in the menu opens"
+  ],
+  [
+   "PASS",
+   "demo auditor@example.org: every screen in the menu opens"
+  ]
+ ],
+ "problems": []
+}

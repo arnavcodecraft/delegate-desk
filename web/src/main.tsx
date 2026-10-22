@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import '@fontsource-variable/inter';
+import '@fontsource-variable/playfair-display';
 import 'flag-icons/css/flag-icons.min.css';
 import './styles.css';
 import './platform.css';

@@ -18,7 +18,7 @@ export function InPersonArt() {
       </defs>
       {Array.from({ length: 7 }, (_, r) => Array.from({ length: 14 }, (_, c) => <circle key={`${r}-${c}`} cx={20 + c * 28 + (r % 2) * 14} cy={18 + r * 14} r={4.5} fill="#f1e3b6" opacity={0.08 + r * 0.03} />))}
       <rect width={W} height={H} fill="url(#ip-spot)" />
-      <rect x="150" y="96" width="100" height="58" rx="6" fill="#2f5c43" /><rect x="164" y="104" width="72" height="8" rx="4" fill="#c9a227" />
+      <rect x="150" y="96" width="100" height="58" rx="6" fill="#17366f" /><rect x="164" y="104" width="72" height="8" rx="4" fill="#d6b25e" />
       <rect x="186" y="74" width="28" height="24" rx="3" fill="#3d3a33" /><rect x="198" y="58" width="4" height="18" fill="#8d8572" /><circle cx="200" cy="56" r="5" fill="#bdb39c" />
       {Array.from({ length: 4 }, (_, r) => Array.from({ length: 9 - (r % 2) }, (_, c) => (
         <g key={`p${r}-${c}`} transform={`translate(${30 + c * 42 + (r % 2) * 21} ${170 + r * 26})`}>
@@ -37,7 +37,7 @@ export function OnlineArt() {
       <rect x="306" y="130" width="18" height="34" fill="#9a9686" />
       <rect x="92" y="88" width="190" height="122" rx="10" fill="#c9cbc6" /><rect x="100" y="96" width="174" height="106" rx="5" fill="#1f2a25" />
       {[0, 1, 2].map((r) => [0, 1, 2].map((c) => (
-        <g key={`${r}${c}`}><rect x={106 + c * 56} y={102 + r * 33} width="52" height="29" rx="4" fill={['#2f5c43', '#3b4d63', '#5b3d48', '#4f5c3a'][(r * 3 + c) % 4]} />
+        <g key={`${r}${c}`}><rect x={106 + c * 56} y={102 + r * 33} width="52" height="29" rx="4" fill={['#17366f', '#3b4d63', '#5b3d48', '#8a6d2a'][(r * 3 + c) % 4]} />
           <circle cx={132 + c * 56} cy={112 + r * 33} r="5" fill="#e9dcc0" /><rect x={124 + c * 56} y={118 + r * 33} width="16" height="9" rx="4" fill="#e9dcc0" /></g>
       )))}
       <path d="M70 210h234l14 10H56z" fill="#b8b9b3" />

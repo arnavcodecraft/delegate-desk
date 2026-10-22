@@ -10,7 +10,7 @@ import { startJobs } from './services/jobs.ts';
 import { sessionMiddleware } from './auth.ts';
 import { HttpError, asSystem, workspaceStore } from './util.ts';
 import { resolveWorkspace, allWorkspaces, inWorkspace, claimCode } from './platform.ts';
-import { syncListing } from './services/conference.ts';
+import { syncListing, migrateLegacyPaymentDetails } from './services/conference.ts';
 import { publicRouter, webhookRouter, serveFile } from './routes/public.ts';
 import { authRouter, adminRouter } from './routes/admin.ts';
 import { financeRouter } from './routes/finance.ts';
@@ -77,7 +77,7 @@ export function boot(dbFile?: string) {
   openDb(dbFile);
   asSystem(() => { seedChart(); seedTemplates(); });
   // Register the main workspace's conference codes and listings so public links and Explore can find them.
-  for (const w of allWorkspaces()) inWorkspace(w, () => asSystem(() => { for (const e of all('SELECT id, code FROM event')) { try { claimCode(e.code, e.id); syncListing(e.id); } catch (err) { console.warn('[listing]', (err as Error).message); } } }));
+  for (const w of allWorkspaces()) inWorkspace(w, () => asSystem(() => { migrateLegacyPaymentDetails(); for (const e of all('SELECT id, code FROM event')) { try { claimCode(e.code, e.id); syncListing(e.id); } catch (err) { console.warn('[listing]', (err as Error).message); } } }));
 }
 
 if (/[\\/]index\.ts$/.test(process.argv[1] ?? '')) {

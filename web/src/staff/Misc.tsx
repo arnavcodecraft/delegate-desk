@@ -72,7 +72,7 @@ export function Messages() {
   const toast = useToast();
   return (
     <div className="stack">
-      <PageHead title="Messages" subtitle="Every state change sends a templated message within seconds. Edit wording, connect WhatsApp and SMS, and see what went out." />
+      <PageHead title="Communications" subtitle="Email everyone, a committee or the unpaid; edit the wording of every automatic message; connect WhatsApp and SMS; and see what went out." />
       <Tabs value={tab} onChange={setTab} tabs={[{ key: 'outbox', label: 'Outbox & history' }, ...(can('templates.manage') ? [{ key: 'templates' as const, label: 'Templates' }] : []), ...(can('messages.send') ? [{ key: 'bulk' as const, label: 'Bulk send' }] : [])]} />
       {tab === 'outbox' && <>
         <div className="row"><input className="search" placeholder="Recipient or subject" value={q} onChange={(e) => setQ(e.target.value)} />{['', 'queued', 'sent', 'failed', 'bounced', 'suppressed'].map((s) => <button key={s} className={`chip ${status === s ? 'on' : ''}`} onClick={() => setStatus(s)}>{s ? label(s) : 'All'}</button>)}</div>

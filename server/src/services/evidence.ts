@@ -7,6 +7,7 @@ import { config, uploadDir } from '../config.ts';
 import { eventSettings } from '../settings.ts';
 import { addHours, bad, conflict, ctx, forbidden, inr, istDate, now, sha256, uid, notFound, workspaceStore } from '../util.ts';
 import { enqueue, notifyStaff } from './notify.ts';
+import { onlyApprover } from '../auth.ts';
 import { payableNow } from './fees.ts';
 import { receive, regVars } from './payments.ts';
 import { ocrImage, parseProof } from './ocr.ts';
@@ -54,22 +55,19 @@ export const normUtr = (u: string) => String(u ?? '').toUpperCase().replace(/[^A
 
 /** Unique reference the delegate writes in the transfer remark, e.g. BGYS27-R-000124. */
 export function payInstructions(reg: Record<string, any>) {
-  const org = one('SELECT * FROM organization LIMIT 1')!;
   const amount = payableNow(reg);
   const m = eventSettings(reg.event_id).paymentMethods;
-  const custom = m.link.enabled || m.qr.enabled || m.bank.enabled || m.in_person.enabled;
-  // Organisers who set up Financials get exactly what they chose; older events fall back to the organisation's UPI and bank.
-  const upiId = custom ? (m.qr.enabled ? m.qr.upiId || null : null) : org.upi_id;
-  const payee = (custom && m.bank.accountName) || org.legal_name;
+  const bank = m.bank.enabled ? m.bank : null;
+  const upiId = m.qr.enabled ? m.qr.upiId || null : null;
+  const payee = bank?.accountName || one('SELECT legal_name FROM organization LIMIT 1')?.legal_name || '';
   const upi = upiId ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payee)}&am=${(amount / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(reg.ref)}` : null;
-  const bank = custom ? (m.bank.enabled ? m.bank : null) : org.bank_account ? { accountName: org.legal_name, accountNumber: org.bank_account, ifsc: org.bank_ifsc, bankName: org.bank_name, reference: '', instructions: '' } : null;
   return {
-    upiId, payee, bankName: bank?.bankName ?? null, account: bank?.accountNumber ?? null, ifsc: bank?.ifsc ?? null, accountName: bank?.accountName ?? null,
+    upiId, payee, bankName: bank?.bankName || null, account: bank?.accountNumber || null, ifsc: bank?.ifsc || null, accountName: bank?.accountName || null,
     bankInstructions: bank?.instructions || null, amountPaise: amount, reference: (bank?.reference ? `${bank.reference} ` : '') + reg.ref, upiUri: upi,
-    qrImage: custom && m.qr.enabled && m.qr.image ? `/api/public/media/${m.qr.image}` : null, qrInstructions: custom && m.qr.enabled ? m.qr.instructions || null : null,
-    link: custom && m.link.enabled ? { url: m.link.url, instructions: m.link.instructions || null } : null,
-    inPerson: custom && m.in_person.enabled ? { instructions: m.in_person.instructions || 'Pay at the registration desk. The team will mark your payment as received.' } : null,
-    proofAccepted: custom ? m.link.enabled || m.qr.enabled || m.bank.enabled : true,
+    qrImage: m.qr.enabled && m.qr.image ? `/api/public/media/${m.qr.image}` : null, qrInstructions: m.qr.enabled ? m.qr.instructions || null : null,
+    link: m.link.enabled ? { url: m.link.url, instructions: m.link.instructions || null } : null,
+    inPerson: m.in_person.enabled ? { instructions: m.in_person.instructions || 'Pay at the registration desk. The team will mark your payment as received.' } : null,
+    proofAccepted: m.link.enabled || m.qr.enabled || m.bank.enabled,
   };
 }
 
@@ -137,7 +135,7 @@ export function approveEvidence(evidenceId: string, approvedPaise?: number) {
     if (!e) throw notFound('Payment proof');
     if (e.status !== 'submitted') throw conflict(`Already ${e.status}`);
     // Maker-checker: whoever submitted a proof on a delegate's behalf cannot approve it.
-    if (e.reason?.startsWith('submitted by staff ') && e.reason.endsWith(ctx().userId ?? '—')) throw forbidden('You submitted this proof, so another approver must review it');
+    if (e.reason?.startsWith('submitted by staff ') && e.reason.endsWith(ctx().userId ?? '—') && !onlyApprover('payments.approve', ctx().userId)) throw forbidden('You submitted this proof, so another approver must review it');
     const amount = approvedPaise ?? e.amount_paise;
     if (amount <= 0) throw bad('Approved amount must be positive');
     const reg = one('SELECT * FROM registration WHERE id = ?', e.registration_id)!;

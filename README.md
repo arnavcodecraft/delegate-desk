@@ -37,7 +37,27 @@ Demo accounts (password `ChangeMe!2026` for all, all `@example.org`):
 
 New organisers create their own account at `/list`: they become admin + CFO of a separate workspace, are signed in straight away, and set up two-factor sign-in at their next sign-in. Chairs accepted from Applications get an account by email with a temporary password. Delegates never need a password; they use the link in their email.
 
-Tests: `npm test` (68 tests: spec worked examples, money flows, permissions, an 8-process concurrent-registration test, and every integration exercised against a local fake that speaks its real protocol: clamd, WhatsApp Cloud API, MSG91, Google OAuth + Sheets, Anthropic Messages; plus workspace isolation, onboarding, review mode, the Job Board, and the live-session voting rules). Typecheck: `npm run typecheck`. Docker: `docker build -t delegatedesk . && docker run -p 8080:8080 -v dd:/data delegatedesk`.
+Tests: `npm test` (70 tests: spec worked examples, money flows, permissions, an 8-process concurrent-registration test, and every integration exercised against a local fake that speaks its real protocol: clamd, WhatsApp Cloud API, MSG91, Google OAuth + Sheets, Anthropic Messages; plus workspace isolation, onboarding, review mode, the Job Board, and the live-session voting rules). Typecheck: `npm run typecheck`. Docker: `docker build -t delegatedesk . && docker run -p 8080:8080 -v dd:/data delegatedesk`.
+
+End-to-end test: `npm run e2e` drives a real browser through the whole product against a running demo (start it with `ALLOW_SANDBOX=1`; run `npx playwright install chromium` once). A new organiser signs up and creates *Test Model United Nations* with three committees, sets fees, a coupon and four payment methods, opens applications and publishes; delegates register (instant and reviewed), pay by proof and in person, upload a position paper; an advisor and a chair apply; the chair runs a live session; then check-in, badges, certificates, emails, a refund, an expense, the books, settings and backups; finally every demo account opens every screen in its menu. Screenshots land in `e2e/screenshots/`.
+
+## Where each thing lives (one home per setting)
+
+| What | Page |
+|---|---|
+| Name, dates, venue, logo, banner, description, contact | Conference page |
+| Committees, portfolios, committee descriptions | Committees (one editor for adding and editing) |
+| Who can apply, deadline, instant vs reviewed allotment, position papers | Applications → Settings |
+| Accepting an applicant and giving a seat | Applications (the delegate record links there) |
+| Fees, GST, payment methods (bank, UPI QR, link, in person), fee tiers, coupons, payment rules | Financials (tabs: Payments · Fee tiers · Payment rules) |
+| Seat holds, locks, reminders, alerts, dress code, reporting time | Settings → Event rules |
+| Organisation, team, integrations, Google Sheets, backups, data protection | Settings |
+
+The event-update API only accepts rules; profile, application and payment fields sent there are refused with a message naming where they belong. Old payment details stored on the organisation are moved into the conference's payment methods at start-up.
+
+Two-person approval (payments, refunds, expenses, manual journals) applies whenever someone else can approve. A solo organiser who is the only person holding the approving role can approve their own entries; each such approval is audited as self-approved.
+
+Look: navy and gold "summit" theme with Playfair Display headings across public pages, the delegate page and the staff app, in light and dark.
 
 Configuration lives in environment variables; see [`.env.example`](.env.example).
 

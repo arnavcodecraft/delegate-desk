@@ -114,7 +114,7 @@ export function ConferencePage() {
       <div className="pf-card pf-cover">
         <div className={`bn ${bn.className}`} style={bn.style} />
         <div className="pf-cover-body" style={{ paddingBottom: 22 }}>
-          <div className="pf-logo" style={{ cursor: 'default' }}>{c.logo ? <img src={c.logo} alt="" /> : <b style={{ fontSize: 28, color: 'var(--pf-green)' }}>{(c.acronym ?? '').slice(0, 4)}</b>}</div>
+          <div className="pf-logo" style={{ cursor: 'default' }}>{c.logo ? <img src={c.logo} alt="" /> : <b style={{ fontSize: 28, color: 'var(--pf-brand)' }}>{(c.acronym ?? '').slice(0, 4)}</b>}</div>
           <div className="pf-cover-text" style={{ flex: 1, minWidth: 240, paddingBottom: 6 }}>
             <div className="pf-eyebrow">{c.organiser}</div>
             <h1>{c.acronym && c.acronym !== c.name ? c.acronym : c.name}</h1>
@@ -144,6 +144,7 @@ export function ConferencePage() {
                       <span>{DIFF[m.difficulty] ?? 'Intermediate'}</span>{m.language && m.language !== 'English' && <span>{m.language}</span>}
                       <span>{m.open > 0 ? `${m.open} of ${m.seats} seats open` : 'Full'}</span>
                     </div>
+                    {m.description && <div className="pf-small pf-muted" style={{ marginTop: 6 }}>{m.description}</div>}
                     {m.topics?.length > 0 && <div className="pf-small" style={{ marginTop: 6 }}>{m.topics.map((t: string, i: number) => <div key={i}><b style={{ color: 'var(--pf-gold)' }}>Topic {m.topics.length > 1 ? i + 1 : ''}</b> {t}</div>)}</div>}
                     <div className="pf-bar"><i style={{ width: `${m.seats ? Math.round(((m.seats - m.open) / m.seats) * 100) : 0}%` }} /></div>
                   </div>

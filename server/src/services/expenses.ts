@@ -1,4 +1,5 @@
 import { all, one, run, insert, tx, update, nextCounter, scalar } from '../db.ts';
+import { onlyApprover } from '../auth.ts';
 import { audit, diff } from '../audit.ts';
 import { config } from '../config.ts';
 import { EXPENSE_CATEGORIES, orgSettings } from '../settings.ts';
@@ -92,7 +93,9 @@ export function approveExpense(id: string) {
     if (!e) throw notFound('Expense');
     if (e.status !== 'submitted' && e.status !== 'draft') throw conflict(`Expense is ${e.status}`);
     const me = ctx().userId; const roles = ctx().roles ?? [];
-    if (e.submitted_by && e.submitted_by === me) throw forbidden('You submitted this expense, so someone else must approve it');
+    const selfApproval = !!e.submitted_by && e.submitted_by === me;
+    if (selfApproval && !onlyApprover('expense.approve', me)) throw forbidden('You submitted this expense, so someone else must approve it');
+    if (selfApproval) audit('expense.self_approved', 'expense', id, undefined, { reason: 'only approver in this organisation' });
     const limit = orgSettings().approvalLimits.accountantExpensePaise;
     if (!roles.includes('cfo') && total(e) > limit) throw forbidden(`Above ${inr(limit)} only the CFO can approve`);
     if (!roles.includes('cfo') && !roles.includes('accountant')) throw forbidden();

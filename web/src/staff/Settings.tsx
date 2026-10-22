@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import { api } from '../api';
 import { inr, label, toPaise, toRupees } from '../format';
 import { Alert, Btn, DataTable, Field, Loading, Modal, Tabs, useAsync, useToast, usePrompt } from '../ui';
@@ -7,14 +9,14 @@ import { Integrations, SheetsSync, Backups, DataProtection } from './SettingsExt
 
 export default function Settings() {
   const { can } = useStaff();
-  type T = 'event' | 'fees' | 'org' | 'users' | 'integrations' | 'sheets' | 'backups' | 'privacy';
+  type T = 'event' | 'org' | 'users' | 'integrations' | 'sheets' | 'backups' | 'privacy';
   const [tab, setTab] = useState<T>(can('event.config') ? 'event' : can('users.manage') ? 'users' : 'org');
   return (
     <div className="stack">
-      <PageHead title="Settings" subtitle="Event rules, fees, organisation details, people and roles, connected services, backups and data protection."><NewEvent /></PageHead>
+      <PageHead title="Settings" subtitle="How this conference runs, your organisation, your team, connected services, backups and data protection. Public details live on Conference page; fees and payments on Financials.">{can('event.config') && <Link className="btn" to="/list"><Plus className="icon" />New conference</Link>}</PageHead>
       <Tabs value={tab} onChange={setTab} tabs={[
-        ...(can('event.config') ? [{ key: 'event' as const, label: 'Event' }, { key: 'fees' as const, label: 'Fees & coupons' }] : []),
-        ...(can('settings.org', 'settings.finance') ? [{ key: 'org' as const, label: 'Organisation & finance' }] : []),
+        ...(can('event.config') ? [{ key: 'event' as const, label: 'Event rules' }] : []),
+        ...(can('settings.org', 'settings.finance') ? [{ key: 'org' as const, label: 'Organisation' }] : []),
         ...(can('users.manage') ? [{ key: 'users' as const, label: 'Users & roles' }] : []),
         ...(can('settings.org', 'settings.finance', 'event.config') ? [{ key: 'integrations' as const, label: 'Integrations' }] : []),
         ...(can('lists.share') ? [{ key: 'sheets' as const, label: 'Google Sheets' }] : []),
@@ -25,30 +27,17 @@ export default function Settings() {
       {tab === 'sheets' && <SheetsSync />}
       {tab === 'backups' && <Backups />}
       {tab === 'privacy' && <DataProtection />}
-      {tab === 'event' && <EventSettings />}
-      {tab === 'fees' && <Fees />}
+      {tab === 'event' && <EventRules />}
       {tab === 'org' && <Org />}
       {tab === 'users' && <Users />}
     </div>
   );
 }
 
-function NewEvent() {
-  const { can, reloadMe, setEventId } = useStaff();
-  const ask = usePrompt();
-  const toast = useToast();
-  if (!can('event.config')) return null;
-  return <Btn onClick={async () => {
-    const r = await ask({ title: 'New event', message: 'Add committees, portfolios and fees next, then open registration.', fields: [{ key: 'code', label: 'Code (used in delegate IDs, e.g. BGYS27)', required: true }, { key: 'name', label: 'Name', required: true }, { key: 'kind', label: 'Kind', options: [{ value: 'mun', label: 'Model UN' }, { value: 'moot', label: 'Moot court' }, { value: 'other', label: 'Other' }] }, { key: 'venue', label: 'Venue' }, { key: 'city', label: 'City' }, { key: 'start_date', label: 'Starts', type: 'date' }, { key: 'end_date', label: 'Ends', type: 'date' }] });
-    if (!r) return;
-    try { const e = await api.post<any>('/api/admin/events', r); toast('Event created', 'ok'); setEventId(e.id); reloadMe(); } catch (x: any) { toast(x.message, 'bad'); }
-  }}>+ New event</Btn>;
-}
-
 const ISO = (v: string | null) => (v ? v.slice(0, 16) : '');
 const fromLocal = (v: string) => (v ? new Date(v).toISOString() : null);
 
-function EventSettings() {
+function EventRules() {
   const { eventId, can, reloadMe } = useStaff();
   const ev = useAsync<any[]>(() => api.get('/api/admin/events'), [eventId]);
   const gw = useAsync<any>(() => api.get(`/api/finance/events/${eventId}/gateways`).catch(() => null), [eventId]);
@@ -61,7 +50,8 @@ function EventSettings() {
   const s = f.s; const setS = (k: string, v: any) => setF({ ...f, s: { ...s, [k]: v } });
   const save = async () => {
     try {
-      await api.patch(`/api/admin/events/${eventId}`, { name: f.name, venue: f.venue, city: f.city, state_code: f.state_code, start_date: f.start_date, end_date: f.end_date, status: ['draft', 'open', 'closed'].includes(f.status) ? f.status : undefined, settings: s });
+      const keys = ['holdHours', 'holdGraceHours', 'holdWarningHours', 'maxPerInstitutionPerCommittee', 'allocationLockAt', 'detailsLockAt', 'requireMobileOtp', 'reminderHours', 'escalationHours', 'processingAlertMinutes', 'unverifiedAlertHours', 'commissionHoldDays', 'variableCostPerDelegatePaise', 'dressCode', 'reportingTime'];
+      await api.patch(`/api/admin/events/${eventId}`, { state_code: f.state_code, settings: Object.fromEntries(keys.map((k) => [k, s[k]])) });
       toast('Saved', 'ok'); ev.reload(); reloadMe();
     } catch (x: any) { toast(x.message, 'bad'); }
   };
@@ -69,53 +59,18 @@ function EventSettings() {
   const money = (k: string, lbl: string, hint?: string) => <Field label={lbl} hint={hint}><input inputMode="decimal" value={toRupees(s[k])} onChange={(x) => setS(k, toPaise(x.target.value) || 0)} /></Field>;
   return (
     <div className="stack">
-      <div className="card stack"><h3>Event</h3>
-        <div className="grid g3">
-          <Field label="Name"><input value={f.name} onChange={(x) => setF({ ...f, name: x.target.value })} /></Field>
-          <Field label="Venue"><input value={f.venue ?? ''} onChange={(x) => setF({ ...f, venue: x.target.value })} /></Field>
-          <Field label="City"><input value={f.city ?? ''} onChange={(x) => setF({ ...f, city: x.target.value })} /></Field>
-          <Field label="Starts"><input type="date" value={f.start_date ?? ''} onChange={(x) => setF({ ...f, start_date: x.target.value })} /></Field>
-          <Field label="Ends"><input type="date" value={f.end_date ?? ''} onChange={(x) => setF({ ...f, end_date: x.target.value })} /></Field>
-          <Field label="State code" hint="place of supply for GST"><input value={f.state_code ?? ''} onChange={(x) => setF({ ...f, state_code: x.target.value })} /></Field>
-          <Field label="Registration"><select value={f.status} disabled={['held', 'cancelled'].includes(f.status)} onChange={(x) => setF({ ...f, status: x.target.value })}><option value="draft">Draft (not public)</option><option value="open">Open</option><option value="closed">Closed</option>{f.status === 'held' && <option value="held">Held</option>}{f.status === 'cancelled' && <option value="cancelled">Cancelled</option>}</select></Field>
-          <Field label="Public form link"><input readOnly value={`${window.location.origin}/register/${f.code}`} onFocus={(x) => x.target.select()} /></Field>
-        </div>
-      </div>
+      <Alert tone="info">Name, dates, venue and the public page are under <Link to="/app/conference">Conference page</Link>; publishing is on the <Link to="/app/overview">Dashboard</Link>; who can apply is under <Link to="/app/applications?tab=settings">Applications</Link>; fees and payments are under <Link to="/app/financials">Financials</Link>.</Alert>
       <div className="card stack"><h3>Seats & allotment</h3>
         <div className="grid g3">
           {num('holdHours', 'Unpaid hold (hours)')}{num('holdGraceHours', 'Extra hold while a proof is reviewed (hours)')}{num('holdWarningHours', '“Last chance” email before expiry (hours)')}
           {num('maxPerInstitutionPerCommittee', 'Max delegates per institution per committee', '0 = no limit')}
           <Field label="Lock allocations from"><input type="datetime-local" value={ISO(s.allocationLockAt)} onChange={(x) => setS('allocationLockAt', fromLocal(x.target.value))} /></Field>
           <Field label="Lock delegate details from" hint="for badge printing"><input type="datetime-local" value={ISO(s.detailsLockAt)} onChange={(x) => setS('detailsLockAt', fromLocal(x.target.value))} /></Field>
-          <label className="check"><input type="checkbox" checked={s.premiumPricing} onChange={(x) => setS('premiumPricing', x.target.checked)} />Charge the premium on high-demand portfolios</label>
         </div>
       </div>
-      <div className="card stack"><h3>Fees, GST & payments</h3>
+      <div className="card stack"><h3>Registration form</h3>
         <div className="grid g3">
-          <label className="check"><input type="checkbox" checked={s.gstEnabled} onChange={(x) => setS('gstEnabled', x.target.checked)} />Charge GST on registration fees</label>
-          <Field label="GST rate %"><input type="number" value={s.gstRateBp / 100} onChange={(x) => setS('gstRateBp', Math.round(Number(x.target.value) * 100))} /></Field>
-          <Field label="SAC code"><input value={s.sacCode} onChange={(x) => setS('sacCode', x.target.value)} /></Field>
-          <Field label="Fee model"><select value={s.feeModel} onChange={(x) => setS('feeModel', x.target.value)}><option value="full">Pay in full at registration</option><option value="two_stage">Application fee, balance after acceptance</option></select></Field>
-          {s.feeModel === 'two_stage' && money('applicationFeePaise', 'Application fee ₹')}
-          <Field label="Group payment"><select value={s.groupPayment} onChange={(x) => setS('groupPayment', x.target.value)}><option value="members_pay">Each member pays</option><option value="head_pays">Head delegate pays once</option></select></Field>
-          <Field label="Group discount from (members)"><input type="number" value={s.groupDiscount?.minSize ?? ''} onChange={(x) => setS('groupDiscount', { ...(s.groupDiscount ?? { rateBp: 1000 }), minSize: Number(x.target.value) })} /></Field>
-          <Field label="Group discount %"><input type="number" value={(s.groupDiscount?.rateBp ?? 0) / 100} onChange={(x) => setS('groupDiscount', { ...(s.groupDiscount ?? { minSize: 8 }), rateBp: Math.round(Number(x.target.value) * 100) })} /></Field>
-          {num('refundWindowDays', 'Refund requests close (days before event)')}
-          {money('largeRefundPaise', 'Refunds above this need two approvers ₹')}
-        </div>
-        <h4>Payment methods</h4>
-        <div className="grid g3">
-          {(['razorpay', 'cashfree', 'mock'] as const).map((g) => {
-            const info = gw.data?.all.find((x: any) => x.name === g);
-            return <div key={g} className="tile"><div className="label">{g === 'mock' ? 'Sandbox (test)' : label(g)}</div>
-              <label className="check"><input type="checkbox" checked={s.gateways[g].enabled} onChange={(x) => setS('gateways', { ...s.gateways, [g]: { ...s.gateways[g], enabled: x.target.checked } })} />Offer to delegates</label>
-              <label className="check"><input type="checkbox" checked={s.gateways[g].down} onChange={(x) => setS('gateways', { ...s.gateways, [g]: { ...s.gateways[g], down: x.target.checked } })} />Temporarily down (hide)</label>
-              <div className="sub">{info ? (info.configured ? 'Keys configured' : 'No API keys set — hidden') : ''}</div></div>;
-          })}
-          <Field label="Default gateway"><select value={s.defaultGateway} onChange={(x) => setS('defaultGateway', x.target.value)}><option value="razorpay">Razorpay</option><option value="cashfree">Cashfree</option><option value="mock">Sandbox</option></select></Field>
-          <Field label="Route small payments" hint="amounts up to ₹ go to…"><input inputMode="decimal" value={s.routing?.[0] ? toRupees(s.routing[0].maxPaise) : ''} placeholder="e.g. 1000" onChange={(x) => setS('routing', x.target.value ? [{ maxPaise: toPaise(x.target.value), gateway: s.routing?.[0]?.gateway ?? 'cashfree' }] : [])} /></Field>
-          {s.routing?.[0] && <Field label="…this gateway"><select value={s.routing[0].gateway} onChange={(x) => setS('routing', [{ ...s.routing[0], gateway: x.target.value }])}><option value="razorpay">Razorpay</option><option value="cashfree">Cashfree</option></select></Field>}
-          <label className="check"><input type="checkbox" checked={s.screenshotEnabled} onChange={(x) => setS('screenshotEnabled', x.target.checked)} />Accept UPI / bank transfer with screenshot</label>
+          <Field label="State code" hint="place of supply for GST invoices"><input value={f.state_code ?? ''} onChange={(x) => setF({ ...f, state_code: x.target.value })} /></Field>
           <label className="check"><input type="checkbox" checked={!!s.requireMobileOtp} onChange={(x) => setS('requireMobileOtp', x.target.checked)} />Verify mobile numbers with a one-time code on the form</label>
         </div>
       </div>
@@ -138,7 +93,7 @@ function EventSettings() {
   );
 }
 
-function Fees() {
+export function FeeTiers() {
   const { eventId } = useStaff();
   const d = useAsync<any>(() => api.get(`/api/admin/events/${eventId}/fees`), [eventId]);
   const [tier, setTier] = useState<any>(null);
@@ -168,6 +123,55 @@ function Fees() {
   );
 }
 
+/** Payment rules and online gateways, shown on Financials. */
+export function PaymentRules({ ownGateways }: { ownGateways: boolean }) {
+  const { eventId } = useStaff();
+  const ev = useAsync<any[]>(() => api.get('/api/admin/events'), [eventId]);
+  const gw = useAsync<any>(() => (ownGateways ? api.get(`/api/finance/events/${eventId}/gateways`).catch(() => null) : Promise.resolve(null)), [eventId]);
+  const e = (ev.data ?? []).find((x) => x.id === eventId);
+  const [s, setSt] = useState<any>(null);
+  const toast = useToast();
+  useEffect(() => { if (e) setSt({ ...e.settings }); }, [e?.id, ev.data]); // eslint-disable-line
+  if (!s) return <Loading />;
+  const setS = (k: string, v: any) => setSt({ ...s, [k]: v });
+  const num = (k: string, lbl: string, hint?: string) => <Field label={lbl} hint={hint}><input type="number" value={s[k]} onChange={(x) => setS(k, Number(x.target.value))} /></Field>;
+  const money = (k: string, lbl: string, hint?: string) => <Field label={lbl} hint={hint}><input inputMode="decimal" value={toRupees(s[k])} onChange={(x) => setS(k, toPaise(x.target.value) || 0)} /></Field>;
+  const keys = ['sacCode', 'feeModel', 'applicationFeePaise', 'groupPayment', 'groupDiscount', 'refundWindowDays', 'largeRefundPaise', 'premiumPricing', 'gateways', 'defaultGateway', 'routing'];
+  return (
+    <div className="stack">
+      <div className="card stack"><h3>Payment rules</h3>
+        <div className="grid g3">
+          <Field label="Fee model"><select value={s.feeModel} onChange={(x) => setS('feeModel', x.target.value)}><option value="full">Pay in full once a seat is held</option><option value="two_stage">Application fee first, balance after acceptance</option></select></Field>
+          {s.feeModel === 'two_stage' && money('applicationFeePaise', 'Application fee ₹')}
+          <Field label="School delegations"><select value={s.groupPayment} onChange={(x) => setS('groupPayment', x.target.value)}><option value="members_pay">Each member pays</option><option value="head_pays">Head delegate pays once</option></select></Field>
+          <Field label="Group discount from (members)"><input type="number" value={s.groupDiscount?.minSize ?? ''} onChange={(x) => setS('groupDiscount', { ...(s.groupDiscount ?? { rateBp: 1000 }), minSize: Number(x.target.value) })} /></Field>
+          <Field label="Group discount %"><input type="number" value={(s.groupDiscount?.rateBp ?? 0) / 100} onChange={(x) => setS('groupDiscount', { ...(s.groupDiscount ?? { minSize: 8 }), rateBp: Math.round(Number(x.target.value) * 100) })} /></Field>
+          {num('refundWindowDays', 'Refund requests close (days before event)')}
+          {money('largeRefundPaise', 'Refunds above this need two approvers ₹')}
+          {s.gstEnabled && <Field label="SAC code" hint="on GST invoices"><input value={s.sacCode} onChange={(x) => setS('sacCode', x.target.value)} /></Field>}
+          <label className="check"><input type="checkbox" checked={s.premiumPricing} onChange={(x) => setS('premiumPricing', x.target.checked)} />Charge the premium set on high-demand portfolios</label>
+        </div>
+      </div>
+      {ownGateways && <div className="card stack"><h3>Online payment gateways</h3>
+        <p className="small muted" style={{ margin: 0 }}>Card and UPI checkout through the deployment's Razorpay and Cashfree accounts (keys are set on the server).</p>
+        <div className="grid g3">
+          {(['razorpay', 'cashfree', 'mock'] as const).map((g) => {
+            const info = gw.data?.all.find((x: any) => x.name === g);
+            return <div key={g} className="tile"><div className="label">{g === 'mock' ? 'Sandbox (test)' : label(g)}</div>
+              <label className="check"><input type="checkbox" checked={s.gateways[g].enabled} onChange={(x) => setS('gateways', { ...s.gateways, [g]: { ...s.gateways[g], enabled: x.target.checked } })} />Offer to delegates</label>
+              <label className="check"><input type="checkbox" checked={s.gateways[g].down} onChange={(x) => setS('gateways', { ...s.gateways, [g]: { ...s.gateways[g], down: x.target.checked } })} />Temporarily down (hide)</label>
+              <div className="sub">{info ? (info.configured ? 'Keys configured' : 'No API keys set — hidden') : ''}</div></div>;
+          })}
+          <Field label="Default gateway"><select value={s.defaultGateway} onChange={(x) => setS('defaultGateway', x.target.value)}><option value="razorpay">Razorpay</option><option value="cashfree">Cashfree</option><option value="mock">Sandbox</option></select></Field>
+          <Field label="Route small payments" hint="amounts up to ₹ go to…"><input inputMode="decimal" value={s.routing?.[0] ? toRupees(s.routing[0].maxPaise) : ''} placeholder="e.g. 1000" onChange={(x) => setS('routing', x.target.value ? [{ maxPaise: toPaise(x.target.value), gateway: s.routing?.[0]?.gateway ?? 'cashfree' }] : [])} /></Field>
+          {s.routing?.[0] && <Field label="…this gateway"><select value={s.routing[0].gateway} onChange={(x) => setS('routing', [{ ...s.routing[0], gateway: x.target.value }])}><option value="razorpay">Razorpay</option><option value="cashfree">Cashfree</option></select></Field>}
+        </div>
+      </div>}
+      <div><Btn kind="primary" onClick={async () => { try { await api.patch(`/api/admin/events/${eventId}`, { settings: Object.fromEntries(keys.map((k) => [k, s[k]])) }); toast('Saved', 'ok'); ev.reload(); } catch (x: any) { toast(x.message, 'bad'); } }}>Save payment rules</Btn></div>
+    </div>
+  );
+}
+
 function Org() {
   const { can } = useStaff();
   const o = useAsync<any>(() => api.get('/api/admin/org'), []);
@@ -185,8 +189,7 @@ function Org() {
           {[['name', 'Display name'], ['legal_name', 'Legal name'], ['pan', 'PAN'], ['gstin', 'GSTIN'], ['state_code', 'State code'], ['address', 'Registered address'], ['grievance_contact', 'Grievance officer contact']].map(([k, l]) => <Field key={k} label={l}><input value={f[k] ?? ''} onChange={(e) => setF({ ...f, [k]: e.target.value })} /></Field>)}
           <Field label="Entity type" hint="books, GST and TDS treatment depend on it"><select value={f.entity_type} onChange={(e) => setF({ ...f, entity_type: e.target.value })}>{['private_limited', 'section_8', 'llp', 'society', 'trust'].map((x) => <option key={x} value={x}>{label(x)}</option>)}</select></Field>
         </div>
-        <h4>Where delegates pay by UPI / bank transfer</h4>
-        <div className="grid g4">{[['upi_id', 'UPI ID'], ['bank_name', 'Bank'], ['bank_account', 'Account number'], ['bank_ifsc', 'IFSC']].map(([k, l]) => <Field key={k} label={l}><input value={f[k] ?? ''} onChange={(e) => setF({ ...f, [k]: e.target.value })} /></Field>)}</div>
+        <p className="small muted" style={{ margin: 0 }}>Bank and UPI details for delegate payments are set per conference under <Link to="/app/financials">Financials</Link>.</p>
       </div>
       <div className="card stack"><h3>Finance controls {!fin && <span className="badge">CFO only</span>}</h3>
         <div className="grid g3">
@@ -220,13 +223,16 @@ function Org() {
 
 function Users() {
   const u = useAsync<any>(() => api.get('/api/admin/users'), []);
-  const { eventId } = useStaff();
+  const { eventId, me } = useStaff();
   const inv = useAsync<any[]>(() => api.get(`/api/admin/events/${eventId}/inventory`).catch(() => []), [eventId]);
   const ask = usePrompt();
   const toast = useToast();
   const [matrix, setMatrix] = useState(false);
   if (!u.data) return <Loading />;
-  const roleOpts = u.data.roles.map((r: any) => ({ value: r.role, label: r.label }));
+  // Super admin is only grantable by a super admin; the most common hire (registration desk) comes first.
+  const order = ['registration_exec', 'chair', 'accountant', 'cfo', 'admin', 'auditor', 'referrer', 'head_delegate', 'superadmin'];
+  const roleOpts = u.data.roles.filter((r: any) => r.role !== 'superadmin' || me.roles.some((x) => x.role === 'superadmin'))
+    .sort((a: any, b: any) => order.indexOf(a.role) - order.indexOf(b.role)).map((r: any) => ({ value: r.role, label: r.label }));
   const addRole = async (userId: string) => {
     const r = await ask({ title: 'Add role', fields: [{ key: 'role', label: 'Role', options: roleOpts }, { key: 'committee_id', label: 'Committee (chairs only)', options: [{ value: '', label: '—' }, ...(inv.data ?? []).map((c) => ({ value: c.id, label: c.name }))] }] });
     if (!r) return;
@@ -238,7 +244,7 @@ function Users() {
       <div className="row"><Btn kind="primary" onClick={async () => {
         const r = await ask({ title: 'Invite staff', fields: [{ key: 'name', label: 'Name', required: true }, { key: 'email', label: 'Email', type: 'email', required: true }, { key: 'role', label: 'Role', options: roleOpts }, { key: 'committee_id', label: 'Committee (chairs only)', options: [{ value: '', label: '—' }, ...(inv.data ?? []).map((c) => ({ value: c.id, label: c.name }))] }] });
         if (!r) return;
-        try { const x = await api.post<any>('/api/admin/users', { name: r.name, email: r.email, roles: [{ role: r.role, committee_id: r.committee_id || null, event_id: r.committee_id ? eventId : null }] }); await ask({ title: 'User created', message: `Share this temporary password securely: ${x.temporaryPassword}\nThey should change it after signing in.`, confirm: 'Done' }); u.reload(); } catch (e: any) { toast(e.message, 'bad'); }
+        try { const x = await api.post<any>('/api/admin/users', { name: r.name, email: r.email, roles: [{ role: r.role, committee_id: r.committee_id || null, event_id: r.committee_id ? eventId : null }] }); u.reload(); void ask({ title: 'User created', message: `Share this temporary password securely: ${x.temporaryPassword}\nThey should change it after signing in.`, confirm: 'Done', info: true }); } catch (e: any) { toast(e.message, 'bad'); }
       }}>+ Invite staff</Btn><button className="btn" onClick={() => setMatrix(true)}>Permission matrix</button></div>
       <div className="card flush"><DataTable rows={u.data.users} columns={[
         { key: 'name', label: 'Name', render: (x: any) => <><strong>{x.name}</strong><div className="small faint">{x.email}</div></> },
@@ -246,7 +252,7 @@ function Users() {
         { key: 'totp_enabled', label: '2FA', render: (x: any) => (x.totp_enabled ? 'On' : 'Off') }, { key: 'active', label: 'Active', render: (x: any) => (x.active ? 'Yes' : 'No') },
         { key: 'act', label: '', sort: false, render: (x: any) => <span className="row">
           <Btn size="sm" onClick={async () => { await api.patch(`/api/admin/users/${x.id}`, { active: !x.active }); u.reload(); }}>{x.active ? 'Deactivate' : 'Activate'}</Btn>
-          <Btn size="sm" onClick={async () => { const r = await api.post<any>(`/api/admin/users/${x.id}/reset-password`); await ask({ title: 'Password reset', message: `Temporary password: ${r.temporaryPassword}`, confirm: 'Done' }); }}>Reset password</Btn>
+          <Btn size="sm" onClick={async () => { const r = await api.post<any>(`/api/admin/users/${x.id}/reset-password`); await ask({ title: 'Password reset', message: `Temporary password: ${r.temporaryPassword}`, confirm: 'Done', info: true }); }}>Reset password</Btn>
           {x.totp_enabled ? <Btn size="sm" onClick={async () => { await api.post(`/api/admin/users/${x.id}/reset-mfa`); u.reload(); }}>Reset 2FA</Btn> : null}
         </span> },
       ]} /></div>

@@ -1,4 +1,5 @@
 import { one, insert, update, tx } from '../db.ts';
+import { onlyApprover } from '../auth.ts';
 import { audit } from '../audit.ts';
 import { orgSettings } from '../settings.ts';
 import { bad, conflict, ctx, forbidden, inr, istDate, json, now, uid, notFound } from '../util.ts';
@@ -42,7 +43,7 @@ export function approveJournal(id: string, auto = false) {
     const me = ctx().userId ?? 'system'; const roles = ctx().roles ?? [];
     const approvals = json<{ user: string; role: string }[]>(r.approvals, []);
     if (!auto) {
-      if (r.kind === 'manual' && r.requested_by === me) throw forbidden('You raised this journal, so someone else must approve it');
+      if (r.kind === 'manual' && r.requested_by === me && !onlyApprover('books.approve', me)) throw forbidden('You raised this journal, so someone else must approve it');
       if (approvals.some((a) => a.user === me)) throw forbidden('You have already signed off');
       const role = roles.includes('cfo') ? 'cfo' : roles.includes('accountant') ? 'accountant' : null;
       if (!role) throw forbidden();

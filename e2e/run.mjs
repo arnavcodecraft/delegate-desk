@@ -1,0 +1,360 @@
+// End-to-end test of the whole app: a new organiser creates a test conference and uses every feature,
+// Run against a freshly seeded demo started with ALLOW_SANDBOX=1:  npm run e2e
+// delegates/advisors/chairs use the public side, and every seeded role visits every screen it can open.
+import { chromium } from 'playwright';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const B = process.env.BASE_URL ?? 'http://localhost:8080';
+const DIR = path.dirname(fileURLToPath(import.meta.url));
+const SHOTS = path.join(DIR, 'screenshots'); fs.rmSync(SHOTS, { recursive: true, force: true }); fs.mkdirSync(SHOTS);
+const PROOF = path.join(DIR, '..', 'server', 'assets', 'demo-receipt.png');
+const PDF = path.join(DIR, 'sample.pdf');
+const results = []; const problems = [];
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+const dec = (s) => { let b = 0, v = 0; const o = []; for (const c of s) { v = (v << 5) | B32.indexOf(c); b += 5; if (b >= 8) { o.push((v >>> (b - 8)) & 255); b -= 8; } } return Buffer.from(o); };
+const totp = (s) => { const b = Buffer.alloc(8); b.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000))); const m = crypto.createHmac('sha1', dec(s)).update(b).digest(); const o = m[m.length - 1] & 15; return String((m.readUInt32BE(o) & 0x7fffffff) % 1e6).padStart(6, '0'); };
+
+const br = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+const expected = [/\/api\/auth\/me/, /checkin\b.*400/];
+function watch(page, who) {
+  page.on('pageerror', (e) => problems.push(`[${who}] JS error on ${page.url()}: ${e.message}`));
+  page.on('response', (r) => { const s = r.status(); if (s >= 500 || (s >= 400 && s !== 401 && !expected.some((x) => x.test(r.url())))) problems.push(`[${who}] HTTP ${s} ${r.request().method()} ${r.url().replace(B, '')}`); });
+  page.on('dialog', (d) => d.accept());
+}
+async function newPage(who, mobile = false) { const ctx = await br.newContext({ viewport: mobile ? { width: 400, height: 860 } : { width: 1360, height: 900 }, acceptDownloads: true }); const p = await ctx.newPage(); watch(p, who); return p; }
+let current = '';
+async function step(name, page, fn) {
+  current = name;
+  const before = problems.length;
+  try { await fn(); await page.waitForTimeout(250); const errorBox = await page.locator('.alert.bad, .error-box').count().catch(() => 0);
+    if (problems.length > before) throw new Error(problems.slice(before).join(' | '));
+    results.push(['PASS', name]); console.log('PASS', name);
+  } catch (e) {
+    results.push(['FAIL', name, String(e.message).split('\n')[0].slice(0, 400)]); console.log('FAIL', name, '—', String(e.message).split('\n')[0].slice(0, 400));
+    await page.screenshot({ path: `${SHOTS}/FAIL-${name.replace(/[^a-z0-9]+/gi, '-').slice(0, 60)}.png`, fullPage: true }).catch(() => {});
+  }
+}
+const api = (page, method, url, body) => page.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: { 'content-type': 'application/json', 'x-dd': '1' }, body: b ? JSON.stringify(b) : undefined }); const t = await r.text(); let d; try { d = JSON.parse(t); } catch { d = t; } if (!r.ok) throw new Error(`${m} ${u} → ${r.status} ${d?.error ?? t}`); return d; }, [method, url, body]);
+const toast = async (page) => (await page.locator('.toast').last().innerText({ timeout: 4000 }).catch(() => '')).trim();
+const cont = (p, t = 'Continue') => p.getByRole('button', { name: t, exact: true }).click();
+const pfModal = (p) => p.locator('.pf-modal, .pf-editor').last();
+
+// ============ ORGANISER: create the test conference ============
+const org = await newPage('organiser');
+let eventId = '', code = '', slug = '';
+await step('wizard: create Test Model United Nations', org, async () => {
+  await org.goto(`${B}/list`);
+  await org.evaluate(() => localStorage.clear());
+  await org.goto(`${B}/list`);
+  await org.getByLabel('Full name').fill('Test Model United Nations');
+  await org.getByLabel('Acronym').fill('TMUN');
+  await org.getByLabel('First day').fill('2027-02-19'); await org.getByLabel('Last day').fill('2027-02-21');
+  await cont(org);
+  await org.getByRole('button', { name: /In Person/ }).click();
+  await org.getByRole('button', { name: /Open to both/ }).click(); await cont(org);
+  await org.getByLabel('Search countries').fill('India'); await org.getByRole('button', { name: 'India', exact: true }).click();
+  await org.getByLabel('City').fill('New Delhi'); await cont(org);
+  await org.getByRole('button', { name: /~100/ }).click(); await cont(org);
+  for (const [type, name] of [['MUN', 'Security Council'], ['Custom', 'Lok Sabha'], ['Press', 'International Press Corps']]) {
+    await org.getByRole('button', { name: /Add (your first|another) committee/ }).click();
+    await org.getByRole('button', { name: new RegExp(`^${type}`) }).click();
+    await pfModal(org).locator('input.pf-input').first().fill(name);
+    await org.waitForTimeout(350);
+    await org.getByRole('button', { name: 'Add committee' }).click();
+  }
+  await cont(org);
+  await org.getByLabel('Description').fill('A test conference used to check every feature.'); await cont(org);
+  await org.getByRole('button', { name: /Delegates pay a fee/ }).click(); await org.getByLabel(/Delegate fee/).fill('2000'); await cont(org);
+  await org.getByLabel('Select all').check(); await cont(org, 'Continue to review');
+  await org.getByLabel('Your name').fill('Tara Organiser'); await org.getByLabel('Organisation or society').fill('Test MUN Society');
+  await org.getByLabel('Email', { exact: true }).fill('tara@testmun.example'); await org.getByLabel('Password (10+ characters)').fill('testmun-pass-1');
+  await org.getByRole('button', { name: 'Create conference' }).click();
+  await org.waitForSelector('text=is created', { timeout: 15000 });
+  await org.screenshot({ path: `${SHOTS}/01-created.png` });
+  await org.getByRole('link', { name: /Go to your dashboard/ }).click();
+  await org.waitForURL(/overview/);
+  const me = await api(org, 'GET', '/api/auth/me');
+  eventId = me.events[0].id; code = me.events[0].code; slug = code.toLowerCase();
+  if (!/^TMUN/.test(code)) throw new Error('unexpected code ' + code);
+});
+await step('dashboard shows draft and priorities', org, async () => {
+  await org.goto(`${B}/app/overview`); await org.waitForSelector('text=Set-up priorities');
+  if (!(await org.locator('.badge', { hasText: 'Draft' }).count())) throw new Error('no Draft badge');
+  await org.screenshot({ path: `${SHOTS}/02-overview.png`, fullPage: true });
+});
+await step('committees page lists the three committees with portfolios', org, async () => {
+  await org.goto(`${B}/app/allocation`); await org.waitForSelector('text=Security Council');
+  const inv = await api(org, 'GET', `/api/admin/events/${eventId}/inventory`);
+  if (inv.length !== 3) throw new Error('committees ' + inv.length);
+  if (inv.find((c) => c.short === 'UNSC').seats !== 15) throw new Error('UNSC seats ' + inv.find((c) => c.short === 'UNSC').seats);
+  await org.getByRole('button', { name: 'Edit' }).first().click(); await org.waitForSelector('.pf-editor');
+  await org.getByPlaceholder('What delegates will debate and what to prepare').fill('Maritime security and peacekeeping.');
+  await org.getByRole('button', { name: 'Save committee' }).click(); await org.waitForTimeout(600);
+  await org.screenshot({ path: `${SHOTS}/03-committees.png`, fullPage: true });
+});
+await step('conference page settings save', org, async () => {
+  await org.goto(`${B}/app/conference`); await org.waitForSelector('text=Full name');
+  await org.getByLabel('Venue').fill('India Habitat Centre');
+  await org.getByRole('button', { name: 'Save', exact: true }).click(); await org.waitForTimeout(600);
+  const p = await api(org, 'GET', `/api/admin/events/${eventId}/profile`);
+  if (p.event.venue !== 'India Habitat Centre') throw new Error('venue not saved');
+});
+await step('financials wizard: fees + bank, QR, link, in person', org, async () => {
+  await org.goto(`${B}/app/financials`); await org.getByRole('button', { name: /Set up payments|Change set-up/ }).click();
+  await cont(org); // paid
+  await org.getByLabel('Early-bird fee (₹)').fill('1600'); await org.getByLabel('Early bird ends on').fill('2026-12-31'); await cont(org);
+  await cont(org); // GST off
+  for (const m of ['Payment link', 'Payment QR code', 'Bank transfer', 'In-person payment']) await org.getByRole('button', { name: new RegExp(m) }).click();
+  await cont(org);
+  await org.getByLabel('Your payment page').fill('https://pay.example.com/tmun'); await cont(org);
+  await org.getByLabel(/UPI ID/).fill('tmun@okaxis'); await cont(org);
+  await org.getByLabel('Name on the account').fill('Test MUN Society'); await org.getByLabel('Account number or IBAN').fill('50100012345678'); await org.getByLabel(/IFSC, SWIFT/).fill('HDFC0001234'); await cont(org);
+  await org.getByLabel('Instructions for payers').fill('Pay cash at the desk on Day 1.'); await cont(org);
+  await org.getByRole('button', { name: 'Save', exact: true }).click(); await org.waitForTimeout(700);
+  const f = await api(org, 'GET', `/api/admin/events/${eventId}/financials`);
+  if (!f.methods.bank.enabled || !f.methods.qr.enabled || !f.methods.link.enabled || !f.methods.in_person.enabled) throw new Error('methods not saved');
+  if (!f.tiers.some((t) => t.name === 'Early bird' && t.amount_paise === 160000)) throw new Error('early bird missing');
+  await org.screenshot({ path: `${SHOTS}/04-financials.png`, fullPage: true });
+});
+await step('fee tiers tab: add coupon TEST10', org, async () => {
+  await org.goto(`${B}/app/financials?tab=tiers`); await org.waitForSelector('text=Fee tiers');
+  await org.getByRole('button', { name: '+ Coupon' }).click();
+  await org.getByLabel('Code').fill('TEST10'); await org.getByLabel('Value (% or ₹)').fill('10');
+  await org.getByRole('button', { name: 'Confirm' }).click(); await org.waitForTimeout(600);
+  await org.waitForSelector('text=TEST10');
+});
+await step('payment rules tab: saves, no platform gateways for organisers', org, async () => {
+  await org.goto(`${B}/app/financials?tab=rules`); await org.waitForSelector('text=Payment rules');
+  if (await org.locator('text=Online payment gateways').count()) throw new Error('platform gateways shown to an organiser');
+  await org.getByRole('button', { name: 'Save payment rules' }).click(); await org.waitForTimeout(500);
+});
+await step('applications settings: advisors, observers, chairs, position papers', org, async () => {
+  await org.goto(`${B}/app/applications?tab=settings`); await org.waitForSelector('text=Who can apply');
+  await org.getByText('Instantly, by preference').click();
+  for (const l of ['Faculty advisors', 'Observers', /^Chairs/, /Collect position papers/]) { const sw = org.getByRole('switch', { name: l }).first(); if (!(await sw.isChecked())) await sw.click(); }
+  await org.locator('input[type=date]').nth(1).fill('2027-02-10');
+  await org.getByRole('button', { name: 'Save', exact: true }).click(); await org.waitForTimeout(600);
+  const s = await api(org, 'GET', `/api/admin/events/${eventId}/applications-settings`);
+  if (!s.roles.advisor || !s.roles.observer || !s.roles.chair || !s.positionPapers.enabled) throw new Error(JSON.stringify(s));
+});
+await step('publish', org, async () => {
+  await org.goto(`${B}/app/overview`); await org.getByRole('button', { name: 'Publish' }).click(); await org.waitForTimeout(800);
+  if (!(await org.locator('.badge', { hasText: 'Live' }).count())) throw new Error('not live');
+});
+await step('job board: post a director role for each committee', org, async () => {
+  await org.goto(`${B}/app/jobs`); await org.getByRole('button', { name: /Post a director role/ }).click(); await org.waitForTimeout(900);
+  if ((await org.locator('tbody tr').count()) < 3) throw new Error('roles not posted');
+});
+await step('public: Explore, conference page and Job Board show TMUN', org, async () => {
+  await org.goto(`${B}/explore`); await org.waitForSelector(`text=${'TMUN'}`);
+  await org.goto(`${B}/c/${slug}`); await org.waitForSelector('text=Apply as a delegate');
+  await org.waitForSelector('text=Maritime security and peacekeeping.');
+  await org.screenshot({ path: `${SHOTS}/05-public-page.png`, fullPage: true });
+  await org.goto(`${B}/jobs`); await org.waitForSelector('text=Director, UNSC');
+});
+
+// ============ DELEGATES ============
+async function registerDelegate(name, email, opts = {}) {
+  const d = await newPage(`delegate ${name}`, true);
+  await d.goto(`${B}/register/${code}?src=instagram`); await d.waitForSelector('text=Full name');
+  await d.getByLabel(/Full name/).fill(name); await d.getByLabel('Email', { exact: true }).fill(email);
+  await d.getByLabel(/Mobile/).first().fill(opts.mobile ?? '98' + String(Math.floor(10000000 + Math.random() * 89999999)));
+  await d.getByLabel('School or college').fill('Delhi Public School'); await d.getByLabel('Class or year').selectOption({ index: 3 });
+  await d.getByLabel('City').fill('New Delhi'); await d.getByLabel('Date of birth').fill('2005-06-06');
+  await d.locator('button.chip').first().click();
+  if (opts.coupon) { await d.getByText('Have a coupon code?').click(); await d.getByPlaceholder('e.g. EARLY10').fill(opts.coupon); }
+  await d.getByLabel(/I agree/).check();
+  await d.waitForTimeout(1700);
+  await d.getByRole('button', { name: /Register|Send my application/ }).click();
+  await d.waitForURL(/\/r\//, { timeout: 15000 }); await d.waitForTimeout(700);
+  return d;
+}
+let delA, delB, delC;
+await step('delegate A registers (instant allotment) and sees bank, QR, link, in person', org, async () => {
+  delA = await registerDelegate('Aisha Delegate', 'aisha@example.com');
+  for (const t of ['Pay', 'Open the payment page', 'Paying in person?', '50100012345678']) await delA.waitForSelector(`text=${t}`);
+  if (await delA.locator('text=Sandbox test payment').count()) throw new Error('sandbox offered to an organiser delegate');
+  await delA.screenshot({ path: `${SHOTS}/06-delegate-pay.png`, fullPage: true });
+});
+await step('delegate A uploads payment proof', org, async () => {
+  await delA.getByLabel('Transaction reference (UTR)').fill('432112345678');
+  await delA.setInputFiles('#upload input[type=file]', PROOF);
+  await delA.getByRole('button', { name: 'Submit payment proof' }).click(); await delA.waitForTimeout(900);
+  await delA.reload(); await delA.waitForSelector('text=under review');
+});
+await step('organiser approves the proof → delegate A confirmed', org, async () => {
+  await org.goto(`${B}/app/payments/review`); await org.waitForSelector('text=Aisha Delegate');
+  await org.getByRole('button', { name: 'Approve' }).first().click(); await org.waitForTimeout(400);
+  const confirm = org.getByRole('button', { name: /^(Approve|Confirm)/ }).last(); if (await confirm.isVisible().catch(() => false)) await confirm.click();
+  await org.waitForTimeout(900);
+  await delA.reload(); await delA.waitForSelector('text=Confirmed');
+});
+await step('delegate A uploads a position paper', org, async () => {
+  await delA.setInputFiles('text=Upload PDF >> input', PDF).catch(async () => { await delA.locator('input[type=file][accept="application/pdf"]').setInputFiles(PDF); });
+  await delA.waitForTimeout(900); await delA.reload(); await delA.waitForSelector('text=Submitted');
+});
+await step('delegate B registers with coupon, pays in person, organiser records cash', org, async () => {
+  delB = await registerDelegate('Bilal Delegate', 'bilal@example.com', { coupon: 'TEST10' });
+  const ref = (await delB.locator('strong').filter({ hasText: /^TMUN/ }).first().innerText()).trim();
+  const reg = (await api(org, 'GET', `/api/admin/events/${eventId}/applicants?status=all`)).find((r) => r.ref === ref);
+  if (!reg) throw new Error('B not found');
+  await org.goto(`${B}/app/financials`); await org.waitForSelector('text=Record an in-person payment');
+  const portal = await api(delB, 'GET', `/api/public/r/${delB.url().split('/r/')[1].split('?')[0]}`);
+  await org.getByLabel(/Delegate ID/).fill(ref); await org.getByLabel(/Amount received/).fill(String(portal.payment.duePaise / 100)); await org.getByLabel(/^Note/).fill('Receipt 001');
+  await org.getByRole('button', { name: 'Record payment' }).click(); await org.waitForTimeout(900);
+  await delB.reload(); await delB.waitForSelector('text=Confirmed');
+});
+await step('review mode: delegate C applies, organiser scores and assigns', org, async () => {
+  await org.goto(`${B}/app/applications?tab=settings`); await org.getByText('After we review applications').click();
+  await org.getByRole('button', { name: 'Save', exact: true }).click(); await org.waitForTimeout(600);
+  delC = await registerDelegate('Chen Delegate', 'chen@example.com');
+  await delC.waitForSelector('text=Application under review');
+  await org.goto(`${B}/app/applications`); await org.waitForSelector('text=Chen Delegate');
+  await org.getByLabel('Score').first().selectOption('7'); await org.waitForTimeout(400);
+  await org.getByRole('button', { name: 'Accept & assign' }).first().click(); await org.waitForTimeout(600);
+  await org.locator('input[name=seat]').first().check(); await org.getByRole('button', { name: 'Assign', exact: true }).click(); await org.waitForTimeout(900);
+  await delC.reload(); await delC.waitForSelector('text=Provisional');
+});
+await step('faculty advisor applies; organiser accepts', org, async () => {
+  const a = await newPage('advisor');
+  await a.goto(`${B}/c/${slug}`); await a.getByRole('button', { name: 'Apply as a faculty advisor' }).click();
+  await a.getByLabel('Full name').fill('Mrs Advisor'); await a.getByLabel('Email').fill('advisor@school.example'); await a.getByLabel(/School or institution/).fill('Delhi Public School');
+  await a.getByRole('button', { name: 'Send application' }).click(); await a.waitForSelector('text=Application sent');
+  await org.goto(`${B}/app/applications?tab=advisor`); await org.getByText('Mrs Advisor').click();
+  await org.getByRole('button', { name: 'Accept', exact: true }).click(); await org.waitForTimeout(800);
+  await a.getByRole('link', { name: 'Check its status' }).click(); await a.waitForSelector('text=Accepted');
+});
+let chairPass = '';
+await step('chair applies from the Job Board with a CV; organiser accepts with an account', org, async () => {
+  const c = await newPage('chair applicant');
+  await c.goto(`${B}/jobs`); await c.locator('.pf-job', { hasText: 'Director, UNSC' }).getByRole('button', { name: 'Apply' }).click();
+  await c.getByLabel('Full name').fill('Charu Chair'); await c.getByLabel('Email').fill('charu@chairs.example'); await c.getByLabel(/School, college or organisation/).fill('St Stephen’s College');
+  await c.getByLabel(/Your MUN experience/).fill('Chaired five Security Councils and two crisis committees.');
+  await c.setInputFiles('input[type=file]', PDF);
+  await c.getByRole('button', { name: 'Send application' }).click(); await c.waitForSelector('text=Application sent');
+  await org.goto(`${B}/app/applications?tab=team`); await org.getByText('Charu Chair').click();
+  await org.getByRole('button', { name: 'Accept', exact: true }).click(); await org.waitForTimeout(1000);
+  const mail = (await api(org, 'GET', '/api/admin/notifications?q=charu')).find((n) => n.template_key === 'staff_invite');
+  chairPass = /Temporary password: (\S+)/.exec(mail?.body ?? '')?.[1] ?? '';
+  if (!chairPass) throw new Error('no staff invite email with a password');
+});
+await step('chair signs in, reviews the position paper and runs a live session', org, async () => {
+  const ch = await newPage('chair');
+  await ch.goto(`${B}/login`); await ch.getByLabel('Email').fill('charu@chairs.example'); await ch.getByLabel('Password').fill(chairPass); await ch.getByRole('button', { name: 'Sign in' }).click();
+  await ch.waitForURL(/\/app/); await ch.goto(`${B}/app/documents`); await ch.waitForSelector('text=Position papers');
+  await ch.getByText('Aisha Delegate').click(); await ch.getByLabel('Score (0–10)').selectOption('8'); await ch.getByLabel('Feedback').fill('Clear and well researched.');
+  await ch.getByRole('button', { name: 'Send feedback' }).click(); await ch.waitForTimeout(700);
+  await ch.goto(`${B}/app/sessions`); await ch.waitForSelector('text=Start live session');
+  const [con] = await Promise.all([ch.context().waitForEvent('page'), ch.getByRole('button', { name: 'Start live session' }).first().click()]);
+  watch(con, 'chair console'); await con.waitForSelector('text=Roll call');
+  await con.getByRole('button', { name: 'All present' }).click(); await con.waitForTimeout(400);
+  await con.getByRole('button', { name: 'Add motion' }).click(); await con.waitForTimeout(300);
+  await con.getByRole('button', { name: 'Vote', exact: true }).first().click(); await con.waitForTimeout(300);
+  for (const y of await con.locator('.lv-ballot button.for').all()) await y.click();
+  await con.getByRole('button', { name: 'Close the vote' }).click(); await con.waitForSelector('text=Passes');
+  await con.screenshot({ path: `${SHOTS}/07-chair-console.png`, fullPage: true });
+  await delA.reload(); await delA.waitForSelector('text=8/10');
+});
+await step('documents: upload a study guide PDF', org, async () => {
+  await org.goto(`${B}/app/documents`); await org.waitForSelector('text=Study guides');
+  const [chooser] = await Promise.all([org.waitForEvent('filechooser'), org.getByRole('button', { name: 'Upload PDF' }).first().click()]);
+  await chooser.setFiles(PDF); await org.waitForTimeout(900);
+  await org.waitForSelector('text=Open');
+});
+await step('check-in delegate A at the door', org, async () => {
+  const ref = (await api(org, 'GET', `/api/admin/events/${eventId}/applicants?status=all`)).find((r) => r.full_name === 'Aisha Delegate').ref;
+  await org.goto(`${B}/app/checkin`); await org.getByLabel('Badge code or delegate ID').fill(ref); await org.getByRole('button', { name: 'Check in' }).click();
+  await org.waitForSelector('text=1 of');
+});
+await step('lists, exports, badges and certificates', org, async () => {
+  await org.goto(`${B}/app/lists`); await org.waitForTimeout(800);
+  for (const u of [`/api/admin/events/${eventId}/badges.pdf`, `/api/admin/events/${eventId}/certificates.pdf`, `/api/admin/events/${eventId}/lists/master/export?format=csv`, `/api/admin/events/${eventId}/lists/master/export?format=xlsx`]) {
+    const r = await org.request.get(B + u); if (r.status() !== 200) throw new Error(`${u} → ${r.status()}`);
+  }
+});
+await step('communications: templates and a bulk email', org, async () => {
+  await org.goto(`${B}/app/messages`); await org.waitForSelector('text=Communications');
+  const r = await api(org, 'POST', `/api/admin/events/${eventId}/bulk-message`, { template: 'event_reminder', list: 'master' });
+  if (!(r.queued >= 2)) throw new Error('bulk queued ' + r.queued);
+});
+await step('refund delegate B, approve and record the bank reference', org, async () => {
+  const reg = (await api(org, 'GET', `/api/admin/events/${eventId}/applicants?status=all`)).find((r) => r.full_name === 'Bilal Delegate');
+  await org.goto(`${B}/app/registrations/${reg.id}`); await org.getByRole('button', { name: 'Refund…' }).click();
+  await org.getByLabel('Reason').fill('Cannot attend'); await org.getByRole('button', { name: 'Confirm' }).click(); await org.waitForTimeout(700);
+  await org.goto(`${B}/app/payments`); await org.waitForTimeout(700);
+  await org.getByText('Refunds', { exact: true }).click().catch(() => {});
+  await org.waitForTimeout(500);
+  const rf = (await api(org, 'GET', `/api/finance/refunds`).catch(() => null)) ?? [];
+  const id = rf.find?.((x) => x.status === 'requested')?.id;
+  if (!id) throw new Error('refund not listed');
+  await api(org, 'POST', `/api/finance/refunds/${id}/approve`);
+  await api(org, 'POST', `/api/finance/refunds/${id}/complete`, { reference: 'NEFT123456' });
+});
+await step('expenses: create, approve, pay', org, async () => {
+  const e = await api(org, 'POST', '/api/finance/expenses', { event_id: eventId, category: 'venue', description: 'Hall booking', bill_date: '2026-10-20', amount_paise: 5000000, status: 'submitted' });
+  await org.goto(`${B}/app/expenses`); await org.waitForSelector('text=Hall booking');
+  await api(org, 'POST', `/api/finance/expenses/${e.id}/approve`);
+  await api(org, 'POST', `/api/finance/expenses/${e.id}/pay`, { amount_paise: 5000000, mode: 'bank', reference: 'UTR998877', paid_on: '2026-10-21' });
+});
+await step('books: trial balance balances', org, async () => {
+  const tb = await api(org, 'GET', '/api/finance/books/trial-balance');
+  const rows = tb.rows ?? tb; const dr = rows.reduce((s, r) => s + (r.debit_paise ?? r.debit ?? 0), 0); const cr = rows.reduce((s, r) => s + (r.credit_paise ?? r.credit ?? 0), 0);
+  if (tb.totals && tb.totals.debit !== tb.totals.credit) throw new Error('trial balance does not balance');
+  if (!tb.totals && dr !== cr) throw new Error(`trial balance ${dr} vs ${cr}`);
+  await org.goto(`${B}/app/books`); await org.waitForSelector('text=Trial balance');
+});
+await step('settings: every tab loads; invite a team member; back up now', org, async () => {
+  await org.goto(`${B}/app/settings`);
+  for (const t of ['Event rules', 'Organisation', 'Users & roles', 'Integrations', 'Google Sheets', 'Backups', 'Data protection']) { await org.getByRole('tab', { name: t }).click(); await org.waitForTimeout(500); }
+  await org.getByRole('tab', { name: 'Event rules' }).click(); await org.getByRole('button', { name: 'Save event settings' }).click(); await org.waitForTimeout(500);
+  await org.getByRole('tab', { name: 'Users & roles' }).click(); await org.getByRole('button', { name: /Invite staff/ }).click();
+  await org.getByLabel('Name').fill('Dev Desk'); await org.getByLabel('Email').fill('dev@testmun.example'); await org.getByRole('button', { name: 'Confirm' }).click(); await org.getByRole('button', { name: 'Done' }).click(); await org.waitForSelector('text=Dev Desk');
+  await org.getByRole('tab', { name: 'Backups' }).click(); await org.getByRole('button', { name: 'Back up now' }).click(); await org.waitForSelector('text=Passed', { timeout: 15000 });
+});
+await step('every organiser screen opens without errors', org, async () => {
+  const links = await org.locator('.side a.nav').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
+  for (const l of links) { await org.goto(B + l); await org.waitForTimeout(700); const bad = await org.locator('.error-box').count(); if (bad) throw new Error(`error box on ${l}: ` + await org.locator('.error-box').first().innerText()); }
+});
+await step('organiser cannot see the demo organiser\'s conference', org, async () => {
+  const me = await api(org, 'GET', '/api/auth/me'); if (me.events.some((e) => e.code === 'BGYS27')) throw new Error('isolation broken');
+});
+
+// ============ standalone live session ============
+await step('anyone can run a session at /session; a delegate joins and asks to speak', org, async () => {
+  const p = await newPage('session chair');
+  await p.goto(`${B}/session`); await p.getByRole('button', { name: 'New session' }).click();
+  await p.locator('.pf-editor input.pf-input').first().fill('General Assembly');
+  await p.getByRole('button', { name: /^P5/ }).click(); await p.getByRole('button', { name: 'Add committee' }).click();
+  await p.waitForURL(/\/chair/); await p.waitForSelector('.lv-code'); const sc = (await p.locator('.lv-code').innerText()).trim();
+  await p.getByRole('button', { name: 'All present' }).click();
+  const d = await newPage('session delegate', true); await d.goto(`${B}/session/${sc}`); await d.getByRole('button', { name: /France/ }).click();
+  await d.getByRole('button', { name: 'Ask to speak' }).click(); await p.waitForSelector('text=Asking to speak', { timeout: 6000 });
+});
+
+// ============ demo workspace: every role, every screen ============
+async function signIn(email) {
+  const p = await newPage(email);
+  await p.goto(`${B}/login`); await p.getByLabel('Email').fill(email); await p.getByLabel('Password').fill('ChangeMe!2026'); await p.getByRole('button', { name: 'Sign in' }).click();
+  await p.waitForTimeout(900);
+  if (await p.getByLabel('6-digit code').count()) { const sec = (await p.locator('.mono').first().innerText()).trim(); await p.getByLabel('6-digit code').fill(totp(sec)); await p.getByRole('button', { name: /Turn on/ }).click(); }
+  await p.waitForURL(/\/app/); return p;
+}
+for (const email of ['admin@example.org', 'cfo@example.org', 'accounts@example.org', 'desk@example.org', 'chair.unsc@example.org', 'auditor@example.org']) {
+  const p = await signIn(email);
+  await step(`demo ${email}: every screen in the menu opens`, p, async () => {
+    const links = await p.locator('.side a.nav').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
+    if (!links.length) throw new Error('no menu');
+    for (const l of links) { await p.goto(B + l); await p.waitForTimeout(650); if (await p.locator('.error-box').count()) throw new Error(`error box on ${l}: ` + await p.locator('.error-box').first().innerText()); }
+  });
+  await p.context().close();
+}
+
+await br.close();
+console.log('\n==== SUMMARY ====');
+const fails = results.filter((r) => r[0] === 'FAIL');
+console.log(`${results.length - fails.length} passed, ${fails.length} failed`);
+for (const f of fails) console.log('FAIL:', f[1], '—', f[2]);
+const uniq = [...new Set(problems)]; if (uniq.length) { console.log('\nProblems seen:'); for (const p of uniq.slice(0, 60)) console.log(' -', p); }
+fs.writeFileSync(`${DIR}/e2e-report.json`, JSON.stringify({ results, problems: uniq }, null, 1));

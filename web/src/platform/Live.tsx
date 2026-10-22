@@ -59,7 +59,7 @@ export function StartSession() {
       <div className="pf-hero"><div className="pf-eyebrow">Live committees</div><h1 className="pf-h1" style={{ marginTop: 10 }}>Run a committee session</h1><p className="pf-sub">Roll call, the speakers list, motions and voting with Security Council vetoes. Free, no account needed. Delegates follow along on their phones with a six-letter code.</p></div>
       <div className="pf-choices" style={{ marginTop: 26 }}>
         <div className="pf-card pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <span className="glyph" style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--pf-green-soft)', color: 'var(--pf-green)', display: 'grid', placeItems: 'center' }}><Gavel className="icon" /></span>
+          <span className="glyph" style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--pf-brand-soft)', color: 'var(--pf-brand)', display: 'grid', placeItems: 'center' }}><Gavel className="icon" /></span>
           <div className="pf-h2">Start a session</div>
           <p className="pf-muted" style={{ margin: 0 }}>Name the committee and add its delegations. You get a chair console and a code for delegates.</p>
           <button className="pf-btn primary" onClick={() => setEditing(true)}><Plus className="icon" />New session</button>

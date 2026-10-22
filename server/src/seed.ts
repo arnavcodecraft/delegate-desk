@@ -5,6 +5,7 @@
  *   npm run seed -- --demo  # plus sample activity
  */
 import { settleProofReads } from './services/evidence.ts';
+import { migrateLegacyPaymentDetails } from './services/conference.ts';
 import { stopOcr } from './services/ocr.ts';
 import { openDb, one, insert, all, run } from './db.ts';
 import { seedChart } from './services/ledger.ts';
@@ -109,6 +110,7 @@ export function seed() {
   insert('position', { id: uid(), event_id: eventId, kind: 'chair', title: 'Vice-Chair, UNHRC', committee_id: committeeIds.UNHRC, description: 'Help run the Human Rights Council with the Director. At least two conferences as a delegate or chair.', openings: 1, deadline: '2026-12-20T18:29:59.000Z', open: 1, sort: 0, created_at: now() });
   insert('position', { id: uid(), event_id: eventId, kind: 'press', title: 'Head of Press, IPC', committee_id: committeeIds.IPC, description: 'Lead the International Press Corps: assign stories, edit the daily newsletter.', openings: 1, deadline: null, open: 1, sort: 1, created_at: now() });
   insert('position', { id: uid(), event_id: eventId, kind: 'volunteer', title: 'Logistics volunteer', committee_id: null, description: 'Registration desk, committee rooms and the socials. Certificates for all volunteers.', openings: 12, deadline: null, open: 1, sort: 2, created_at: now() });
+  migrateLegacyPaymentDetails();   // UPI + bank transfer as the demo's payment methods
   insert('executive_board', { id: uid(), event_id: eventId, committee_id: committeeIds.UNSC, name: 'Ananya Rao', position: 'Director', email: 'chair.unsc@example.org', phone: '9800000011' });
   insert('executive_board', { id: uid(), event_id: eventId, committee_id: committeeIds.UNSC, name: 'Kabir Singh', position: 'Vice-Director', email: 'kabir@example.org', phone: '9800000012' });
   return { orgId, eventId, committeeIds };

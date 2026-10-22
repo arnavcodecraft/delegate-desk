@@ -28,7 +28,7 @@ import { badgesPdf, certificatesPdf, checkIn, sendCertificates } from '../servic
 import { createBackup, verifyBackup, backupFilePath } from '../services/backup.ts';
 import { balanceOf } from '../services/fees.ts';
 import { parseMoney } from '../util.ts';
-import { currentWorkspace, claimCode } from '../platform.ts';
+import { currentWorkspace } from '../platform.ts';
 import { syncListing } from '../services/conference.ts';
 
 export const authRouter = express.Router();
@@ -116,29 +116,21 @@ adminRouter.patch('/org', requirePerm('settings.org', 'settings.finance'), h((re
 }));
 
 adminRouter.get('/events', h(() => all('SELECT * FROM event ORDER BY created_at DESC').map((e) => ({ ...e, settings: eventSettings(e) }))));
-adminRouter.post('/events', requirePerm('event.config'), h((req) => {
-  const b = req.body ?? {};
-  if (!/^[A-Z0-9]{3,12}$/.test(String(b.code ?? '').toUpperCase())) throw bad('Event code: 3–12 letters/numbers, e.g. BGYS27');
-  if (!b.name?.trim()) throw bad('Name the event');
-  const id = uid();
-  tx(() => {
-    insert('event', { id, org_id: getOrg().id, code: b.code.toUpperCase(), name: b.name.trim(), kind: b.kind ?? 'mun', venue: b.venue ?? null, city: b.city ?? null, state_code: b.state_code ?? getOrg().state_code, start_date: b.start_date ?? null, end_date: b.end_date ?? null, status: 'draft', settings: '{}', created_at: now() });
-    claimCode(b.code, id);   // links are platform-wide, so the code must be free across all organisers
-  });
-  syncListing(id);
-  audit('event.create', 'event', id, undefined, b);
-  return getEvent(id);
-}));
 adminRouter.patch('/events/:id', requirePerm('event.config'), h((req) => {
   const e = getEvent(P(req).id);
   const b = req.body ?? {};
-  const patch = Object.fromEntries(Object.entries(b).filter(([k]) => ['name', 'venue', 'city', 'state_code', 'start_date', 'end_date', 'kind'].includes(k)));
-  if (b.status) {
-    if (!['draft', 'open', 'closed'].includes(b.status)) throw bad('Use the dedicated actions to mark an event held or cancelled');
-    patch.status = b.status;
-  }
+  // Rules only. Public details go through PUT /events/:id/profile, publishing through /publish, who can apply
+  // through /applications-settings, and fees and payment methods through /financials.
+  const stray = Object.keys(b).filter((k) => !['state_code', 'settings'].includes(k));
+  if (stray.length) throw bad(`These are changed elsewhere: ${stray.join(', ')}`);
+  const patch = Object.fromEntries(Object.entries(b).filter(([k]) => ['state_code'].includes(k)));
   if (Object.keys(patch).length) { const d = diff(e, patch); update('event', e.id, patch); audit('event.update', 'event', e.id, d.before, d.after); }
-  if (b.settings) saveEventSettings(e.id, b.settings);
+  if (b.settings) {
+    const owned = ['profile', 'roles', 'applicationDeadline', 'allocationMode', 'free', 'paymentMethods', 'positionPapers', 'gstEnabled', 'gstRateBp'];
+    const clash = Object.keys(b.settings).filter((k) => owned.includes(k));
+    if (clash.length) throw bad(`These are changed elsewhere: ${clash.join(', ')}`);
+    saveEventSettings(e.id, b.settings);
+  }
   syncListing(e.id);
   const out = getEvent(e.id);
   return { ...out, settings: eventSettings(out) };
@@ -173,15 +165,6 @@ adminRouter.post('/events/:id/coupons', requirePerm('event.config'), h((req) => 
 
 // ---------- committees, portfolios, allocation ----------
 adminRouter.get('/events/:id/inventory', requirePerm('reg.read', 'lists.read'), h((req) => inventory(P(req).id)));
-adminRouter.post('/events/:id/committees', requirePerm('alloc.config'), h((req) => {
-  const b = req.body ?? {};
-  if (!b.name?.trim() || !b.short?.trim()) throw bad('Name and short code are required');
-  const id = b.id ?? uid();
-  const row = { name: b.name.trim(), short: b.short.trim().toUpperCase(), kind: b.kind === 'double' ? 'double' : 'single', description: b.description ?? null, guide_url: b.guide_url ?? null, sort: b.sort ?? 0 };
-  if (b.id) update('committee', b.id, row); else insert('committee', { id, event_id: P(req).id, ...row });
-  audit(b.id ? 'committee.update' : 'committee.create', 'committee', id, undefined, row);
-  return one('SELECT * FROM committee WHERE id = ?', id);
-}));
 adminRouter.post('/committees/:id/portfolios', requirePerm('alloc.config'), h((req) => {
   const items = Array.isArray(req.body?.portfolios) ? req.body.portfolios : [req.body];
   const ids = items.map((p: any) => addPortfolio(P(req).id, { name: p.name, tier: p.tier, premiumPaise: p.premium_paise, seats: p.seats, sort: p.sort }));

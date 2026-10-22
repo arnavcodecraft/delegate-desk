@@ -65,7 +65,7 @@ export function Btn({ onClick, children, kind, size, disabled, title, type, clas
 }
 
 // ---------- prompt / confirm dialogs ----------
-type PromptReq = { title: string; message?: string; fields?: { key: string; label: string; type?: string; value?: string; options?: { value: string; label: string }[]; required?: boolean; hint?: string }[]; confirm?: string; danger?: boolean; resolve: (v: Record<string, string> | null) => void };
+type PromptReq = { title: string; message?: string; fields?: { key: string; label: string; type?: string; value?: string; options?: { value: string; label: string }[]; required?: boolean; hint?: string }[]; confirm?: string; danger?: boolean; info?: boolean; resolve: (v: Record<string, string> | null) => void };
 const PromptCtx = createContext<(r: Omit<PromptReq, 'resolve'>) => Promise<Record<string, string> | null>>(async () => null);
 function PromptHost({ children }: { children: React.ReactNode }) {
   const [req, setReq] = useState<PromptReq | null>(null);
@@ -80,7 +80,7 @@ function PromptHost({ children }: { children: React.ReactNode }) {
     <PromptCtx.Provider value={ask}>
       {children}
       {req && (
-        <Modal title={req.title} onClose={() => close(null)} footer={<><button className="btn" onClick={() => close(null)}>Cancel</button><button className={`btn ${req.danger ? 'danger' : 'primary'}`} disabled={missing} onClick={() => close(vals)}>{req.confirm ?? 'Confirm'}</button></>}>
+        <Modal title={req.title} onClose={() => close(null)} footer={<>{!req.info && <button className="btn" onClick={() => close(null)}>Cancel</button>}<button className={`btn ${req.danger ? 'danger' : 'primary'}`} disabled={missing} onClick={() => close(vals)}>{req.confirm ?? 'Confirm'}</button></>}>
           <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!missing) close(vals); }}>
             {req.message && <p className="muted">{req.message}</p>}
             {(req.fields ?? []).map((f, i) => (
@@ -136,7 +136,7 @@ export function EmptyState({ icon: Icon = Inbox, title, children }: { icon?: Luc
   return <div className="empty"><Icon className="icon" aria-hidden /><strong>{title}</strong>{children && <div className="small">{children}</div>}</div>;
 }
 export function ErrorBox({ error, retry }: { error: Error; retry?: () => void }) {
-  return <div className="alert bad"><XCircle className="icon" aria-hidden /><div><strong>{error.message}</strong>{retry && <div style={{ marginTop: '.4rem' }}><button className="btn sm" onClick={retry}>Try again</button></div>}</div></div>;
+  return <div className="alert bad error-box"><XCircle className="icon" aria-hidden /><div><strong>{error.message}</strong>{retry && <div style={{ marginTop: '.4rem' }}><button className="btn sm" onClick={retry}>Try again</button></div>}</div></div>;
 }
 export function Alert({ tone, children }: { tone?: 'good' | 'warn' | 'bad' | 'info'; children: React.ReactNode }) {
   const Icon = tone === 'good' ? CheckCircle2 : tone === 'bad' ? XCircle : tone === 'warn' ? AlertTriangle : Info;
