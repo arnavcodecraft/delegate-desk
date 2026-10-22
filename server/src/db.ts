@@ -14,7 +14,25 @@ export function openDb(file = config.dbPath) {
   db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;');
   db.exec(fs.readFileSync(path.join(import.meta.dirname, 'schema.sql'), 'utf8'));
+  migrate();
   return db;
+}
+
+/** Columns added after the first release, applied to every database at startup (each ALTER runs once). */
+const COLUMNS: [table: string, column: string, ddl: string][] = [
+  ['template', 'provider_template', 'TEXT'],
+  ['template', 'language', "TEXT NOT NULL DEFAULT 'en'"],
+  ['template', 'params', "TEXT NOT NULL DEFAULT '[]'"],
+  ['notification', 'vars', "TEXT NOT NULL DEFAULT '{}'"],
+  ['notification', 'provider_message_id', 'TEXT'],
+  ['notification', 'delivery_status', 'TEXT'],
+  ['expense', 'is_po', 'INTEGER NOT NULL DEFAULT 0'],
+];
+function migrate() {
+  for (const [table, column, ddl] of COLUMNS) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  }
 }
 
 export function getDb() {

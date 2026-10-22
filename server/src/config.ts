@@ -24,6 +24,24 @@ export const config = {
     apiVersion: process.env.CASHFREE_API_VERSION ?? '2023-08-01',
   },
   jobsEnabled: process.env.JOBS !== 'off',
+  ocrEnabled: process.env.OCR !== 'off',
+  backup: {
+    enabled: process.env.BACKUPS !== 'off', key: process.env.BACKUP_KEY ?? '',
+    dir: process.env.BACKUP_DIR ?? path.join(root, 'data', 'backups'), keep: Number(process.env.BACKUP_KEEP ?? 30),
+  },
+  // Claude-powered assistance turns on when Anthropic credentials are present.
+  ai: { enabled: !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN), baseUrl: process.env.ANTHROPIC_BASE_URL ?? '' },
+  google: {
+    serviceAccountJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON ?? '', serviceAccountFile: process.env.GOOGLE_SERVICE_ACCOUNT_FILE ?? '',
+    tokenUrl: process.env.GOOGLE_TOKEN_URL ?? '', sheetsBase: process.env.GOOGLE_SHEETS_BASE ?? 'https://sheets.googleapis.com',
+  },
+  whatsapp: {
+    token: process.env.WHATSAPP_TOKEN ?? '', phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? '',
+    appSecret: process.env.WHATSAPP_APP_SECRET ?? '', verifyToken: process.env.WHATSAPP_VERIFY_TOKEN ?? '',
+    apiVersion: process.env.WHATSAPP_API_VERSION ?? 'v21.0', apiBase: process.env.WHATSAPP_API_BASE ?? 'https://graph.facebook.com',
+  },
+  msg91: { authKey: process.env.MSG91_AUTH_KEY ?? '', apiBase: process.env.MSG91_API_BASE ?? 'https://control.msg91.com' },
+  clamav: { host: process.env.CLAMAV_HOST ?? '', port: Number(process.env.CLAMAV_PORT ?? 3310), required: process.env.CLAMAV_REQUIRED === '1' },
   // The built-in sandbox gateway is always available in development; in production only when explicitly allowed.
   allowSandbox: process.env.NODE_ENV !== 'production' || process.env.ALLOW_SANDBOX === '1',
   isProd: process.env.NODE_ENV === 'production',

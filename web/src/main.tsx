@@ -1,7 +1,9 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import '@fontsource-variable/inter';
 import './styles.css';
+import { applyTheme, savedTheme } from './ui';
 import { ToastHost } from './ui';
 import Register from './pages/Register';
 import Portal, { SandboxPay, Consent, Privacy } from './pages/Portal';
@@ -16,6 +18,9 @@ import Expenses from './staff/Expenses';
 import Books from './staff/Books';
 import { Imports, Messages, Audit } from './staff/Misc';
 import Settings from './staff/Settings';
+import CheckIn from './staff/CheckIn';
+
+applyTheme(savedTheme());
 
 const staff = (el: React.ReactNode) => <StaffGate>{el}</StaffGate>;
 
@@ -49,6 +54,7 @@ function App() {
       <Route path="/app/messages" element={staff(<Messages />)} />
       <Route path="/app/settings" element={staff(<Settings />)} />
       <Route path="/app/audit" element={staff(<Audit />)} />
+      <Route path="/app/checkin" element={staff(<CheckIn />)} />
       <Route path="*" element={<div className="empty"><h1>Page not found</h1><a href="/login">Go to sign-in</a></div>} />
     </Routes>
   );

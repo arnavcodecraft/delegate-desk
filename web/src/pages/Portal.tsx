@@ -80,7 +80,7 @@ export default function Portal() {
   }
 
   return (
-    <PublicShell title={event.name} subtitle={<>Delegate ID <strong>{r.ref}</strong> · {r.full_name}</>}>
+    <PublicShell eyebrow="Your delegate page" title={event.name} subtitle={<>{r.full_name} · Delegate ID <strong>{r.ref}</strong></>}>
       <div className="stack">
         {orderState && orderState !== 'paid' && orderState !== 'failed' && <Alert tone="info"><strong>Processing your payment…</strong> We confirm it directly with the payment gateway. This usually takes a few seconds; you can close this page safely.</Alert>}
         {orderState === 'failed' && <Alert tone="bad">The payment did not go through. No money was taken, or it will be returned by your bank. Please try again.</Alert>}
@@ -112,6 +112,7 @@ export default function Portal() {
           </div>
         </div>
 
+        {v.data.checkinCode && <CheckinPass code={v.data.checkinCode} name={r.full_name} />}
         {payment && <PaymentCard token={token} payment={payment} reg={r} pay={pay} onDone={v.reload} />}
 
         {r.payment_status === 'submitted' && <Alert tone="info"><strong>Your payment proof is under review.</strong> The finance team checks it against the bank statement, usually within a day. Your seat stays held meanwhile.</Alert>}
@@ -358,3 +359,18 @@ export function Privacy() {
 }
 
 export { date };
+
+/** The same signed code as the printed badge, so delegates can check in from their phone. */
+function CheckinPass({ code, name }: { code: string; name: string }) {
+  const [qr, setQr] = useState<string | null>(null);
+  useEffect(() => { QRCode.toDataURL(code, { margin: 1, width: 360 }).then(setQr).catch(() => {}); }, [code]);
+  return (
+    <div className="card row" style={{ gap: '1.25rem', alignItems: 'center' }}>
+      {qr && <img src={qr} alt={`Check-in QR code for ${name}`} width={128} height={128} style={{ borderRadius: 10, background: '#fff', padding: 6, border: '1px solid var(--border)' }} />}
+      <div style={{ flex: '1 1 200px' }}>
+        <h3 style={{ marginBottom: '.25rem' }}>Your check-in pass</h3>
+        <p className="muted small" style={{ margin: 0 }}>Show this at the registration desk and committee door. It's the same code as on your printed badge.</p>
+      </div>
+    </div>
+  );
+}

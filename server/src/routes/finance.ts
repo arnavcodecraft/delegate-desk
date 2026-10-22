@@ -16,6 +16,10 @@ import { createExpense, editExpense, approveExpense, rejectExpense, payExpense, 
 import { trialBalance, ledger, journalRegister, book, profitAndLoss, balanceSheet, gstSummary, reverse, lockPeriod, unlockPeriod, currentFy } from '../services/ledger.ts';
 import { requestJournal, approveJournal, rejectJournal } from '../services/journals.ts';
 import { dashboard, scenario } from '../services/dashboard.ts';
+import { ocrImage, parseBill } from '../services/ocr.ts';
+import { checkUpload } from '../services/scanner.ts';
+import { readBill, readProofWithAi, summarise } from '../services/ai.ts';
+import { rateLimit } from '../auth.ts';
 import { toCsv, toXlsx, statementPdf, tallyXml, logExport, exportMeta, commissionStatementPdf, tablePdf, invoicePdf } from '../services/documents.ts';
 
 export const financeRouter = express.Router();
@@ -23,6 +27,7 @@ financeRouter.use(requireUser);
 
 // ---------- dashboard ----------
 financeRouter.get('/events/:id/dashboard', requirePerm('dashboard.read'), h((req) => dashboard(P(req).id)));
+financeRouter.post('/events/:id/ai/summary', requirePerm('dashboard.read'), h(async (req) => { rateLimit(`ai:${req.auth!.user.id}`, 40, 3600_000); return summarise(P(req).id); }));
 financeRouter.post('/events/:id/scenario', requirePerm('dashboard.read'), h((req) => scenario(P(req).id, req.body ?? {})));
 
 // ---------- screenshot review queue ----------
@@ -36,6 +41,12 @@ financeRouter.get('/events/:id/evidence', requirePerm('payments.read'), h((req) 
 }));
 financeRouter.post('/evidence/:id/approve', requirePerm('payments.approve'), h((req) => approveEvidence(P(req).id, req.body?.amount_paise)));
 financeRouter.post('/evidence/:id/reject', requirePerm('payments.approve'), h((req) => { rejectEvidence(P(req).id, req.body?.reason, req.body?.mode === 'resubmit' ? 'resubmit' : 'rejected'); return { ok: true }; }));
+financeRouter.post('/evidence/:id/ai-read', requirePerm('payments.read'), h(async (req) => {
+  rateLimit(`ai:${req.auth!.user.id}`, 40, 3600_000);
+  const e = one('SELECT * FROM payment_evidence WHERE id = ?', P(req).id);
+  if (!e) throw notFound('Payment proof');
+  return readProofWithAi(fs.readFileSync(path.join(config.uploadDir, e.file_path)), e.mime);
+}));
 financeRouter.post('/evidence/bulk-approve', requirePerm('payments.approve'), h((req) => bulkApprove(req.body?.ids ?? [], req.body?.requireBankMatch !== false)));
 financeRouter.post('/evidence/rematch', requirePerm('payments.read'), h(() => ({ matched: autoMatchEvidence() })));
 financeRouter.get('/bank-lines', requirePerm('payments.read'), h(() => all(`SELECT b.*, r.ref FROM bank_line b LEFT JOIN payment_evidence e ON e.id = b.matched_evidence_id LEFT JOIN registration r ON r.id = e.registration_id ORDER BY b.txn_date DESC LIMIT 1000`)));
@@ -163,10 +174,11 @@ financeRouter.get('/events/:id/expenses', requirePerm('expense.read', 'expense.c
     .map((e) => ({ ...e, splits: json(e.splits, []), bill_url: e.bill_path ? signedFileUrl(e.bill_path) : null }));
 }));
 financeRouter.get('/events/:id/budget-check', requirePerm('expense.create'), h((req) => budgetStatus(P(req).id, String(req.query.category), Number(req.query.amount ?? 0))));
-financeRouter.post('/expenses', requirePerm('expense.create'), upload.single('bill'), h((req) => {
+financeRouter.post('/expenses', requirePerm('expense.create'), upload.single('bill'), h(async (req) => {
   const b = req.file ? JSON.parse(req.body.data ?? '{}') : req.body ?? {};
   let billPath: string | null = null;
   if (req.file) {
+    await checkUpload(req.file.buffer);
     const mime = sniff(req.file.buffer);
     if (!mime) throw bad('Bill must be a JPG, PNG or PDF');
     billPath = path.join('bills', `${uid()}.${mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg'}`);
@@ -175,11 +187,36 @@ financeRouter.post('/expenses', requirePerm('expense.create'), upload.single('bi
   }
   return createExpense({ ...b, bill_path: billPath });
 }));
+/** Read a bill and suggest vendor, date, invoice number and amounts. The user confirms before saving. */
+financeRouter.post('/expenses/read-bill', requirePerm('expense.create'), upload.single('bill'), h(async (req) => {
+  if (!req.file) throw bad('Attach the bill');
+  await checkUpload(req.file.buffer);
+  const mime = sniff(req.file.buffer);
+  if (!mime) throw bad('Bill must be a JPG, PNG or PDF');
+  // With AI configured the model reads the bill (better on photos and handwriting); otherwise on-device OCR.
+  if (req.query.ai !== '0' && config.ai.enabled) { rateLimit(`ai:${req.auth!.user.id}`, 40, 3600_000); return readBill(req.file.buffer, mime); }
+  const text = mime === 'application/pdf'
+    ? [...req.file.buffer.toString('latin1').matchAll(/\(([^()]{1,200})\)\s*Tj/g)].map((m) => m[1]).join('\n')
+    : await ocrImage(req.file.buffer);
+  if (!text.trim()) return { found: false };
+  const b = parseBill(text);
+  const vendor = (b.gstin && one('SELECT id, name FROM vendor WHERE upper(gstin) = ?', b.gstin))
+    || (b.vendor && one('SELECT id, name FROM vendor WHERE lower(name) = lower(?)', b.vendor.trim())) || null;
+  const gstRate = b.amountPaise && b.gstPaise ? [0, 5, 12, 18, 28].reduce((best, r) => (Math.abs(b.amountPaise! * r / 100 - b.gstPaise!) < Math.abs(b.amountPaise! * best / 100 - b.gstPaise!) ? r : best), 18) : null;
+  return { found: true, ...b, gstRate, vendorId: vendor?.id ?? null, vendorName: vendor?.name ?? b.vendor };
+}));
 financeRouter.patch('/expenses/:id', requirePerm('expense.create'), h((req) => {
   const e = one('SELECT submitted_by FROM expense WHERE id = ?', P(req).id);
   if (!e) throw notFound('Expense');
   if (e.submitted_by !== req.auth!.user.id && !can(req.auth!.roleNames, 'expense.approve')) throw forbidden();
   editExpense(P(req).id, req.body ?? {}); return { ok: true };
+}));
+financeRouter.post('/expenses/:id/submit', requirePerm('expense.create'), h((req) => {
+  const e = one('SELECT * FROM expense WHERE id = ?', P(req).id);
+  if (!e || e.status !== 'draft') throw conflict('Only purchase orders (drafts) can be submitted as bills');
+  update('expense', e.id, { status: 'submitted', invoice_no: req.body?.invoice_no || e.invoice_no, bill_date: req.body?.bill_date || e.bill_date });
+  audit('expense.po_to_bill', 'expense', e.id, { status: 'draft' }, { status: 'submitted' });
+  return { ok: true };
 }));
 financeRouter.post('/expenses/:id/approve', requirePerm('expense.approve'), h((req) => { approveExpense(P(req).id); return { ok: true }; }));
 financeRouter.post('/expenses/:id/reject', requirePerm('expense.approve'), h((req) => { rejectExpense(P(req).id, req.body?.reason); return { ok: true }; }));

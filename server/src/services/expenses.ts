@@ -58,7 +58,7 @@ export function createExpense(i: ExpenseInput) {
       description: i.description.trim(), vendor_id: i.vendor_id ?? null, invoice_no: i.invoice_no ?? null, bill_date: i.bill_date,
       amount_paise: i.amount_paise, gst_rate_bp: i.gst_rate_bp ?? 0, gst_paise: gst, itc_eligible: i.itc_eligible ? 1 : 0,
       tds_section: i.tds_section ?? null, tds_rate_bp: i.tds_rate_bp ?? 0, tds_paise: tds, payment_mode: i.payment_mode ?? 'bank', claimant_id: i.claimant_id ?? (i.payment_mode === 'personal' ? ctx().userId : null),
-      status: i.status ?? 'submitted', bill_path: i.bill_path ?? null, submitted_by: ctx().userId ?? null, budget_override: i.budget_override ? 1 : 0, created_at: now(),
+      status: i.status ?? 'submitted', is_po: i.status === 'draft' ? 1 : 0, bill_path: i.bill_path ?? null, submitted_by: ctx().userId ?? null, budget_override: i.budget_override ? 1 : 0, created_at: now(),
     });
     if (b.pct != null && b.pct >= 80) notifyStaff(['cfo'], 'staff_alert', { title: `Budget ${b.pct >= 100 ? 'exceeded' : 'at ' + b.pct + '%'}: ${i.category}`, message: `${ref} brings ${i.category} to ${inr(b.after!)} of ${inr(b.budget!)} (${b.pct}%).` }, i.event_id);
     const limit = orgSettings().approvalLimits.accountantExpensePaise;

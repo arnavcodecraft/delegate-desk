@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, qs } from '../api';
 import { inr, dt, label, toPaise, toRupees, today } from '../format';
@@ -14,7 +15,7 @@ export default function Referrals() {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="stack">
-      <PageHead title="Referrals & commission">{can('referrer.manage') && <button className="btn primary" onClick={() => setEdit({ kind: 'individual' })}>+ Referrer</button>}</PageHead>
+      <PageHead title="Referrals & commission" subtitle="Referral codes, the delegates they brought in, commission earned and payouts.">{can('referrer.manage') && <Btn kind="primary" icon={Plus} onClick={() => setEdit({ kind: 'individual' })}>Referrer</Btn>}</PageHead>
       <Tabs value={tab} onChange={setTab} tabs={[{ key: 'referrers', label: 'Referrers' }, { key: 'unmatched', label: 'Unmatched names' }, { key: 'plans', label: 'Plans' }, { key: 'payouts', label: 'Payouts' }, { key: 'tds', label: 'TDS register' }]} />
       {tab === 'referrers' && <div className="card flush"><DataTable rows={refs.data ?? []} onRowClick={(r) => setOpen(r.id)} columns={[
         { key: 'name', label: 'Referrer', render: (r: any) => <><strong>{r.name}</strong>{!r.active && <span className="badge">inactive</span>}<div className="small faint">{label(r.kind)}{r.aliases.length ? ` · also “${r.aliases.slice(0, 2).join('”, “')}”` : ''}</div></> },

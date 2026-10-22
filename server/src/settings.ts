@@ -36,6 +36,7 @@ export interface EventSettings {
   largeRefundPaise: number;          // refunds above this need a second approver
   commissionHoldDays: number;
   unverifiedAlertHours: number;
+  requireMobileOtp: boolean;
 }
 
 export const defaultEventSettings: EventSettings = {
@@ -57,6 +58,7 @@ export const defaultEventSettings: EventSettings = {
   largeRefundPaise: 1000000,
   commissionHoldDays: 7,
   unverifiedAlertHours: 24,
+  requireMobileOtp: false,
 };
 
 export interface OrgSettings {

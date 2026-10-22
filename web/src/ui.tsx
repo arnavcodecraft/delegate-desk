@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError } from './api';
+import { AlertTriangle, CheckCircle2, Info, XCircle, Inbox, type LucideIcon } from 'lucide-react';
 import { inr, inrShort, label } from './format';
 
 // ---------- data loading ----------
@@ -33,7 +34,7 @@ export function ToastHost({ children }: { children: React.ReactNode }) {
   return (
     <ToastCtx.Provider value={push}>
       <PromptHost>{children}</PromptHost>
-      <div className="toasts" role="status" aria-live="polite">{items.map((t) => <div key={t.id} className={`toast ${t.kind ?? ''}`}>{t.msg}</div>)}</div>
+      <div className="toasts" role="status" aria-live="polite">{items.map((t) => <div key={t.id} className={`toast ${t.kind ?? ''}`}>{t.kind === 'bad' ? <XCircle className="icon" /> : t.kind === 'ok' ? <CheckCircle2 className="icon" /> : null}<span>{t.msg}</span></div>)}</div>
     </ToastCtx.Provider>
   );
 }
@@ -52,13 +53,13 @@ export function useAction() {
   return { busy, run };
 }
 
-export function Btn({ onClick, children, kind, size, disabled, title, type, className }: { onClick?: () => any; children: React.ReactNode; kind?: 'primary' | 'danger' | 'good' | 'ghost'; size?: 'sm' | 'lg'; disabled?: boolean; title?: string; type?: 'button' | 'submit'; className?: string }) {
+export function Btn({ onClick, children, kind, size, disabled, title, type, className, icon: Icon }: { onClick?: () => any; children?: React.ReactNode; kind?: 'primary' | 'danger' | 'good' | 'ghost'; size?: 'sm' | 'lg'; disabled?: boolean; title?: string; type?: 'button' | 'submit'; className?: string; icon?: LucideIcon }) {
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   return (
     <button type={type ?? 'button'} title={title} className={`btn ${kind ?? ''} ${size ?? ''} ${className ?? ''}`} disabled={disabled || busy}
       onClick={onClick ? async () => { const r = onClick(); if (r && typeof r.then === 'function') { setBusy(true); try { await r; } catch (e: any) { toast(e.message, 'bad'); } finally { setBusy(false); } } } : undefined}>
-      {busy ? 'Working…' : children}
+      {Icon && !busy && <Icon className="icon" aria-hidden />}{busy ? 'Working…' : children}
     </button>
   );
 }
@@ -121,16 +122,25 @@ export function Field({ label: l, hint, error, children }: { label: React.ReactN
 export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { key: T; label: React.ReactNode }[]; value: T; onChange: (k: T) => void }) {
   return <div className="tabs" role="tablist">{tabs.map((t) => <button key={t.key} role="tab" aria-selected={t.key === value} className={t.key === value ? 'on' : ''} onClick={() => onChange(t.key)}>{t.label}</button>)}</div>;
 }
-export function Tile({ label: l, value, sub, tone }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: 'pos' | 'neg' }) {
-  return <div className="tile"><div className="label">{l}</div><div className={`value ${tone ?? ''}`}>{value}</div>{sub && <div className="sub">{sub}</div>}</div>;
+export function Tile({ label: l, value, sub, tone, icon: Icon }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: 'pos' | 'neg'; icon?: LucideIcon }) {
+  return <div className="tile"><div className="label">{Icon && <Icon className="icon" aria-hidden />}{l}</div><div className={`value ${tone ?? ''}`}>{value}</div>{sub && <div className="sub">{sub}</div>}</div>;
 }
-export function Loading({ what }: { what?: string }) { return <div className="empty">Loading{what ? ` ${what}` : ''}…</div>; }
+export function Loading({ what, rows = 4 }: { what?: string; rows?: number }) {
+  return (
+    <div style={{ padding: '1rem' }} aria-busy="true" aria-label={`Loading${what ? ` ${what}` : ''}`}>
+      {Array.from({ length: rows }, (_, i) => <div key={i} className="skeleton" style={{ height: 14, margin: '.65rem 0', width: `${92 - (i % 3) * 14}%` }} />)}
+    </div>
+  );
+}
+export function EmptyState({ icon: Icon = Inbox, title, children }: { icon?: LucideIcon; title: string; children?: React.ReactNode }) {
+  return <div className="empty"><Icon className="icon" aria-hidden /><strong>{title}</strong>{children && <div className="small">{children}</div>}</div>;
+}
 export function ErrorBox({ error, retry }: { error: Error; retry?: () => void }) {
-  return <div className="alert bad"><span className="icon">!</span><div><strong>{error.message}</strong>{retry && <div><button className="btn sm" onClick={retry}>Try again</button></div>}</div></div>;
+  return <div className="alert bad"><XCircle className="icon" aria-hidden /><div><strong>{error.message}</strong>{retry && <div style={{ marginTop: '.4rem' }}><button className="btn sm" onClick={retry}>Try again</button></div>}</div></div>;
 }
 export function Alert({ tone, children }: { tone?: 'good' | 'warn' | 'bad' | 'info'; children: React.ReactNode }) {
-  const icon = tone === 'good' ? '✓' : tone === 'bad' ? '!' : tone === 'warn' ? '!' : 'i';
-  return <div className={`alert ${tone ?? ''}`}><span className="icon" aria-hidden>{icon}</span><div>{children}</div></div>;
+  const Icon = tone === 'good' ? CheckCircle2 : tone === 'bad' ? XCircle : tone === 'warn' ? AlertTriangle : Info;
+  return <div className={`alert ${tone ?? ''}`}><Icon className="icon" aria-hidden /><div>{children}</div></div>;
 }
 
 const STATUS_TONE: Record<string, 'good' | 'warn' | 'bad' | 'info' | undefined> = {
@@ -183,7 +193,7 @@ export function DataTable<R extends Record<string, any>>({ columns, rows, onRowC
               </tr>
             );
           })}
-          {!rows.length && <tr><td colSpan={columns.length + (selectable ? 1 : 0)}><div className="empty">{empty ?? 'Nothing here yet.'}</div></td></tr>}
+          {!rows.length && <tr><td colSpan={columns.length + (selectable ? 1 : 0)}><EmptyState title={typeof empty === 'string' ? empty : 'Nothing here yet'}>{typeof empty === 'string' ? null : empty}</EmptyState></td></tr>}
         </tbody>
         {foot && <tfoot>{foot}</tfoot>}
       </table>
@@ -322,3 +332,18 @@ export function Suggest({ value, onChange, fetcher, placeholder, id, invalid, au
 export function downloadUrl(url: string) {
   const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
 }
+
+export function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: React.ReactNode }[] }) {
+  return <div className="segmented" role="radiogroup">{options.map((o) => <button key={o.value} type="button" role="radio" aria-checked={o.value === value} className={o.value === value ? 'on' : ''} onClick={() => onChange(o.value)}>{o.label}</button>)}</div>;
+}
+export function Switch({ checked, onChange, label: l }: { checked: boolean; onChange: (v: boolean) => void; label: React.ReactNode }) {
+  return <label className="switch"><input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} />{l}</label>;
+}
+
+/** Light / dark / system theme, remembered on this device. */
+export type Theme = 'light' | 'dark' | 'system';
+export function applyTheme(t: Theme) {
+  if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('dd-theme', t); } catch { /* storage unavailable */ }
+}
+export function savedTheme(): Theme { try { return (localStorage.getItem('dd-theme') as Theme) || 'system'; } catch { return 'system'; } }

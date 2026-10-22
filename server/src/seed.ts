@@ -4,6 +4,8 @@
  *   npm run seed            # base setup
  *   npm run seed -- --demo  # plus sample activity
  */
+import { settleProofReads } from './services/evidence.ts';
+import { stopOcr } from './services/ocr.ts';
 import { openDb, one, insert, all } from './db.ts';
 import { seedChart } from './services/ledger.ts';
 import { seedTemplates } from './services/notify.ts';
@@ -12,6 +14,7 @@ import { createUser } from './auth.ts';
 import { asSystem, ctxStore, now, uid, token, normalizeName, istDate, addDays } from './util.ts';
 import { config } from './config.ts';
 import QRCode from 'qrcode';
+import { readFileSync } from 'node:fs';
 import { saveEventSettings } from './settings.ts';
 
 const PASSWORD = process.env.SEED_PASSWORD ?? 'ChangeMe!2026';
@@ -99,6 +102,7 @@ async function demo(eventId: string) {
   const last = ['Sharma', 'Iyer', 'Reddy', 'Nair', 'Gupta', 'Banerjee', 'Khan', 'Patel', 'Menon', 'Das'];
   const schools = ['Delhi Public School RK Puram', 'Bishop Cotton Boys School', 'National Public School Indiranagar', 'The Doon School', 'Mallya Aditi International School', 'St. Xavier’s College Mumbai', 'Christ University'];
   const referrals = ['Riya Kapoor', 'riya kapur', 'Arjun Mehta', 'Delhi Public School RK Puram', '', '', 'Mr. Arjun Mehta', 'Rhea K', ''];
+  let evidenceCount = 0;
   for (let i = 0; i < 45; i++) {
     const name = `${first[i % first.length]} ${last[(i * 7) % last.length]}`;
     const school = schools[i % schools.length];
@@ -115,8 +119,13 @@ async function demo(eventId: string) {
         const o = await createOrder({ registrationIds: [r.id], gateway: 'mock' });
         sandboxComplete(o.orderId, 'success');
       } else if (i % 5 === 3) {
-        const png = await QRCode.toBuffer(`Demo UPI receipt ${r.ref} UTR 4321${String(10000000 + i).slice(0, 8)} amount ${r.total_paise / 100}`, { width: 360 });
-        submitEvidence(one('SELECT * FROM registration WHERE id = ?', r.id)!, { buffer: png }, { utr: `4321${String(10000000 + i).slice(0, 8)}`, amountPaise: r.total_paise, paidOn: istDate() });
+        // The first two proofs use a real-looking receipt so screenshot reading has something to show:
+        // one whose typed details match it, one where the delegate typed a different UTR.
+        const proofNo = evidenceCount++;
+        const utr = proofNo === 0 ? '432110000003' : `4321${String(10000000 + i).slice(0, 8)}`;
+        const png = proofNo < 2 ? readFileSync(new URL('../assets/demo-receipt.png', import.meta.url))
+          : await QRCode.toBuffer(`Demo UPI receipt ${r.ref} UTR ${utr} amount ${r.total_paise / 100}`, { width: 360 });
+        submitEvidence(one('SELECT * FROM registration WHERE id = ?', r.id)!, { buffer: png }, { utr, amountPaise: r.total_paise, paidOn: proofNo < 2 ? '2026-10-21' : istDate() });
       }
     } catch (e: any) { console.warn('demo registration skipped:', e.message); }
   }
@@ -138,6 +147,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   openDb();
   const res = asSystem(() => seed());
   if (res && process.argv.includes('--demo')) await asSystem(() => demo(res.eventId));
+  await settleProofReads();
+  await stopOcr();
   if (res) {
     console.log(`\nSeeded. Staff sign in at ${config.baseUrl}/login with password: ${PASSWORD}`);
     console.log('  admin@example.org (Secretary-General)   cfo@example.org / cfo2@example.org (CFO)   accounts@example.org (Accountant)');

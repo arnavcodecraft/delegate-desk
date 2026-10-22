@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Download } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { api, qs } from '../api';
 import { dt, label, today } from '../format';
@@ -23,7 +24,7 @@ export function Imports() {
   const reset = () => { setStep(1); setParsed(null); setPv(null); setResult(null); };
   return (
     <div className="stack">
-      <PageHead title="Import" />
+      <PageHead title="Import" subtitle="Bring in registrations, seats, bank statements, settlements, vendors, expenses, referrers or opening balances. Nothing financial is posted straight from a file." />
       <div className="card stack">
         <div className="steps">{['Upload', 'Map columns', 'Preview', 'Done'].map((s, i) => <span key={s} className={step === i + 1 ? 'on' : step > i + 1 ? 'done' : ''}>{i + 1}. {s}</span>)}</div>
         {step === 1 && <div className="stack">
@@ -71,14 +72,15 @@ export function Messages() {
   const toast = useToast();
   return (
     <div className="stack">
-      <PageHead title="Messages" />
+      <PageHead title="Messages" subtitle="Every state change sends a templated message within seconds. Edit wording, connect WhatsApp and SMS, and see what went out." />
       <Tabs value={tab} onChange={setTab} tabs={[{ key: 'outbox', label: 'Outbox & history' }, ...(can('templates.manage') ? [{ key: 'templates' as const, label: 'Templates' }] : []), ...(can('messages.send') ? [{ key: 'bulk' as const, label: 'Bulk send' }] : [])]} />
       {tab === 'outbox' && <>
         <div className="row"><input className="search" placeholder="Recipient or subject" value={q} onChange={(e) => setQ(e.target.value)} />{['', 'queued', 'sent', 'failed', 'bounced', 'suppressed'].map((s) => <button key={s} className={`chip ${status === s ? 'on' : ''}`} onClick={() => setStatus(s)}>{s ? label(s) : 'All'}</button>)}</div>
         <Alert tone="info">Messages go out within seconds, with retries, quiet hours (reminders only) and a per-minute rate limit. Without SMTP configured they are logged here instead of delivered.</Alert>
         <div className="card flush"><DataTable rows={out.data ?? []} maxHeight={640} columns={[{ key: 'created_at', label: 'Queued', render: (n: any) => dt(n.created_at) }, { key: 'channel', label: 'Channel' }, { key: 'recipient', label: 'To' }, { key: 'subject', label: 'Subject' }, { key: 'status', label: 'Status' }, { key: 'attempts', label: 'Tries', num: true }, { key: 'last_error', label: 'Note' }, { key: 'act', label: '', sort: false, render: (n: any) => <span className="row"><button className="btn sm" onClick={() => setEdit({ preview: n })}>View</button>{['failed', 'bounced', 'suppressed'].includes(n.status) && can('messages.send') && <Btn size="sm" onClick={async () => { await api.post(`/api/admin/notifications/${n.id}/retry`); out.reload(); }}>Retry</Btn>}</span> }]} /></div>
       </>}
-      {tab === 'templates' && t.data && <div className="card flush"><DataTable rows={t.data.templates} rowKey={(x: any) => x.key + x.channel} onRowClick={(x) => setEdit(x)} columns={[{ key: 'key', label: 'Trigger', render: (x: any) => label(x.key) }, { key: 'channel', label: 'Channel' }, { key: 'subject', label: 'Subject' }, { key: 'active', label: 'Active', render: (x: any) => (x.active ? 'Yes' : 'No') }, { key: 'updated_at', label: 'Updated', render: (x: any) => dt(x.updated_at) }]} /></div>}
+      {tab === 'templates' && t.data && <div className="row">{(['email', 'whatsapp', 'sms'] as const).map((c) => <span key={c} className="badge"><span className={`status-dot ${t.data.channels?.[c] ? 'on' : ''}`} />{c === 'sms' ? 'SMS' : label(c)} {t.data.channels?.[c] ? 'connected' : 'not connected — messages are logged only'}</span>)}</div>}
+      {tab === 'templates' && t.data && <div className="card flush"><DataTable rows={t.data.templates} rowKey={(x: any) => x.key + x.channel} onRowClick={(x) => setEdit(x)} columns={[{ key: 'key', label: 'Trigger', render: (x: any) => label(x.key) }, { key: 'channel', label: 'Channel', render: (x: any) => x.channel === 'sms' ? 'SMS' : label(x.channel) }, { key: 'subject', label: 'Subject / template', render: (x: any) => x.channel === 'email' ? x.subject : (x.provider_template ? <span className="mono small">{x.provider_template}</span> : <span className="badge warn">template name needed</span>) }, { key: 'active', label: 'Active', render: (x: any) => (x.active ? 'Yes' : 'No') }, { key: 'updated_at', label: 'Updated', render: (x: any) => dt(x.updated_at) }]} /></div>}
       {tab === 'bulk' && <BulkSend eventId={eventId} templates={t.data?.templates ?? []} />}
       {edit?.preview && <Modal title={edit.preview.subject} onClose={() => setEdit(null)}><p className="small muted">To {edit.preview.recipient} · {label(edit.preview.status)}</p><pre style={{ whiteSpace: 'pre-wrap', font: 'inherit' }}>{edit.preview.body}</pre></Modal>}
       {edit && !edit.preview && <TemplateEdit tpl={edit} fields={t.data?.mergeFields ?? []} onClose={() => setEdit(null)} onDone={() => { setEdit(null); t.reload(); toast('Template saved', 'ok'); }} />}
@@ -87,7 +89,8 @@ export function Messages() {
 }
 
 function TemplateEdit({ tpl, fields, onClose, onDone }: any) {
-  const [f, setF] = useState({ subject: tpl.subject, body: tpl.body, active: !!tpl.active });
+  const [f, setF] = useState({ subject: tpl.subject, body: tpl.body, active: !!tpl.active, provider_template: tpl.provider_template ?? '', language: tpl.language ?? 'en', params: (tpl.params ?? []).join(', ') });
+  const channel = tpl.channel as string;
   const [pv, setPv] = useState<any>(null);
   const toast = useToast();
   const ask = usePrompt();
@@ -95,11 +98,19 @@ function TemplateEdit({ tpl, fields, onClose, onDone }: any) {
     <Modal wide title={`Template: ${label(tpl.key)} (${tpl.channel})`} onClose={onClose} footer={<>
       <Btn onClick={async () => setPv(await api.post(`/api/admin/templates/${tpl.key}/preview`, f))}>Preview</Btn>
       <Btn onClick={async () => { const r = await ask({ title: 'Send a test', fields: [{ key: 'to', label: 'Email', type: 'email', required: true }] }); if (r) { await api.post(`/api/admin/templates/${tpl.key}/test`, r); toast('Test queued', 'ok'); } }}>Send test</Btn>
-      <span className="spacer" /><Btn kind="primary" onClick={async () => { await api.put(`/api/admin/templates/${tpl.key}/${tpl.channel}`, f); onDone(); }}>Save</Btn>
+      <span className="spacer" /><Btn kind="primary" onClick={async () => { await api.put(`/api/admin/templates/${tpl.key}/${tpl.channel}`, { ...f, params: f.params.split(',').map((x: string) => x.trim()).filter(Boolean) }); onDone(); }}>Save</Btn>
     </>}>
       <div className="stack">
-        <Field label="Subject"><input value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })} /></Field>
-        <Field label="Body" hint={<>merge fields: {fields.map((x: string) => `{{${x}}}`).join(' ')}</>}><textarea rows={12} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} /></Field>
+        {channel !== 'email' && <>
+          <Alert tone="info">{channel === 'whatsapp' ? 'WhatsApp business messages must use a template approved by Meta. Enter its exact name and language, and list the merge fields that fill {{1}}, {{2}}… in order.' : 'Indian SMS must use a DLT-registered template. Enter the MSG91 flow template id, and list the merge fields that fill its variables (named the same as in MSG91).'}</Alert>
+          <div className="grid g3">
+            <Field label={channel === 'whatsapp' ? 'Approved template name' : 'MSG91 template id'}><input value={f.provider_template} onChange={(e) => setF({ ...f, provider_template: e.target.value })} placeholder={channel === 'whatsapp' ? 'reg_allotted_v1' : '64f0…'} /></Field>
+            {channel === 'whatsapp' && <Field label="Language code"><input value={f.language} onChange={(e) => setF({ ...f, language: e.target.value })} placeholder="en" /></Field>}
+            <Field label="Parameters, in order" hint="comma separated merge fields"><input value={f.params} onChange={(e) => setF({ ...f, params: e.target.value })} placeholder="name, committee, portfolio" /></Field>
+          </div>
+        </>}
+        {channel === 'email' && <Field label="Subject"><input value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })} /></Field>}
+        <Field label={channel === 'email' ? 'Body' : 'Preview text (shown in the outbox)'} hint={<>merge fields: {fields.map((x: string) => `{{${x}}}`).join(' ')}</>}><textarea rows={12} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} /></Field>
         <label className="check"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} />Active</label>
         {pv && <div className="card" style={{ background: 'var(--surface-2)' }}><strong>{pv.subject}</strong><pre style={{ whiteSpace: 'pre-wrap', font: 'inherit', margin: '.5rem 0 0' }}>{pv.body}</pre></div>}
       </div>
@@ -134,7 +145,7 @@ export function Audit() {
   const [tab, setTab] = useState<'trail' | 'logins'>('trail');
   return (
     <div className="stack">
-      <PageHead title="Audit trail"><button className="btn" onClick={() => downloadUrl('/api/admin/audit/export')}>Export full trail (CSV)</button></PageHead>
+      <PageHead title="Audit trail" subtitle="Every change by every person, append-only. Rows cannot be edited or deleted."><button className="btn" onClick={() => downloadUrl('/api/admin/audit/export')}><Download className="icon" />Export CSV</button></PageHead>
       <Alert tone="info">Every action is logged with user, time, IP and before/after values. The log is append-only at the database level and cannot be switched off — Companies (Accounts) Rules, rule 3(1). Retained for at least eight financial years.</Alert>
       <Tabs value={tab} onChange={setTab} tabs={[{ key: 'trail', label: `Changes${a.data ? ` (${a.data.total} total)` : ''}` }, { key: 'logins', label: 'Sign-ins' }]} />
       {tab === 'trail' && <>

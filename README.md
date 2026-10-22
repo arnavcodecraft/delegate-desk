@@ -17,7 +17,7 @@ npm start                  # http://localhost:8080   (set ALLOW_SANDBOX=1 to use
   `admin@` (Secretary-General), `cfo@` and `cfo2@` (CFO), `accounts@` (Accountant), `desk@` (Registration exec), `chair.unsc@` (UNSC chair), `auditor@` — all `@example.org`.
   Admin, CFO and Accountant set up two-factor sign-in (any authenticator app) on first sign-in.
 
-Tests: `npm test` (32 tests: spec worked examples, money flows, permissions, and an 8-process concurrent-registration test). Typecheck: `npm run typecheck`. Docker: `docker build -t delegatedesk . && docker run -p 8080:8080 -v dd:/data delegatedesk`.
+Tests: `npm test` (56 tests: spec worked examples, money flows, permissions, an 8-process concurrent-registration test, and every integration exercised against a local fake that speaks its real protocol: clamd, WhatsApp Cloud API, MSG91, Google OAuth + Sheets, Anthropic Messages). Typecheck: `npm run typecheck`. Docker: `docker build -t delegatedesk . && docker run -p 8080:8080 -v dd:/data delegatedesk`.
 
 Configuration lives in environment variables; see [`.env.example`](.env.example).
 
@@ -39,6 +39,16 @@ Configuration lives in environment variables; see [`.env.example`](.env.example)
 | 12 | Dashboard: the eight tiles, break-even (mix-weighted, after gateway fee and commission), date at current pace, forecast, what-if scenarios, contribution by committee and referrer, budget vs actual, alerts | `services/dashboard.ts`, `staff/Dashboard.tsx` |
 | 13 | Imports (upload → map → preview → confirm, error file, rollback) for registrations, portfolios, bank statements, settlements (drafts), vendors, expenses, referrers, opening balances (two sign-offs) | `services/imports.ts`, `staff/Misc.tsx` |
 | 14 | Commission: flat %, flat amount, slab, progressive; count or value basis; base options; event/month/FY periods; caps, minimum payout, per-type plans, CFO-signed overrides; true-ups, refund reversals, held → accrued → approved → paid, TDS with threshold and no-PAN rate, statements and PDFs | `services/commission.ts`, `staff/Referrals.tsx` |
+| 6 | Screenshot reading: on-device OCR (Tesseract) pulls UTR, amount and date from UPI/bank screenshots and compares them with what the delegate typed; optional second read by Claude | `services/ocr.ts`, `services/evidence.ts` |
+| 8 | WhatsApp Business (Meta Cloud API templates, signed delivery-status webhook) and SMS (MSG91 Flow, DLT) alongside email, per-template provider names and parameters, only to delegates who opted in | `services/channels.ts`, `services/notify.ts` |
+| 5 | Optional mobile OTP on the form (WhatsApp or SMS, 3 codes per 15 minutes, signed one-time token) | `services/otp.ts` |
+| 10 | Live Google Sheets: any list pushed to a tab on a schedule through a service account; contacts and minors left out unless chosen | `services/sheets.ts`, Settings → Google Sheets |
+| 10 | Printable badges (8 per A4, signed QR), certificates with award wording, email certificates, QR/typed check-in with camera scanning, unpaid delegates held at the door, live per-committee attendance | `services/badges.ts`, `staff/CheckIn.tsx` |
+| 11 | Bill reading on upload (OCR or Claude): vendor, GSTIN, invoice no., date, GST and total prefilled; purchase orders converted to bills | `services/ocr.ts`, `services/ai.ts`, `staff/Expenses.tsx` |
+| 12 | AI assistant: plain-English questions over read-only, permission-scoped tools (dashboard, delegates, lists, trial balance, P&L, expenses, statements, proofs) and a written status note | `services/ai.ts`, `staff/Shell.tsx` |
+| 16 | Upload scanning with ClamAV (clamd INSTREAM) on top of type sniffing and PDF active-content checks | `services/scanner.ts` |
+| 16 | Encrypted daily backups (database + uploads, AES-256-GCM), restore-tested after every run (decrypt, integrity check, row counts), download, `npm run restore -- file.ddbak [dir]` | `services/backup.ts`, `server/src/restore.ts` |
+| 16 | Data protection: erasure requests (erase / decline with reason), breach register with Board notification tracking and plain-language notices to affected delegates | Settings → Data protection |
 | 4, 16 | Nine roles with server-side permissions, TOTP 2FA, session timeouts, CSRF header, login log, private files via expiring signed links, minimal data, consent withdrawal and erasure that respects 8-year retention | `server/src/auth.ts` |
 
 ## Engineering rules the code enforces
@@ -51,7 +61,8 @@ Configuration lives in environment variables; see [`.env.example`](.env.example)
 
 ## Deliberate choices and limits
 
-- **Database:** SQLite (Node’s built-in `node:sqlite`, WAL mode) instead of PostgreSQL, so it runs with no extra services. All the money rules rely on real transactions and constraints, which SQLite provides. Moving to PostgreSQL means porting `server/src/db.ts` and the schema; run a single app instance against one database file.
+- **Database:** SQLite (Node’s built-in `node:sqlite`, WAL mode) instead of PostgreSQL, so it runs with no extra services. All the money rules rely on real transactions and constraints, which SQLite provides. Moving to PostgreSQL means porting `server/src/db.ts` and the schema; run a single app instance against one database file. That port was deliberately left out: it adds a service to run without changing any behaviour, and the encrypted, restore-tested backups cover the durability side.
 - **Gateways:** Razorpay follows its documented signature scheme. The Cashfree header names and API version (`2023-08-01`) are what the spec flagged as needing confirmation; check them against Cashfree’s current docs before going live. A built-in sandbox gateway exercises the same signed-webhook path for testing.
-- **Not included:** OCR of screenshot images (UTR/amount are read only from text PDFs), a WhatsApp/SMS provider (the channel and templates exist; plug a BSP into `notify.ts`), ClamAV (PDFs with active content are rejected; hook point in `evidence.ts`), live Google Sheets sync (use the share-link CSV with `IMPORTDATA`), and AI assistance (phase 5 in the roadmap).
+- **Integrations switch on with their keys.** WhatsApp, SMS, ClamAV, Google Sheets and AI stay off until their environment variables are set (Settings → Integrations shows what is connected). OCR runs locally and is on by default. A screenshot or an AI reading is never treated as proof: it only flags differences for the person approving.
+- **Screenshot reading** works on clear phone screenshots; heavily compressed or cropped images may give nothing, and the proof then shows “nothing could be read”, not a guess.
 - **Compliance:** like the spec, this is audit-ready, not certified. GST rate/applicability, revenue recognition, chart of accounts, TDS sections and DPDP obligations must be confirmed by your CA and lawyer; every rate is a setting.

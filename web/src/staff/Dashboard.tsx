@@ -4,12 +4,15 @@ import { api } from '../api';
 import { inr, date, label } from '../format';
 import { Alert, BarChart, BudgetBars, Btn, DataTable, ErrorBox, Field, LineChart, Loading, Tile, useAsync } from '../ui';
 import { PageHead, useStaff } from './Shell';
+import { Sparkles, RefreshCw, Users, BadgeIndianRupee, Hourglass, TrendingUp, Wallet, Landmark, Handshake, Gift } from 'lucide-react';
 
 export default function Dashboard() {
   const { eventId } = useStaff();
   const d = useAsync<any>(() => api.get(`/api/finance/events/${eventId}/dashboard`), [eventId]);
   const budgets = useAsync<any[]>(() => api.get(`/api/finance/events/${eventId}/budgets`).catch(() => []), [eventId]);
   const [showTable, setShowTable] = useState(false);
+  const [note, setNote] = useState<{ text: string; error?: string } | null>(null);
+  const ai = useAsync<{ enabled: boolean }>(() => api.get('/api/admin/ai/status'), []);
   if (!eventId) return <div className="card">Create an event in Settings first.</div>;
   if (d.loading && !d.data) return <Loading what="dashboard" />;
   if (d.error) return <ErrorBox error={d.error} retry={d.reload} />;
@@ -18,7 +21,13 @@ export default function Dashboard() {
   const ahead = be.resultAtCurrentPaise >= 0;
   return (
     <div className="stack">
-      <PageHead title={x.event.name}><button className="btn" onClick={d.reload}>Refresh</button></PageHead>
+      <PageHead title={x.event.name} subtitle="Are we ahead of break-even today, and what would change that? Money collected, money earned and cash in the bank are shown separately.">
+        {ai.data?.enabled && <Btn icon={Sparkles} onClick={async () => { setNote({ text: '' }); try { setNote(await api.post(`/api/finance/events/${eventId}/ai/summary`)); } catch (e: any) { setNote({ text: '', error: e.message }); } }}>Write a status note</Btn>}
+        <Btn icon={RefreshCw} onClick={d.reload}>Refresh</Btn>
+      </PageHead>
+      {note && <div className="card stack tight"><div className="row between"><h3 style={{ margin: 0 }}><Sparkles className="icon" style={{ color: 'var(--accent)', verticalAlign: -2 }} /> Status note</h3><div className="row">{note.text && <button className="btn sm" onClick={() => navigator.clipboard?.writeText(note.text)}>Copy</button>}<button className="btn sm ghost" onClick={() => setNote(null)}>Close</button></div></div>
+        {note.error ? <Alert tone="bad">{note.error}</Alert> : note.text ? <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{note.text}</p> : <Loading rows={3} />}
+        {note.text && <span className="small faint">Drafted by Claude from the figures on this page. Check before sharing.</span>}</div>}
 
       <div className="card" id="breakeven" style={{ borderLeft: `4px solid ${ahead ? 'var(--status-good)' : 'var(--status-critical)'}` }}>
         <div className="row" style={{ alignItems: 'flex-start', gap: '1.5rem' }}>
@@ -40,14 +49,14 @@ export default function Dashboard() {
       {x.alerts.length > 0 && <div className="stack">{x.alerts.map((a: any, i: number) => <Alert key={i} tone={a.level === 'danger' ? 'bad' : 'warn'}><strong>{a.title}.</strong> {a.detail} {a.link && <Link to={a.link}>Open →</Link>}</Alert>)}</div>}
 
       <div className="grid g4">
-        <Tile label="Registrations" value={x.registrations.total} sub={`${x.registrations.confirmed} confirmed · ${x.registrations.provisional} provisional · ${x.registrations.waitlisted} waitlisted · ${x.registrations.cancelled} cancelled`} />
-        <Tile label="Verified collections (excl. GST)" value={inr(x.collections.verifiedNetPaise)} sub={`${inr(x.collections.verifiedGrossPaise)} incl. GST · GST is never income`} />
-        <Tile label="Pending money" value={inr(x.pending.holds.amount + x.pending.review.amount)} sub={<>{x.pending.holds.n} unpaid holds · <Link to="/app/payments/review">{x.pending.review.n} proofs</Link>{x.pending.review.oldestHours != null ? `, oldest ${x.pending.review.oldestHours} h` : ''}</>} />
-        <Tile label="Operating surplus / deficit" value={inr(x.surplus)} tone={x.surplus >= 0 ? 'pos' : 'neg'} sub="fees earned − expenses − gateway fees − commission" />
-        <Tile label="Expenses incurred" value={inr(x.expenses.incurred)} sub={`${inr(x.expenses.budgeted)} budgeted · ${inr(x.expenses.committed)} awaiting approval · ${inr(x.expenses.paid)} paid · ${inr(x.expenses.unpaid)} unpaid`} />
-        <Tile label="Cash at bank" value={inr(x.cash.bank + x.cash.pettyCash)} sub={`${inr(x.cash.gatewayUnsettled)} still with gateways (not yet settled)`} />
-        <Tile label="Commission" value={inr(x.commission.earned)} sub={`${inr(x.commission.held)} in refund window · ${inr(x.commission.approved)} approved · ${inr(x.commission.paid)} paid · ${inr(x.commission.tdsWithheld)} TDS`} />
-        <Tile label="Sponsorship (shown separately)" value={inr(x.sponsorship)} sub="registrations stand on their own above" />
+        <Tile icon={Users} label="Registrations" value={x.registrations.total} sub={`${x.registrations.confirmed} confirmed · ${x.registrations.provisional} provisional · ${x.registrations.waitlisted} waitlisted · ${x.registrations.cancelled} cancelled`} />
+        <Tile icon={BadgeIndianRupee} label="Verified collections (excl. GST)" value={inr(x.collections.verifiedNetPaise)} sub={`${inr(x.collections.verifiedGrossPaise)} incl. GST · GST is never income`} />
+        <Tile icon={Hourglass} label="Pending money" value={inr(x.pending.holds.amount + x.pending.review.amount)} sub={<>{x.pending.holds.n} unpaid holds · <Link to="/app/payments/review">{x.pending.review.n} proofs</Link>{x.pending.review.oldestHours != null ? `, oldest ${x.pending.review.oldestHours} h` : ''}</>} />
+        <Tile icon={TrendingUp} label="Operating surplus / deficit" value={inr(x.surplus)} tone={x.surplus >= 0 ? 'pos' : 'neg'} sub="fees earned − expenses − gateway fees − commission" />
+        <Tile icon={Wallet} label="Expenses incurred" value={inr(x.expenses.incurred)} sub={`${inr(x.expenses.budgeted)} budgeted · ${inr(x.expenses.committed)} awaiting approval · ${inr(x.expenses.paid)} paid · ${inr(x.expenses.unpaid)} unpaid`} />
+        <Tile icon={Landmark} label="Cash at bank" value={inr(x.cash.bank + x.cash.pettyCash)} sub={`${inr(x.cash.gatewayUnsettled)} still with gateways (not yet settled)`} />
+        <Tile icon={Handshake} label="Commission" value={inr(x.commission.earned)} sub={`${inr(x.commission.held)} in refund window · ${inr(x.commission.approved)} approved · ${inr(x.commission.paid)} paid · ${inr(x.commission.tdsWithheld)} TDS`} />
+        <Tile icon={Gift} label="Sponsorship (shown separately)" value={inr(x.sponsorship)} sub="registrations stand on their own above" />
       </div>
 
       <div className="grid g2">

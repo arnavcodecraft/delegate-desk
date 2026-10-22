@@ -3,14 +3,28 @@ import { api } from '../api';
 import { inr, label, toPaise, toRupees } from '../format';
 import { Alert, Btn, DataTable, Field, Loading, Modal, Tabs, useAsync, useToast, usePrompt } from '../ui';
 import { PageHead, useStaff } from './Shell';
+import { Integrations, SheetsSync, Backups, DataProtection } from './SettingsExtra';
 
 export default function Settings() {
   const { can } = useStaff();
-  const [tab, setTab] = useState<'event' | 'fees' | 'org' | 'users'>(can('event.config') ? 'event' : can('users.manage') ? 'users' : 'org');
+  type T = 'event' | 'fees' | 'org' | 'users' | 'integrations' | 'sheets' | 'backups' | 'privacy';
+  const [tab, setTab] = useState<T>(can('event.config') ? 'event' : can('users.manage') ? 'users' : 'org');
   return (
     <div className="stack">
-      <PageHead title="Settings"><NewEvent /></PageHead>
-      <Tabs value={tab} onChange={setTab} tabs={[...(can('event.config') ? [{ key: 'event' as const, label: 'Event' }, { key: 'fees' as const, label: 'Fees & coupons' }] : []), ...(can('settings.org', 'settings.finance') ? [{ key: 'org' as const, label: 'Organisation & finance' }] : []), ...(can('users.manage') ? [{ key: 'users' as const, label: 'Users & roles' }] : [])]} />
+      <PageHead title="Settings" subtitle="Event rules, fees, organisation details, people and roles, connected services, backups and data protection."><NewEvent /></PageHead>
+      <Tabs value={tab} onChange={setTab} tabs={[
+        ...(can('event.config') ? [{ key: 'event' as const, label: 'Event' }, { key: 'fees' as const, label: 'Fees & coupons' }] : []),
+        ...(can('settings.org', 'settings.finance') ? [{ key: 'org' as const, label: 'Organisation & finance' }] : []),
+        ...(can('users.manage') ? [{ key: 'users' as const, label: 'Users & roles' }] : []),
+        ...(can('settings.org', 'settings.finance', 'event.config') ? [{ key: 'integrations' as const, label: 'Integrations' }] : []),
+        ...(can('lists.share') ? [{ key: 'sheets' as const, label: 'Google Sheets' }] : []),
+        ...(can('settings.org', 'audit.read') ? [{ key: 'backups' as const, label: 'Backups' }] : []),
+        ...(can('reg.erase') ? [{ key: 'privacy' as const, label: 'Data protection' }] : []),
+      ]} />
+      {tab === 'integrations' && <Integrations />}
+      {tab === 'sheets' && <SheetsSync />}
+      {tab === 'backups' && <Backups />}
+      {tab === 'privacy' && <DataProtection />}
       {tab === 'event' && <EventSettings />}
       {tab === 'fees' && <Fees />}
       {tab === 'org' && <Org />}
@@ -102,6 +116,7 @@ function EventSettings() {
           <Field label="Route small payments" hint="amounts up to ₹ go to…"><input inputMode="decimal" value={s.routing?.[0] ? toRupees(s.routing[0].maxPaise) : ''} placeholder="e.g. 1000" onChange={(x) => setS('routing', x.target.value ? [{ maxPaise: toPaise(x.target.value), gateway: s.routing?.[0]?.gateway ?? 'cashfree' }] : [])} /></Field>
           {s.routing?.[0] && <Field label="…this gateway"><select value={s.routing[0].gateway} onChange={(x) => setS('routing', [{ ...s.routing[0], gateway: x.target.value }])}><option value="razorpay">Razorpay</option><option value="cashfree">Cashfree</option></select></Field>}
           <label className="check"><input type="checkbox" checked={s.screenshotEnabled} onChange={(x) => setS('screenshotEnabled', x.target.checked)} />Accept UPI / bank transfer with screenshot</label>
+          <label className="check"><input type="checkbox" checked={!!s.requireMobileOtp} onChange={(x) => setS('requireMobileOtp', x.target.checked)} />Verify mobile numbers with a one-time code on the form</label>
         </div>
       </div>
       <div className="card stack"><h3>Reminders, alerts & planning</h3>

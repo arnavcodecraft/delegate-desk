@@ -18,6 +18,10 @@ import { statement } from '../services/commission.ts';
 import { runList } from '../services/lists.ts';
 import { markBounced } from '../services/notify.ts';
 import { hmacHex } from '../services/gateways.ts';
+import { checkUpload } from '../services/scanner.ts';
+import { sendOtp, verifyOtp } from '../services/otp.ts';
+import { whatsapp } from '../services/channels.ts';
+import { applyDeliveryStatuses } from '../services/notify.ts';
 import type { GatewayName } from '../services/gateways.ts';
 
 export const P = (req: Request) => req.params as Record<string, string>;
@@ -55,7 +59,7 @@ publicRouter.get('/events/:code', h((req) => {
     org: { name: org.name, legal_name: org.legal_name, grievance: org.grievance_contact },
     committees: committees.map((c) => ({ ...c, full: c.open_seats === 0 })),
     classOptions: CLASS_OPTIONS, categories, gstRateBp: s.gstEnabled ? s.gstRateBp : 0, holdHours: s.holdHours, feeModel: s.feeModel,
-    refundWindowDays: s.refundWindowDays,
+    refundWindowDays: s.refundWindowDays, requireMobileOtp: s.requireMobileOtp,
   };
 }));
 
@@ -93,6 +97,15 @@ publicRouter.post('/events/:code/register', h((req) => {
   };
 }));
 
+publicRouter.post('/events/:code/otp', h(async (req) => {
+  rateLimit(`otp:${req.ip}`, 10, 60 * 60_000);
+  return sendOtp(eventByCode(P(req).code), String(req.body?.mobile ?? ''));
+}));
+publicRouter.post('/events/:code/otp/verify', h((req) => {
+  rateLimit(`otpv:${req.ip}`, 30, 60 * 60_000);
+  return verifyOtp(eventByCode(P(req).code).id, String(req.body?.mobile ?? ''), String(req.body?.code ?? ''));
+}));
+
 publicRouter.post('/events/:code/delegation', h((req) => {
   rateLimit(`deleg:${req.ip}`, 5, 10 * 60_000);
   const e = eventByCode(P(req).code);
@@ -114,15 +127,17 @@ publicRouter.post('/r/:token/orders', h(async (req) => {
   if (d?.payment_mode === 'head_pays') throw conflict('Your head delegate pays for the whole delegation. Ask them to pay from the delegation page.');
   return createOrder({ registrationIds: [r.id], gateway: req.body?.gateway as GatewayName });
 }));
-publicRouter.post('/r/:token/evidence', upload.single('file'), h((req) => {
+publicRouter.post('/r/:token/evidence', upload.single('file'), h(async (req) => {
   const r = regByToken(P(req).token);
   if (!req.file) throw bad('Attach the payment screenshot or PDF');
+  await checkUpload(req.file.buffer);
   rateLimit(`ev:${r.id}`, 10, 60 * 60_000);
   return submitEvidence(r, req.file, { utr: req.body.utr, amountPaise: parseMoney(req.body.amount), paidOn: req.body.paid_on });
 }));
-publicRouter.post('/r/:token/id-proof', upload.single('file'), h((req) => {
+publicRouter.post('/r/:token/id-proof', upload.single('file'), h(async (req) => {
   const r = regByToken(P(req).token);
   if (!req.file) throw bad('Attach the ID proof');
+  await checkUpload(req.file.buffer);
   if (r.is_minor && r.guardian_consent !== 'verified') throw conflict('We need parental or school consent before collecting ID proof');
   const mime = sniff(req.file.buffer);
   if (!mime) throw bad('Upload a JPG, PNG or PDF');
@@ -278,6 +293,16 @@ for (const g of ['razorpay', 'cashfree', 'mock'] as GatewayName[]) {
     } catch (e) { next(e); }
   });
 }
+// WhatsApp Cloud API: GET is Meta's one-time subscription check; POSTs carry signed delivery receipts.
+webhookRouter.get('/whatsapp', (req, res) => {
+  if (req.query['hub.mode'] === 'subscribe' && config.whatsapp.verifyToken && req.query['hub.verify_token'] === config.whatsapp.verifyToken) return res.type('text').send(String(req.query['hub.challenge'] ?? ''));
+  res.status(403).send('forbidden');
+});
+webhookRouter.post('/whatsapp', (req, res) => {
+  const raw = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
+  if (!whatsapp.verifySignature(raw, req.headers['x-hub-signature-256'] as string | undefined)) return res.status(401).json({ error: 'bad signature' });
+  res.json({ updated: applyDeliveryStatuses(whatsapp.parseStatuses(JSON.parse(raw || '{}'))) });
+});
 webhookRouter.post('/email-bounce', (req, res) => {
   const raw = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
   if (req.headers['x-signature'] !== hmacHex(config.appSecret, raw)) return res.status(401).json({ error: 'bad signature' });

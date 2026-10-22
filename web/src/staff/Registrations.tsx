@@ -4,6 +4,7 @@ import { api, qs } from '../api';
 import { inr, dt, label, toPaise, today } from '../format';
 import { Alert, Btn, DataTable, ErrorBox, Field, Loading, Modal, Status, Tabs, useAsync, useToast, usePrompt, downloadUrl } from '../ui';
 import { PageHead, useStaff } from './Shell';
+import { IdCard, Award, Send, Search, UserPlus } from 'lucide-react';
 
 const TEMPLATES = ['payment_reminder', 'portal_link', 'event_reminder', 'registration_saved', 'hold_expiring'];
 
@@ -42,7 +43,7 @@ export function ListView({ kind, committeeId, onRow, bulk }: { kind: string; com
   return (
     <div className="card flush">
       <div className="card-head">
-        <input className="search input-sm" type="search" placeholder="Search name, email, phone, school, UTR, portfolio…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
+        <div className="search-wrap"><Search className="icon" /><input className="input-sm" type="search" placeholder="Search name, phone, school, UTR, portfolio…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" /></div>
         {filterable.map((c: any) => {
           const vals = [...new Set((data.data?.rows ?? []).map((r: any) => r[c.key]).filter(Boolean))] as string[];
           return vals.length > 1 || filters[c.key] ? <select key={c.key} className="input-sm" style={{ width: 'auto' }} value={filters[c.key] ?? ''} onChange={(e) => setFilters({ ...filters, [c.key]: e.target.value })} aria-label={c.label}><option value="">{c.label}: all</option>{vals.sort().map((v) => <option key={v} value={v}>{label(v)}</option>)}</select> : null;
@@ -88,7 +89,7 @@ export function Registrations() {
   const dups = useAsync<any[]>(() => api.get(`/api/admin/events/${eventId}/duplicates`), [eventId]);
   return (
     <div className="stack">
-      <PageHead title="Delegates">{can('reg.edit') && <button className="btn primary" onClick={() => setAdding(true)}>+ Desk registration</button>}</PageHead>
+      <PageHead title="Delegates" subtitle="Everyone registered for this event. Click a row for the full record, payments, messages and history.">{can('reg.edit') && <Btn kind="primary" icon={UserPlus} onClick={() => setAdding(true)}>Desk registration</Btn>}</PageHead>
       {(dups.data?.length ?? 0) > 0 && <details className="card"><summary style={{ cursor: 'pointer' }}><strong>{dups.data!.length} possible duplicate group(s)</strong> <span className="muted small">same email, phone, or name and institution</span></summary>
         <div className="stack" style={{ marginTop: '.5rem' }}>{dups.data!.map((g, i) => <div key={i} className="small"><span className="badge">{g.match}</span> {g.value}: {g.registrations.map((r: any) => <Link key={r.id} to={`/app/registrations/${r.id}`} style={{ marginRight: 8 }}>{r.ref} {r.full_name} ({label(r.payment_status)})</Link>)}</div>)}</div></details>}
       <ListView kind="master" bulk onRow={(r) => nav(`/app/registrations/${r.id}`)} />
@@ -226,7 +227,9 @@ function EditReg({ r, onClose, onDone }: any) {
 }
 
 export function Lists() {
-  const { eventId, me } = useStaff();
+  const { eventId, me, can } = useStaff();
+  const toast = useToast();
+  const ask = usePrompt();
   const lists = useAsync<any[]>(() => api.get('/api/admin/lists'), []);
   const inv = useAsync<any[]>(() => api.get(`/api/admin/events/${eventId}/inventory`).catch(() => []), [eventId]);
   const chairCommittees = me.roles.filter((r) => r.role === 'chair').map((r) => r.committee_id);
@@ -240,11 +243,15 @@ export function Lists() {
   const nav = useNavigate();
   return (
     <div className="stack">
-      <PageHead title="Lists" />
+      <PageHead title="Lists" subtitle="Every list is generated live from registrations. Search, filter, export, freeze a snapshot or share a read-only link." />
       <div className="row">
         <select style={{ width: 'auto' }} value={kind} onChange={(e) => setKind(e.target.value)} aria-label="List">{available.map((l) => <option key={l.key} value={l.key}>{l.title}</option>)}</select>
         {def?.needsCommittee && <select style={{ width: 'auto' }} value={cId ?? ''} onChange={(e) => setCommittee(e.target.value)} aria-label="Committee">{committees.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
         <Snapshots />
+        <span className="spacer" />
+        <a className="btn" href={`/api/admin/events/${eventId}/badges.pdf${qs({ committee: def?.needsCommittee || isChairOnly ? cId : undefined })}`} target="_blank" rel="noreferrer"><IdCard className="icon" />Print badges</a>
+        <a className="btn" href={`/api/admin/events/${eventId}/certificates.pdf${qs({ committee: def?.needsCommittee || isChairOnly ? cId : undefined })}`} target="_blank" rel="noreferrer"><Award className="icon" />Certificates</a>
+        {can('messages.send') && !isChairOnly && <Btn icon={Send} onClick={async () => { const r = await ask({ title: 'Email certificates', message: 'Each confirmed delegate gets their certificate as a PDF attachment.', fields: [{ key: 'who', label: 'Send to', options: [{ value: 'attended', label: 'Delegates marked present' }, { value: 'all', label: 'All confirmed delegates' }] }], confirm: 'Send' }); if (r) { const x = await api.post<any>(`/api/admin/events/${eventId}/certificates/send`, { attended_only: r.who === 'attended' }); toast(`${x.queued} certificates queued`, 'ok'); } }}>Email certificates</Btn>}
       </div>
       {def && (!def.needsCommittee || cId) && (kind === 'attendance' ? <Attendance committeeId={cId} /> : <ListView key={kind + cId} kind={kind} committeeId={def.needsCommittee ? cId : undefined} bulk={['master', 'unpaid', 'badges'].includes(kind)} onRow={(r) => r.id && !isChairOnly && ['master', 'details', 'unpaid', 'badges', 'waitlist', 'unmatched_referrals'].includes(kind) ? nav(`/app/registrations/${r.id}`) : undefined} />)}
     </div>

@@ -13,6 +13,7 @@ import { publicRouter, webhookRouter, serveFile } from './routes/public.ts';
 import { authRouter, adminRouter } from './routes/admin.ts';
 import { financeRouter } from './routes/finance.ts';
 import './services/documents.ts'; // registers email attachment builders
+import './services/badges.ts';
 
 export function createApp() {
   const app = express();

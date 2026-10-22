@@ -3,20 +3,21 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { api, ApiError, qs } from '../api';
 import { inr, date } from '../format';
 import { Alert, ErrorBox, Field, Loading, Suggest, useAsync } from '../ui';
+import { MapPin, CalendarDays, ShieldCheck } from 'lucide-react';
 
 interface EventInfo {
   event: { code: string; name: string; venue: string; city: string; start_date: string; end_date: string; status: string };
   org: { name: string; legal_name: string; grievance: string };
   committees: { id: string; name: string; short: string; kind: string; open_seats: number; seats: number; full: boolean }[];
-  classOptions: string[]; categories: string[]; gstRateBp: number; holdHours: number; feeModel: string; refundWindowDays: number;
+  classOptions: string[]; categories: string[]; gstRateBp: number; holdHours: number; feeModel: string; refundWindowDays: number; requireMobileOtp: boolean;
 }
 const EMPTY = { full_name: '', email: '', mobile: '', institution: '', class_year: '', city: '', dob: '', referral_name: '', coupon: '', guardian_name: '', guardian_email: '', whatsapp_consent: false, consent: false, preferences: [] as string[], surprise: false };
 type Form = typeof EMPTY;
 
-export function PublicShell({ title, subtitle, children }: { title: React.ReactNode; subtitle?: React.ReactNode; children: React.ReactNode }) {
+export function PublicShell({ title, subtitle, eyebrow, meta, children }: { title: React.ReactNode; subtitle?: React.ReactNode; eyebrow?: React.ReactNode; meta?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="public">
-      <div className="public-head"><div className="inner"><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div></div>
+      <div className="public-head"><div className="inner">{eyebrow && <div className="eyebrow">{eyebrow}</div>}<h1>{title}</h1>{subtitle && <p>{subtitle}</p>}{meta && <div className="meta">{meta}</div>}</div></div>
       <div className="public-body">{children}</div>
     </div>
   );
@@ -37,6 +38,7 @@ export default function Register() {
   const [refHint, setRefHint] = useState<string[]>([]);
   const started = useRef(Date.now());
   const [honey, setHoney] = useState('');
+  const [otp, setOtp] = useState<OtpState>({ step: 'idle' });
 
   // Draft saved every few seconds so a dropped connection loses nothing.
   useEffect(() => { const t = setTimeout(() => { try { localStorage.setItem(draftKey, JSON.stringify({ ...f, consent: false })); } catch { /* storage unavailable */ } }, 600); return () => clearTimeout(t); }, [f, draftKey]);
@@ -64,13 +66,15 @@ export default function Register() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
+    const ev = info.data!;
     const local: Record<string, string> = {};
     if (!f.surprise && !f.preferences.length) local.preferences = 'Pick up to three committees, or choose “Surprise me”';
     if (!f.consent) local.consent = 'Please accept to continue';
+    if (ev.requireMobileOtp && otp.step !== 'verified') local.mobile = 'Verify your mobile number with the code we send';
     if (Object.keys(local).length) { setErrors(local); return; }
     setBusy(true);
     try {
-      const out = await api.post<any>(`/api/public/events/${code}/register`, { ...f, preferences: f.surprise ? [] : f.preferences, website: honey, startedAt: started.current });
+      const out = await api.post<any>(`/api/public/events/${code}/register`, { ...f, preferences: f.surprise ? [] : f.preferences, website: honey, startedAt: started.current, otp_token: otp.step === 'verified' ? otp.token : undefined });
       try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
       nav(`/r/${out.token}?welcome=1`);
     } catch (err) {
@@ -88,7 +92,7 @@ export default function Register() {
   const err = (k: string) => errors[k];
 
   return (
-    <PublicShell title={ev.event.name} subtitle={<>{[ev.event.venue, ev.event.city].filter(Boolean).join(', ')}{ev.event.start_date ? ` · ${date(ev.event.start_date)} – ${date(ev.event.end_date)}` : ''}</>}>
+    <PublicShell eyebrow="Delegate registration" title={ev.event.name} meta={<>{(ev.event.venue || ev.event.city) && <span><MapPin className="icon" />{[ev.event.venue, ev.event.city].filter(Boolean).join(', ')}</span>}{ev.event.start_date && <span><CalendarDays className="icon" />{date(ev.event.start_date)} – {date(ev.event.end_date)}</span>}</>}>
       <div className="card stack">
         <div className="row between"><h2 style={{ margin: 0 }}>Register in 30 seconds</h2><Link to={`/register/${code}/delegation`} className="small">Registering a whole delegation?</Link></div>
         <p className="muted small" style={{ margin: 0 }}>No account or password. You get your committee and portfolio on the next screen.</p>
@@ -101,7 +105,10 @@ export default function Register() {
           </Field>
           <div className="grid g2">
             <Field label="Email" error={err('email')}><input type="email" inputMode="email" autoComplete="email" value={f.email} onChange={(e) => set('email', e.target.value)} className={err('email') ? 'invalid' : ''} required /></Field>
-            <Field label="Mobile (WhatsApp)" error={err('mobile')}><input type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="10-digit number" maxLength={14} value={f.mobile} onChange={(e) => set('mobile', e.target.value)} className={err('mobile') ? 'invalid' : ''} required /></Field>
+            <Field label="Mobile (WhatsApp)" error={err('mobile')}>
+              <input type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="10-digit number" maxLength={14} value={f.mobile} onChange={(e) => { set('mobile', e.target.value); setOtp({ step: 'idle' }); }} className={err('mobile') ? 'invalid' : ''} required />
+              {ev.requireMobileOtp && <OtpVerify code={code} mobile={f.mobile} state={otp} setState={setOtp} />}
+            </Field>
           </div>
           <Field label="School or college" error={err('institution')}>
             <Suggest value={f.institution} onChange={(v) => set('institution', v)} invalid={!!err('institution')} autoComplete="organization" fetcher={(q) => api.get(`/api/public/events/${code}/suggest/institution${qs({ q })}`)} />
@@ -166,5 +173,29 @@ export default function Register() {
       </div>
       <p className="small faint" style={{ textAlign: 'center', marginTop: '1rem' }}>{ev.org.legal_name}{ev.org.grievance ? ` · Grievances: ${ev.org.grievance}` : ''}</p>
     </PublicShell>
+  );
+}
+
+type OtpState = { step: 'idle' } | { step: 'sent'; devCode?: string } | { step: 'verified'; token: string };
+/** Optional mobile verification: send a 6-digit code by SMS/WhatsApp, enter it, get a one-time token for the form. */
+function OtpVerify({ code, mobile, state, setState }: { code: string; mobile: string; state: OtpState; setState: (s: OtpState) => void }) {
+  const [entered, setEntered] = useState('');
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const run = async (fn: () => Promise<void>) => { setBusy(true); setMsg(null); try { await fn(); } catch (e: any) { setMsg(e.message); } finally { setBusy(false); } };
+  if (state.step === 'verified') return <span className="verified"><ShieldCheck className="icon" />Number verified</span>;
+  return (
+    <div className="stack tight" style={{ fontWeight: 400 }}>
+      {state.step === 'idle'
+        ? <div><button type="button" className="btn sm" disabled={busy || mobile.replace(/\D/g, '').length < 10} onClick={() => run(async () => { const r = await api.post<any>(`/api/public/events/${code}/otp`, { mobile }); setState({ step: 'sent', devCode: r.devCode }); })}>Send verification code</button></div>
+        : <div className="otp">
+            <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" value={entered} onChange={(e) => setEntered(e.target.value.replace(/\D/g, ''))} aria-label="Verification code" />
+            <button type="button" className="btn sm primary" disabled={busy || entered.length !== 6} onClick={() => run(async () => { const r = await api.post<any>(`/api/public/events/${code}/otp/verify`, { mobile, code: entered }); setState({ step: 'verified', token: r.token }); })}>Verify</button>
+            <button type="button" className="btn sm ghost" disabled={busy} onClick={() => run(async () => { const r = await api.post<any>(`/api/public/events/${code}/otp`, { mobile }); setState({ step: 'sent', devCode: r.devCode }); })}>Resend</button>
+          </div>}
+      {state.step === 'sent' && state.devCode && <span className="small faint">Test mode (no SMS provider): your code is <strong className="mono">{state.devCode}</strong></span>}
+      {state.step === 'sent' && !state.devCode && <span className="small faint">We sent a 6-digit code to {mobile}.</span>}
+      {msg && <span className="small" style={{ color: 'var(--bad)' }}>{msg}</span>}
+    </div>
   );
 }

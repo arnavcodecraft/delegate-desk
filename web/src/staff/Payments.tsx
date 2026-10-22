@@ -13,10 +13,11 @@ export function ProofReview() {
   const toast = useToast();
   const ask = usePrompt();
   const approver = can('payments.approve');
+  const ai = useAsync<{ enabled: boolean }>(() => api.get('/api/admin/ai/status'), []);
   const matched = (q.data ?? []).filter((e) => e.bank_line_id && e.status === 'submitted');
   return (
     <div className="stack">
-      <PageHead title="Payment proofs">
+      <PageHead title="Payment proofs" subtitle="UPI and bank transfer screenshots waiting for a decision. Text is read from each screenshot and compared with what the delegate typed.">
         <Btn onClick={async () => { const r = await api.post<any>('/api/finance/evidence/rematch'); toast(`${r.matched} newly bank-matched`, 'ok'); q.reload(); }}>Re-match with bank</Btn>
         {can('finance.import') && <Link className="btn" to="/app/imports?kind=bank">Import bank statement</Link>}
       </PageHead>
@@ -47,6 +48,7 @@ export function ProofReview() {
                   {e.hold_expires_at && <><dt>Hold</dt><dd>{dt(e.hold_expires_at)} (kept while under review)</dd></>}
                   {e.reviewer && <><dt>Reviewer</dt><dd>{e.reviewer} · {dt(e.reviewed_at)}{e.reason ? ` · ${e.reason}` : ''}</dd></>}
                 </dl>
+                <ProofReadout e={e} aiOn={!!ai.data?.enabled} />
                 {e.tamper_flags.length > 0 && <Alert tone="warn"><strong>Check carefully:</strong> {e.tamper_flags.join(' · ')}</Alert>}
                 {approver && e.status === 'submitted' && (
                   <div className="row">
@@ -79,7 +81,7 @@ export function Payments() {
   const run = (fn: () => Promise<any>, ok: string, reload: () => void) => async () => { try { const r = await fn(); toast(r?.status === 'awaiting_second_approval' ? 'First approval recorded; a second approver is needed' : r?.error ? `Approved, but the gateway call failed: ${r.error}` : ok, r?.error ? 'bad' : 'ok'); reload(); } catch (e: any) { toast(e.message, 'bad'); } };
   return (
     <div className="stack">
-      <PageHead title="Payments & refunds" />
+      <PageHead title="Payments & refunds" subtitle="Every payment received and refund issued, with links to the delegate and the journal entry." />
       <Tabs value={tab} onChange={setTab} tabs={[{ key: 'refunds', label: 'Refunds' }, { key: 'transactions', label: 'Transactions' }, { key: 'orders', label: 'Orders' }, { key: 'settlements', label: 'Settlements' }, { key: 'excess', label: 'Excess payments' }, { key: 'bank', label: 'Bank lines' }, { key: 'webhooks', label: 'Webhook log' }, { key: 'gateways', label: 'Gateways' }]} />
       {tab === 'refunds' && <div className="card flush"><DataTable rows={refunds.data ?? []} empty="No refunds." onRowClick={(r) => nav(`/app/registrations/${r.registration_id}`)} columns={[
         { key: 'created_at', label: 'Requested' }, { key: 'ref', label: 'Delegate', render: (r: any) => <>{r.full_name}<div className="small faint">{r.ref}</div></> }, { key: 'amount_paise', label: 'Amount', num: true }, { key: 'reason', label: 'Reason' },
@@ -114,6 +116,32 @@ export function Payments() {
         <div className="card flush"><DataTable rows={gw.data.all} rowKey={(r: any) => r.name} columns={[{ key: 'label', label: 'Gateway' }, { key: 'configured', label: 'Keys configured', render: (r: any) => (r.configured ? 'Yes' : 'No — set environment variables') }, { key: 'healthy', label: 'Health', render: (r: any) => (r.healthy ? <span className="badge good">OK</span> : <span className="badge bad">Hidden (failing)</span>) }]} /></div>
         <div className="card small"><strong>Webhook URLs to register with the gateways:</strong><div className="mono">{gw.data.webhookUrls.razorpay}</div><div className="mono">{gw.data.webhookUrls.cashfree}</div><p className="muted" style={{ marginTop: '.5rem' }}>Enable/disable gateways, choose the default and routing in Settings → Event.</p></div>
       </div>}
+    </div>
+  );
+}
+
+/** What the screenshot says (on-device OCR, or Claude when asked), next to what the delegate typed. Suggestions only. */
+function ProofReadout({ e, aiOn }: { e: any; aiOn: boolean }) {
+  const ocr = (() => { try { return e.extracted ? JSON.parse(e.extracted) : null; } catch { return null; } })();
+  const [aiRead, setAiRead] = useState<any>(null);
+  const toast = useToast();
+  const row = (label: string, read: React.ReactNode, ok: boolean | null) => (
+    <tr><td className="faint">{label}</td><td>{read ?? <span className="faint">not readable</span>}</td><td>{ok == null ? null : ok ? <span className="badge good">matches</span> : <span className="badge warn">differs</span>}</td></tr>
+  );
+  if (!ocr && !aiOn) return null;
+  const src = aiRead ?? ocr;
+  return (
+    <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '.6rem .8rem' }}>
+      <div className="row between"><span className="small" style={{ fontWeight: 600 }}>{aiRead ? 'Read by Claude' : ocr ? 'Read from the screenshot (OCR)' : 'Not read yet'}</span>
+        {aiOn && !aiRead && <Btn size="sm" kind="ghost" onClick={async () => { try { setAiRead(await api.post(`/api/finance/evidence/${e.id}/ai-read`)); } catch (x: any) { toast(x.message, 'bad'); } }}>Read with AI</Btn>}</div>
+      {src && !aiRead && src.utr == null && src.amountPaise == null && src.date == null ? <div className="small faint" style={{ marginTop: '.25rem' }}>No payment details could be read from this image. Check it by eye against the bank statement.</div>
+        : src && <table className="t" style={{ marginTop: '.25rem' }}><tbody>
+        {row('UTR', src.utr, src.utr ? String(src.utr).replace(/[^A-Z0-9]/gi, '').toUpperCase() === e.utr : null)}
+        {row('Amount', src.amountPaise != null ? inr(src.amountPaise) : null, src.amountPaise != null ? src.amountPaise === e.amount_paise : null)}
+        {row('Date', src.date, src.date ? src.date === e.paid_on : null)}
+        {aiRead && row('Status', aiRead.status, aiRead.status === 'successful')}
+      </tbody></table>}
+      {aiRead?.concerns?.length > 0 && <div className="small" style={{ color: 'var(--warn)', marginTop: '.35rem' }}>{aiRead.concerns.join(' · ')}</div>}
     </div>
   );
 }

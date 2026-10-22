@@ -10,6 +10,8 @@ import { enqueue, notifyStaff } from './notify.ts';
 import { portalLink, regVars, requestRefund } from './payments.ts';
 import { statement, reconcile } from './commission.ts';
 import { balanceOf } from './fees.ts';
+import { consumeOtpToken } from './otp.ts';
+import { checkinCode } from './badges.ts';
 
 export const CLASS_OPTIONS = ['8', '9', '10', '11', '12', 'UG 1st year', 'UG 2nd year', 'UG 3rd year', 'UG 4th year', 'PG', 'Graduate', 'Faculty / Advisor'];
 
@@ -18,6 +20,7 @@ export interface RegInput {
   preferences: string[]; referral_name?: string | null; dob?: string | null; consent: boolean;
   category?: string; coupon?: string | null; experience?: string; guardian_name?: string | null; guardian_email?: string | null;
   whatsapp_consent?: boolean;
+  otp_token?: string;
 }
 
 export function validate(eventId: string, i: RegInput) {
@@ -72,6 +75,8 @@ export function register(eventId: string, i: RegInput, o: { source?: string; del
     enqueue('portal_link', { to: dup.email, registrationId: dup.id, vars: regVars(dup) });
     throw conflict('You are already registered with this email or mobile. We have emailed your delegate link again.', { duplicate: true });
   }
+  // Optional mobile OTP: only for the public form (desk, delegation and import registrations are staff-entered).
+  if (eventSettings(ev).requireMobileOtp && (o.source ?? 'form') === 'form') consumeOtpToken(eventId, i.mobile, i.otp_token);
   const category = i.category ?? (/faculty|advisor/i.test(i.class_year) ? 'advisor' : /UG|PG|Graduate/i.test(i.class_year) ? 'college' : 'school');
   const q0 = quote(eventId, { category, couponCode: i.coupon, groupSize: o.groupSize });
   const match = matchReferral(ev.org_id, i.referral_name);
@@ -148,6 +153,7 @@ export function portalView(reg: Record<string, any>) {
     evidence, invoices, refunds, committees,
     swap: one("SELECT * FROM swap_request WHERE registration_id = ? AND status = 'pending'", reg.id) ?? null,
     feeModel: s.feeModel, refundWindowDays: s.refundWindowDays,
+    checkinCode: seat?.state === 'confirmed' ? checkinCode(reg.ref) : null,
   };
 }
 

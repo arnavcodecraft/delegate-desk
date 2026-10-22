@@ -15,7 +15,7 @@ export default function Books() {
   const exp = (kind: string, format: string, extra: Record<string, string> = {}) => downloadUrl(`/api/finance/books/export${qs({ kind, format, ...f, ...extra })}`);
   return (
     <div className="stack">
-      <PageHead title="Books">
+      <PageHead title="Books" subtitle="Double-entry ledger, trial balance, profit and loss, balance sheet and GST, ready for the auditor.">
         {can('books.post') && <NewJournal />}
         {can('books.export') && <Btn onClick={() => exp('backup', 'json')}>Auditor backup (JSON)</Btn>}
       </PageHead>

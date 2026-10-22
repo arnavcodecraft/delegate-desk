@@ -16,7 +16,7 @@ export default function Allocation() {
   const total = (inv.data ?? []).reduce((s, c) => ({ seats: s.seats + c.seats, held: s.held + c.held, confirmed: s.confirmed + c.confirmed }), { seats: 0, held: 0, confirmed: 0 });
   return (
     <div className="stack">
-      <PageHead title="Committees & allotment">{can('alloc.config') && <button className="btn primary" onClick={() => setEditing({ name: '', short: '', kind: 'single', description: '', guide_url: '', sort: (inv.data?.length ?? 0) })}>+ Committee</button>}</PageHead>
+      <PageHead title="Committees & allotment" subtitle="Committees, portfolios and seat inventory. Run automatic allotment or place delegates by hand.">{can('alloc.config') && <button className="btn primary" onClick={() => setEditing({ name: '', short: '', kind: 'single', description: '', guide_url: '', sort: (inv.data?.length ?? 0) })}>+ Committee</button>}</PageHead>
       <Tabs value={tab} onChange={setTab} tabs={[{ key: 'inventory', label: 'Seats' }, ...(can('alloc.config') ? [{ key: 'simulate' as const, label: 'Simulator' }] : []), ...(can('alloc.move') ? [{ key: 'swaps' as const, label: 'Change requests' }] : []), { key: 'board', label: 'Executive board' }]} />
       {tab === 'inventory' && (!inv.data ? <Loading /> : <>
         <p className="muted">{total.seats} seats · {total.confirmed} confirmed · {total.held} held · {total.seats - total.held - total.confirmed} open. Seats are locked in the same database transaction that saves a registration, so a portfolio can never be given twice.</p>

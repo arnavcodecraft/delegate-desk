@@ -10,18 +10,24 @@
     "start": "NODE_ENV=production tsx server/src/index.ts",
     "seed": "tsx server/src/seed.ts",
     "test": "node --import tsx --test --test-concurrency=1 server/test/*.test.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
+    "restore": "tsx server/src/restore.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.1.0",
+    "@tesseract.js-data/eng": "^1.0.0",
     "cookie-parser": "^1.4.7",
     "exceljs": "^4.4.0",
     "express": "^5.3.0",
     "multer": "^2.4.0",
     "nodemailer": "^10.2.0",
     "pdfkit": "^0.20.2",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "tesseract.js": "^7.0.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.3.0",
@@ -33,6 +39,8 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "concurrently": "^10.0.6",
+    "jsqr": "^1.4.0",
+    "lucide-react": "^1.61.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.4",

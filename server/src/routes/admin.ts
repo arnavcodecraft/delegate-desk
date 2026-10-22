@@ -17,9 +17,15 @@ import { linkReferral } from '../services/referrals.ts';
 import { reconcile } from '../services/commission.ts';
 import { runList, LISTS, committeeName } from '../services/lists.ts';
 import { toCsv, toXlsx, tablePdf, logExport, exportMeta } from '../services/documents.ts';
-import { DEFAULT_TEMPLATES, enqueue, render } from '../services/notify.ts';
+import { DEFAULT_TEMPLATES, enqueue, render, notifyStaff } from '../services/notify.ts';
 import { KINDS, parseFile, suggestMapping, preview, commit, errorFile, rollback } from '../services/imports.ts';
 import { submitEvidence, signedFileUrl } from '../services/evidence.ts';
+import { checkUpload } from '../services/scanner.ts';
+import { whatsapp, sms } from '../services/channels.ts';
+import { serviceAccount, createSync, deleteSync, syncSheet } from '../services/sheets.ts';
+import { ask, aiStatus } from '../services/ai.ts';
+import { badgesPdf, certificatesPdf, checkIn, sendCertificates } from '../services/badges.ts';
+import { createBackup, verifyBackup, backupFilePath } from '../services/backup.ts';
 import { balanceOf } from '../services/fees.ts';
 import { parseMoney } from '../util.ts';
 
@@ -258,9 +264,10 @@ adminRouter.post('/registrations/:id/award', requirePerm('attendance.mark'), h((
   audit('award.set', 'registration', r.id, { award: r.award }, { award: req.body?.award });
   return { ok: true };
 }));
-adminRouter.post('/registrations/:id/evidence', requirePerm('reg.edit'), upload.single('file'), h((req) => {
+adminRouter.post('/registrations/:id/evidence', requirePerm('reg.edit'), upload.single('file'), h(async (req) => {
   const r = one('SELECT * FROM registration WHERE id = ?', P(req).id);
   if (!r || !req.file) throw bad('Registration and file required');
+  await checkUpload(req.file.buffer);
   return submitEvidence(r, req.file, { utr: req.body.utr, amountPaise: parseMoney(req.body.amount), paidOn: req.body.paid_on }, req.auth!.user.id);
 }));
 adminRouter.get('/events/:id/duplicates', requirePerm('reg.read'), h((req) => duplicates(P(req).id)));
@@ -367,16 +374,21 @@ adminRouter.delete('/executive-board/:id', requirePerm('alloc.config'), h((req) 
 
 // ---------- messaging ----------
 adminRouter.get('/templates', requirePerm('templates.manage', 'messages.read'), h(() => ({
-  templates: all('SELECT * FROM template ORDER BY key, channel'),
+  templates: all('SELECT * FROM template ORDER BY key, channel').map((t) => ({ ...t, params: json(t.params, []) })),
+  channels: { whatsapp: whatsapp.configured(), sms: sms.configured(), email: !!config.smtpUrl },
   mergeFields: ['name', 'ref', 'committee', 'portfolio', 'amount', 'due_date', 'payment_link', 'portal_link', 'upload_link', 'referral_name', 'event_name', 'event_dates', 'venue', 'dress_code', 'reporting_time', 'guide_link', 'reason', 'waitlist_position', 'institution'],
 })));
 adminRouter.put('/templates/:key/:channel', requirePerm('templates.manage'), h((req) => {
   const before = one('SELECT * FROM template WHERE key = ? AND channel = ?', P(req).key, P(req).channel);
-  const { subject, body, active } = req.body ?? {};
+  const { subject, body, active, provider_template, language, params } = req.body ?? {};
   if (!subject || !body) throw bad('Subject and body are required');
-  run('INSERT INTO template (key, channel, subject, body, active, updated_at) VALUES (?,?,?,?,?,?) ON CONFLICT(key, channel) DO UPDATE SET subject = excluded.subject, body = excluded.body, active = excluded.active, updated_at = excluded.updated_at',
-    P(req).key, P(req).channel, subject, body, active === false ? 0 : 1, now());
-  audit('template.update', 'template', `${P(req).key}:${P(req).channel}`, before, { subject, body, active });
+  if (!['email', 'whatsapp', 'sms'].includes(P(req).channel)) throw bad('Unknown channel');
+  const paramList = Array.isArray(params) ? params.map(String) : JSON.parse(before?.params ?? '[]');
+  run(`INSERT INTO template (key, channel, subject, body, active, updated_at, provider_template, language, params) VALUES (?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(key, channel) DO UPDATE SET subject = excluded.subject, body = excluded.body, active = excluded.active, updated_at = excluded.updated_at,
+       provider_template = excluded.provider_template, language = excluded.language, params = excluded.params`,
+    P(req).key, P(req).channel, subject, body, active === false ? 0 : 1, now(), provider_template || null, language || 'en', JSON.stringify(paramList));
+  audit('template.update', 'template', `${P(req).key}:${P(req).channel}`, before, { subject, body, active, provider_template, language, params: paramList });
   return { ok: true };
 }));
 adminRouter.post('/templates/:key/preview', requirePerm('templates.manage', 'messages.send'), h((req) => {
@@ -526,3 +538,120 @@ adminRouter.post('/imports/:id/rollback', h((req) => {
   rollback(P(req).id);
   return { ok: true };
 }));
+
+// ---------- Google Sheets sync ----------
+adminRouter.get('/events/:id/sheet-syncs', requirePerm('lists.share'), h((req) => ({
+  serviceAccount: serviceAccount()?.client_email ?? null,
+  syncs: all('SELECT s.*, c.name AS committee FROM sheet_sync s LEFT JOIN committee c ON c.id = s.committee_id WHERE s.event_id = ? ORDER BY s.created_at', P(req).id),
+})));
+adminRouter.post('/events/:id/sheet-syncs', requirePerm('lists.share'), h((req) => ({ id: createSync(P(req).id, req.body ?? {}) })));
+adminRouter.post('/sheet-syncs/:id/run', requirePerm('lists.share'), h(async (req) => syncSheet(P(req).id)));
+adminRouter.delete('/sheet-syncs/:id', requirePerm('lists.share'), h((req) => { deleteSync(P(req).id); return { ok: true }; }));
+
+// ---------- AI assistant (read-only, permission-scoped) ----------
+adminRouter.get('/ai/status', h(() => aiStatus()));
+adminRouter.post('/events/:id/ai/ask', h(async (req) => {
+  rateLimit(`ai:${req.auth!.user.id}`, 40, 60 * 60_000);
+  return ask(String(req.body?.question ?? ''), req.auth!.roleNames, P(req).id, Array.isArray(req.body?.history) ? req.body.history : []);
+}));
+
+// ---------- badges, certificates, check-in ----------
+function printScope(req: express.Request) {
+  const scope = committeeScope(req);
+  const committeeId = (req.query.committee as string) || undefined;
+  if (scope && (!committeeId || !scope.includes(committeeId))) throw forbidden('Chairs can print for their own committee only');
+  return { committeeId, ids: typeof req.query.ids === 'string' && req.query.ids ? req.query.ids.split(',') : undefined };
+}
+adminRouter.get('/events/:id/badges.pdf', requirePerm('lists.read'), h(async (req, res) => {
+  const pdf = await badgesPdf(P(req).id, printScope(req));
+  audit('badges.print', 'event', P(req).id, undefined, req.query);
+  res.type('pdf').setHeader('content-disposition', 'inline; filename="badges.pdf"'); res.send(pdf);
+}));
+adminRouter.get('/events/:id/certificates.pdf', requirePerm('lists.read'), h(async (req, res) => {
+  const pdf = await certificatesPdf(P(req).id, { ...printScope(req), attendedOnly: req.query.attended === '1' });
+  audit('certificates.print', 'event', P(req).id, undefined, req.query);
+  res.type('pdf').setHeader('content-disposition', 'inline; filename="certificates.pdf"'); res.send(pdf);
+}));
+adminRouter.post('/events/:id/certificates/send', requirePerm('messages.send'), h((req) => ({ queued: sendCertificates(P(req).id, !!req.body?.attended_only) })));
+adminRouter.post('/events/:id/checkin', requirePerm('attendance.mark'), h((req) => checkIn(P(req).id, String(req.body?.code ?? ''), committeeScope(req))));
+adminRouter.get('/events/:id/checkin/stats', requirePerm('attendance.mark'), h((req) => {
+  const scope = committeeScope(req);
+  return all(`SELECT c.id, c.name, c.short, SUM(CASE WHEN s.state = 'confirmed' THEN 1 ELSE 0 END) AS confirmed, SUM(CASE WHEN r.attended_at IS NOT NULL THEN 1 ELSE 0 END) AS present
+    FROM committee c JOIN portfolio p ON p.committee_id = c.id JOIN seat s ON s.portfolio_id = p.id LEFT JOIN registration r ON r.id = s.registration_id
+    WHERE c.event_id = ? GROUP BY c.id ORDER BY c.sort`, P(req).id).filter((c) => !scope || scope.includes(c.id));
+}));
+
+// ---------- backups ----------
+adminRouter.get('/backups', requirePerm('settings.org', 'audit.read'), h(() => ({
+  backups: all('SELECT * FROM backup_log ORDER BY created_at DESC LIMIT 60').map((b) => ({ ...b, counts: json(b.counts, {}) })),
+  keyConfigured: !!config.backup.key, keep: config.backup.keep,
+})));
+adminRouter.post('/backups', requirePerm('settings.org'), h(() => { const b = createBackup(); return { ...b, verify: verifyBackup(b.id) }; }));
+adminRouter.post('/backups/:id/verify', requirePerm('settings.org', 'audit.read'), h((req) => ({ result: verifyBackup(P(req).id) })));
+adminRouter.get('/backups/:id/download', requirePerm('settings.org'), h((req, res) => {
+  const file = backupFilePath(P(req).id);
+  audit('backup.download', 'backup', P(req).id);
+  res.download(file);
+}));
+
+// ---------- data protection: erasure requests and breach register ----------
+adminRouter.post('/erasure-requests/:id/decline', requirePerm('reg.erase'), h((req) => {
+  const reason = String(req.body?.reason ?? '').trim();
+  if (!reason) throw bad('Give a reason (for example, records the law requires us to keep)');
+  run("UPDATE erasure_request SET status = 'declined', note = ?, completed_at = ?, completed_by = ? WHERE id = ?", reason, now(), req.auth!.user.id, P(req).id);
+  audit('erasure.decline', 'erasure_request', P(req).id, undefined, { reason });
+  return { ok: true };
+}));
+adminRouter.get('/breaches', requirePerm('reg.erase', 'audit.read'), h(() => all('SELECT b.*, u.name AS reported_by_name FROM breach_incident b LEFT JOIN user u ON u.id = b.reported_by ORDER BY b.detected_at DESC')));
+adminRouter.post('/breaches', requirePerm('reg.erase'), h((req) => {
+  const b = req.body ?? {};
+  if (!b.title?.trim() || !b.description?.trim()) throw bad('Title and description are required');
+  const fields = { title: b.title.trim(), description: b.description.trim(), detected_at: b.detected_at || now(), data_affected: b.data_affected || null, affected_count: b.affected_count ? Number(b.affected_count) : null, containment: b.containment || null };
+  if (b.id) {
+    const before = one('SELECT * FROM breach_incident WHERE id = ?', b.id);
+    if (!before) throw notFound('Incident');
+    const patch: any = { ...fields, status: ['open', 'contained', 'closed'].includes(b.status) ? b.status : before.status };
+    if (b.board_notified && !before.board_notified_at) patch.board_notified_at = now();
+    if (patch.status === 'closed' && !before.closed_at) patch.closed_at = now();
+    update('breach_incident', b.id, patch);
+    audit('breach.update', 'breach_incident', b.id, before, patch);
+    return { id: b.id };
+  }
+  const id = uid();
+  insert('breach_incident', { id, ...fields, status: 'open', reported_by: req.auth!.user.id, created_at: now() });
+  audit('breach.create', 'breach_incident', id, undefined, fields);
+  notifyStaffAlert(`Personal data breach logged: ${fields.title}`, fields.description);
+  return { id };
+}));
+/** Tell affected delegates (all, or a list of delegate IDs) what happened and what to do. */
+adminRouter.post('/breaches/:id/notify', requirePerm('reg.erase'), h((req) => {
+  const inc = one('SELECT * FROM breach_incident WHERE id = ?', P(req).id);
+  if (!inc) throw notFound('Incident');
+  const message = String(req.body?.message ?? '').trim();
+  if (message.length < 30) throw bad('Write the notice: what happened, what data, what you are doing, what they should do, and who to contact');
+  const refs: string[] = Array.isArray(req.body?.refs) ? req.body.refs : [];
+  const regs = refs.length
+    ? all(`SELECT * FROM registration WHERE ref IN (${refs.map(() => '?').join(',')}) AND erased_at IS NULL`, ...refs)
+    : all('SELECT * FROM registration WHERE event_id = ? AND erased_at IS NULL', req.body?.event_id);
+  const org = getOrg();
+  for (const r of regs) enqueue('breach_notice', { to: r.email, registrationId: r.id, vars: { ...regVars(r), message, grievance: org.grievance_contact ?? '' } });
+  update('breach_incident', inc.id, { people_notified_at: now(), people_notified_count: (inc.people_notified_count ?? 0) + regs.length });
+  audit('breach.notify', 'breach_incident', inc.id, undefined, { notified: regs.length });
+  return { notified: regs.length };
+}));
+
+function notifyStaffAlert(title: string, message: string) { notifyStaff(['admin', 'superadmin'], 'staff_alert', { title, message }); }
+
+/** Which optional integrations are switched on, for the Settings > Integrations screen. */
+adminRouter.get('/integrations', requirePerm('settings.org', 'settings.finance', 'event.config'), h(() => ({
+  email: { on: !!config.smtpUrl, detail: config.smtpUrl ? config.mailFrom : 'Set SMTP_URL and MAIL_FROM' },
+  whatsapp: { on: whatsapp.configured(), detail: whatsapp.configured() ? `Phone number id ${config.whatsapp.phoneNumberId}` : 'Set WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID', webhook: `${config.baseUrl}/api/webhooks/whatsapp` },
+  sms: { on: sms.configured(), detail: sms.configured() ? 'MSG91 Flow API' : 'Set MSG91_AUTH_KEY' },
+  ai: { on: config.ai.enabled, detail: config.ai.enabled ? 'Claude: bill and proof reading, summaries, questions' : 'Set ANTHROPIC_API_KEY' },
+  ocr: { on: config.ocrEnabled, detail: 'On-device text reading of screenshots and bills' },
+  clamav: { on: !!config.clamav.host, detail: config.clamav.host ? `${config.clamav.host}:${config.clamav.port}${config.clamav.required ? ' (required)' : ''}` : 'Set CLAMAV_HOST to scan uploads with ClamAV' },
+  sheets: { on: !!serviceAccount(), detail: serviceAccount()?.client_email ?? 'Set GOOGLE_SERVICE_ACCOUNT_JSON' },
+  backups: { on: config.backup.enabled, detail: config.backup.key ? `Daily, keeping ${config.backup.keep}` : 'Daily — set BACKUP_KEY for production' },
+  razorpay: { on: !!config.razorpay.keyId, detail: config.razorpay.keyId ? 'Keys set' : 'Set RAZORPAY_* keys' },
+  cashfree: { on: !!config.cashfree.appId, detail: config.cashfree.appId ? `Keys set (${config.cashfree.env})` : 'Set CASHFREE_* keys' },
+})));

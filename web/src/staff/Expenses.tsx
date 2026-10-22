@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, qs } from '../api';
 import { inr, dt, label, toPaise, toRupees, today } from '../format';
-import { Alert, BudgetBars, Btn, DataTable, Field, Loading, Modal, Status, Tabs, useAsync, useToast, usePrompt } from '../ui';
+import { Alert, BudgetBars, Btn, DataTable, Field, Loading, Modal, Status, Tabs, Segmented, useAsync, useToast, usePrompt } from '../ui';
 import { PageHead, useStaff } from './Shell';
+import { Plus } from 'lucide-react';
 
 export default function Expenses() {
   const { eventId, can } = useStaff();
@@ -19,11 +20,11 @@ export default function Expenses() {
   const sum = (st: string) => (list.data ?? []).filter((e) => e.status === st).reduce((s, e) => s + e.amount_paise + e.gst_paise, 0);
   return (
     <div className="stack">
-      <PageHead title="Expenses"><button className="btn primary" onClick={() => setAdding(true)}>+ Add expense</button></PageHead>
+      <PageHead title="Expenses" subtitle="Add a bill in under a minute from your phone. Approval posts it to the books; payment clears it."><Btn kind="primary" icon={Plus} onClick={() => setAdding(true)}>Add expense</Btn></PageHead>
       <Tabs value={tab} onChange={setTab} tabs={[{ key: 'list', label: 'Expenses' }, ...(can('expense.read') ? [{ key: 'budgets' as const, label: 'Budgets' }, { key: 'vendors' as const, label: 'Vendors' }, { key: 'ageing' as const, label: 'Who is owed' }, { key: 'cash' as const, label: 'Petty cash & advances' }, { key: 'sponsors' as const, label: 'Sponsorship' }] : [])]} />
       {tab === 'list' && <>
         <div className="row">
-          {['', 'submitted', 'approved', 'rejected', 'unpaid', 'part_paid', 'paid'].map((s) => <button key={s} className={`chip ${status === s ? 'on' : ''}`} onClick={() => setStatus(s)}>{s ? label(s) : 'All'}</button>)}
+          <Segmented value={status} onChange={setStatus} options={['', 'draft', 'submitted', 'approved', 'rejected', 'unpaid', 'paid'].map((x) => ({ value: x, label: x === 'draft' ? 'Purchase orders' : x ? label(x) : 'All' }))} />
           <span className="spacer" /><span className="small muted">Awaiting approval {inr(sum('submitted'))} · approved {inr(sum('approved'))}</span>
         </div>
         <div className="card flush"><DataTable rows={rows} onRowClick={setOpen} columns={[
@@ -46,8 +47,29 @@ export default function Expenses() {
 function ExpenseForm({ meta, onClose, onDone }: any) {
   const { eventId, me } = useStaff();
   const toast = useToast();
-  const [f, setF] = useState<any>({ category: 'venue', cost_behaviour: 'fixed', description: '', vendor_id: '', invoice_no: '', bill_date: today(), amount: '', gst_rate: '18', itc_eligible: true, tds: '', payment_mode: 'bank' });
+  const [f, setF] = useState<any>({ category: 'venue', cost_behaviour: 'fixed', description: '', vendor_id: '', invoice_no: '', bill_date: today(), amount: '', gst_rate: '18', itc_eligible: true, tds: '', payment_mode: 'bank', po: false });
   const [bill, setBill] = useState<File | null>(null);
+  const [reading, setReading] = useState(false);
+  const [suggested, setSuggested] = useState<any>(null);
+  async function readBill(file: File) {
+    const fd = new FormData(); fd.append('bill', file);
+    setReading(true); setSuggested(null);
+    try {
+      const r = await api.post<any>('/api/finance/expenses/read-bill', fd);
+      if (!r.found) return;
+      setSuggested(r);
+      setF((x: any) => ({
+        ...x,
+        vendor_id: r.vendorId ?? x.vendor_id,
+        invoice_no: r.invoiceNo ?? x.invoice_no,
+        bill_date: r.date ?? x.bill_date,
+        amount: r.amountPaise != null ? String(r.amountPaise / 100) : r.totalPaise != null && !r.gstPaise ? String(r.totalPaise / 100) : x.amount,
+        gst_rate: r.gstRate != null ? String(r.gstRate) : x.gst_rate,
+        category: r.category ?? x.category,
+        description: x.description || r.description || (r.vendorName ? `Bill from ${r.vendorName}` : ''),
+      }));
+    } catch { /* reading is a convenience; the form still works */ } finally { setReading(false); }
+  }
   const [budget, setBudget] = useState<any>(null);
   const amount = toPaise(f.amount || '0');
   const gst = Math.round((amount * Number(f.gst_rate || 0)) / 100);
@@ -55,11 +77,11 @@ function ExpenseForm({ meta, onClose, onDone }: any) {
   const tds = tdsSec ? Math.round((amount * tdsSec.rateBp) / 10000) : 0;
   useEffect(() => { const t = setTimeout(() => api.get(`/api/finance/events/${eventId}/budget-check${qs({ category: f.category, amount })}`).then(setBudget).catch(() => setBudget(null)), 200); return () => clearTimeout(t); }, [f.category, amount, eventId]);
   async function save(force = false) {
-    const data = { event_id: eventId, category: f.category, cost_behaviour: f.cost_behaviour, description: f.description, vendor_id: f.vendor_id || null, invoice_no: f.invoice_no || null, bill_date: f.bill_date, amount_paise: amount, gst_rate_bp: Math.round(Number(f.gst_rate || 0) * 100), itc_eligible: f.itc_eligible, tds_section: tdsSec?.section ?? null, tds_rate_bp: tdsSec?.rateBp ?? 0, payment_mode: f.payment_mode, force_duplicate: force, budget_override: force };
+    const data = { event_id: eventId, category: f.category, cost_behaviour: f.cost_behaviour, description: f.description, vendor_id: f.vendor_id || null, invoice_no: f.invoice_no || null, bill_date: f.bill_date, amount_paise: amount, gst_rate_bp: Math.round(Number(f.gst_rate || 0) * 100), itc_eligible: f.itc_eligible, tds_section: tdsSec?.section ?? null, tds_rate_bp: tdsSec?.rateBp ?? 0, payment_mode: f.payment_mode, force_duplicate: force, budget_override: force, status: f.po ? 'draft' : 'submitted' };
     try {
       if (bill) { const fd = new FormData(); fd.append('bill', bill); fd.append('data', JSON.stringify(data)); await api.post('/api/finance/expenses', fd); }
       else await api.post('/api/finance/expenses', data);
-      toast('Expense submitted for approval', 'ok'); onDone();
+      toast(f.po ? 'Purchase order saved' : 'Expense submitted for approval', 'ok'); onDone();
     } catch (e: any) {
       if (e.status === 409 && e.details?.duplicate && window.confirm(`${e.message}. Save anyway?`)) return save(true);
       toast(e.message, 'bad');
@@ -68,7 +90,12 @@ function ExpenseForm({ meta, onClose, onDone }: any) {
   return (
     <Modal title="Add expense" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><Btn kind="primary" onClick={() => save()}>Submit</Btn></>}>
       <div className="stack">
-        <Field label="Bill photo or PDF" hint="optional now, needed before payment"><input type="file" accept="image/*,application/pdf" capture="environment" onChange={(e) => setBill(e.target.files?.[0] ?? null)} /></Field>
+        <Field label="Bill photo or PDF" hint="we'll read it and fill the form for you to check">
+          <input type="file" accept="image/*,application/pdf" onChange={(e) => { const file = e.target.files?.[0] ?? null; setBill(file); if (file) readBill(file); }} />
+        </Field>
+        {reading && <Alert tone="info">Reading the bill…</Alert>}
+        {suggested && <Alert tone="good">Filled from the bill{suggested.source === 'ai' ? ' by Claude' : ''}: {[suggested.vendorName, suggested.invoiceNo && `invoice ${suggested.invoiceNo}`, suggested.date, suggested.totalPaise != null && `total ${inr(suggested.totalPaise)}`].filter(Boolean).join(' · ')}. Please check before submitting.</Alert>}
+        <label className="check"><input type="checkbox" checked={f.po} onChange={(e) => setF({ ...f, po: e.target.checked })} /><span>Purchase order (a commitment — no bill yet; convert to a bill when it arrives)</span></label>
         <div className="grid g2">
           <Field label="Category"><select value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>{meta.categories.map((c: string) => <option key={c} value={c}>{label(c)}</option>)}</select></Field>
           <Field label="Cost behaviour" hint="feeds break-even"><select value={f.cost_behaviour} onChange={(e) => setF({ ...f, cost_behaviour: e.target.value })}><option value="fixed">Fixed</option><option value="variable">Variable per delegate</option><option value="semi">Semi-variable</option></select></Field>
@@ -104,14 +131,15 @@ function ExpenseDetail({ e, onClose, onDone }: any) {
   const act = (fn: () => Promise<any>, ok: string) => async () => { try { await fn(); toast(ok, 'ok'); onDone(); } catch (x: any) { toast(x.message, 'bad'); } };
   return (
     <Modal title={`${e.ref} · ${e.description}`} onClose={onClose} footer={<>
-      {can('expense.approve') && ['submitted', 'draft'].includes(e.status) && e.submitted_by !== me.user!.id && <><Btn kind="good" onClick={act(() => api.post(`/api/finance/expenses/${e.id}/approve`), 'Approved and posted')}>Approve</Btn><Btn kind="danger" onClick={async () => { const r = await ask({ title: 'Reject', fields: [{ key: 'reason', label: 'Reason', required: true }] }); if (r) await act(() => api.post(`/api/finance/expenses/${e.id}/reject`, r), 'Rejected')(); }}>Reject</Btn></>}
+      {e.status === 'draft' && <Btn kind="primary" onClick={async () => { const r = await ask({ title: 'Bill received for this purchase order', fields: [{ key: 'invoice_no', label: 'Invoice no.' }, { key: 'bill_date', label: 'Bill date', type: 'date', value: today() }] }); if (r) await act(() => api.post(`/api/finance/expenses/${e.id}/submit`, r), 'Submitted for approval')(); }}>Convert to bill</Btn>}
+      {can('expense.approve') && e.status === 'submitted' && e.submitted_by !== me.user!.id && <><Btn kind="good" onClick={act(() => api.post(`/api/finance/expenses/${e.id}/approve`), 'Approved and posted')}>Approve</Btn><Btn kind="danger" onClick={async () => { const r = await ask({ title: 'Reject', fields: [{ key: 'reason', label: 'Reason', required: true }] }); if (r) await act(() => api.post(`/api/finance/expenses/${e.id}/reject`, r), 'Rejected')(); }}>Reject</Btn></>}
       {can('expense.pay') && e.status === 'approved' && e.paid_paise < payable && <Btn kind="primary" onClick={async () => { const r = await ask({ title: 'Record payment', fields: [{ key: 'amount', label: 'Amount ₹', value: toRupees(payable - e.paid_paise) }, { key: 'mode', label: 'Paid from', options: [{ value: 'bank', label: 'Bank' }, { value: 'upi', label: 'UPI' }, { value: 'cash', label: 'Petty cash' }, { value: 'card', label: 'Card' }, { value: 'advance', label: 'Against an earlier advance' }] }, { key: 'reference', label: 'Reference' }, { key: 'paid_on', label: 'Date', type: 'date', value: today() }] }); if (r) await act(() => api.post(`/api/finance/expenses/${e.id}/pay`, { amount_paise: toPaise(r.amount), mode: r.mode, reference: r.reference, paid_on: r.paid_on }), 'Payment recorded')(); }}>Record payment</Btn>}
       {can('expense.approve') && e.status === 'approved' && <Btn onClick={async () => { const r = await ask({ title: 'Vendor credit note', fields: [{ key: 'amount', label: 'Amount excl. GST ₹', required: true }, { key: 'gst', label: 'GST ₹', value: '0' }, { key: 'note', label: 'Note', required: true }] }); if (r) await act(() => api.post(`/api/finance/expenses/${e.id}/credit-note`, { amount_paise: toPaise(r.amount), gst_paise: toPaise(r.gst), note: r.note }), 'Credit note posted')(); }}>Credit note</Btn>}
       <Btn onClick={act(() => api.post(`/api/finance/expenses/${e.id}/duplicate`, { bill_date: today() }), 'Recurring copy created')}>Repeat this expense</Btn>
     </>}>
       {e.submitted_by === me.user!.id && e.status === 'submitted' && <Alert tone="info">You submitted this, so someone else must approve it.</Alert>}
       <dl className="kv">
-        <dt>Status</dt><dd><Status value={e.status} /> <Status value={e.payment_status} /></dd>
+        <dt>Status</dt><dd>{e.status === 'draft' ? <span className="badge info">Purchase order</span> : <><Status value={e.status} /> <Status value={e.payment_status} /></>}</dd>
         <dt>Category</dt><dd>{label(e.category)} · {label(e.cost_behaviour)}</dd>
         <dt>Vendor</dt><dd>{e.vendor ?? '—'} {e.invoice_no ? `· invoice ${e.invoice_no}` : ''}</dd>
         <dt>Bill date</dt><dd>{e.bill_date}</dd>

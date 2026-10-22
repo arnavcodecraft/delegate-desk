@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 process.env.UPLOAD_DIR ??= fs.mkdtempSync(path.join(os.tmpdir(), 'dd-up-'));
 process.env.JOBS = 'off';
+process.env.OCR ??= 'off';
 const { openDb, one, all } = await import('../src/db.ts');
 const { seed } = await import('../src/seed.ts');
 const { asSystem, ctxStore } = await import('../src/util.ts');

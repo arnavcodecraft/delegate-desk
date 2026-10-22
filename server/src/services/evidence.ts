@@ -9,6 +9,7 @@ import { addHours, bad, conflict, ctx, forbidden, inr, istDate, now, sha256, uid
 import { enqueue, notifyStaff } from './notify.ts';
 import { payableNow } from './fees.ts';
 import { receive, regVars } from './payments.ts';
+import { ocrImage, parseProof } from './ocr.ts';
 
 export const MAX_UPLOAD = 5 * 1024 * 1024;
 
@@ -59,6 +60,10 @@ export function payInstructions(reg: Record<string, any>) {
   return { upiId: org.upi_id, payee: org.legal_name, bankName: org.bank_name, account: org.bank_account, ifsc: org.bank_ifsc, amountPaise: amount, reference: reg.ref, upiUri: upi };
 }
 
+const pendingReads = new Set<Promise<void>>();
+/** Wait for screenshot reads queued by submitEvidence (used by the seed script and tests). */
+export async function settleProofReads() { while (pendingReads.size) { const all = [...pendingReads]; await Promise.all(all); all.forEach((p) => pendingReads.delete(p)); } }
+
 export function submitEvidence(reg: Record<string, any>, file: { buffer: Buffer; originalname?: string }, input: { utr: string; amountPaise: number; paidOn: string }, submittedByUser?: string | null) {
   const s = eventSettings(reg.event_id);
   if (!s.screenshotEnabled) throw conflict('Screenshot payments are not accepted for this event');
@@ -95,7 +100,7 @@ export function submitEvidence(reg: Record<string, any>, file: { buffer: Buffer;
   const extracted = extract(file.buffer, mime);
   if (extracted?.utr && normUtr(extracted.utr) !== utr) flags.push(`File shows UTR ${extracted.utr}, entered ${utr}`);
   if (extracted?.amount && extracted.amount !== input.amountPaise) flags.push(`File shows ${inr(extracted.amount)}, entered ${inr(input.amountPaise)}`);
-  return tx(() => {
+  const result = tx(() => {
     insert('payment_evidence', {
       id, registration_id: reg.id, file_path: rel, file_hash: hash, mime, size: file.buffer.length, utr, amount_paise: input.amountPaise, paid_on: input.paidOn,
       ref_code: reg.ref, status: 'submitted', tamper_flags: JSON.stringify(flags), extracted: extracted ? JSON.stringify(extracted) : null, submitted_at: now(),
@@ -109,6 +114,8 @@ export function submitEvidence(reg: Record<string, any>, file: { buffer: Buffer;
     audit('evidence.submit', 'payment_evidence', id, undefined, { reg: reg.ref, utr, amount: input.amountPaise, flags });
     return { id, flags };
   });
+  if (mime !== 'application/pdf') { const id = result.id; pendingReads.add(new Promise<void>((done) => setImmediate(() => readProof(id).catch((e) => console.error('[ocr]', e)).finally(done)))); }
+  return result;
 }
 
 export function approveEvidence(evidenceId: string, approvedPaise?: number) {
@@ -206,4 +213,24 @@ export function verifyFileUrl(rel: string, exp: number, sig: string) {
   if (!rel || rel.includes('..') || exp < Date.now()) return false;
   const want = crypto.createHmac('sha256', config.appSecret).update(`${rel}:${exp}`).digest('base64url');
   return want.length === sig.length && crypto.timingSafeEqual(Buffer.from(want), Buffer.from(sig));
+}
+
+/**
+ * Read the screenshot with OCR and compare it with what the delegate typed. Mismatches become flags on the
+ * CFO's review card; OCR never approves or rejects anything.
+ */
+export async function readProof(evidenceId: string) {
+  const e = one('SELECT * FROM payment_evidence WHERE id = ?', evidenceId);
+  if (!e || e.mime === 'application/pdf') return null;
+  const text = await ocrImage(fs.readFileSync(path.join(config.uploadDir, e.file_path)));
+  if (!text.trim()) return null;
+  const found = parseProof(text, e.amount_paise);
+  const flags: string[] = JSON.parse(e.tamper_flags || '[]').filter((f: string) => !f.startsWith('Screenshot '));
+  if (found.utr && normUtr(found.utr) !== e.utr) flags.push(`Screenshot shows UTR ${found.utr}, entered ${e.utr}`);
+  if (!found.utr) flags.push('Screenshot UTR could not be read');
+  if (found.amountFound === false) flags.push(`Screenshot does not clearly show the entered ${inr(e.amount_paise)}${found.amountPaise ? ` (read ${inr(found.amountPaise)})` : ''}`);
+  if (found.date && found.date !== e.paid_on) flags.push(`Screenshot date ${found.date}, entered ${e.paid_on}`);
+  const extracted = { ...found, source: 'ocr', text: text.slice(0, 1500) };
+  run('UPDATE payment_evidence SET extracted = ?, tamper_flags = ? WHERE id = ?', JSON.stringify(extracted), JSON.stringify(flags), evidenceId);
+  return extracted;
 }

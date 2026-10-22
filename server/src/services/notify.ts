@@ -3,6 +3,7 @@ import { all, one, run, insert } from '../db.ts';
 import { config } from '../config.ts';
 import { orgSettings } from '../settings.ts';
 import { addHours, istHour, now, uid } from '../util.ts';
+import { whatsapp, sms } from './channels.ts';
 
 type Tpl = { subject: string; body: string };
 // Admins edit these from the Templates screen; these are only the first-run defaults.
@@ -91,20 +92,40 @@ export const DEFAULT_TEMPLATES: Record<string, Tpl> = {
     subject: '[Alert] {{title}}',
     body: `{{message}}`,
   },
+  breach_notice: {
+    subject: 'Important: a security incident affecting your {{event_name}} registration',
+    body: `Dear {{name}},\n\n{{message}}\n\nIf you have questions, contact our Grievance Officer: {{grievance}}\n\nWe are sorry for the concern this causes.`,
+  },
+  certificate: {
+    subject: 'Your certificate from {{event_name}}',
+    body: `Hi {{name}},\n\nThank you for being part of {{event_name}} as {{portfolio}} in {{committee}}. Your certificate is attached.\n\nSee you at the next conference!`,
+  },
   delegation_created: {
     subject: 'Delegation registered: {{institution}} ({{count}} delegates)',
     body: `Hi {{name}},\n\nYour delegation from {{institution}} is registered with {{count}} members. Manage members and see allotments here: {{delegation_link}}\n\n{{payment_note}}`,
   },
 };
 
+// Second-channel copies (WhatsApp / SMS). Each needs the approved provider template name and the merge fields
+// that fill its placeholders, in order; admins set the template names on the Messages screen.
+const CHANNEL_TEMPLATES: { key: string; channel: 'whatsapp' | 'sms'; params: string[]; body: string }[] = [
+  { key: 'registration_saved', channel: 'whatsapp', params: ['name', 'committee', 'portfolio', 'amount', 'due_date', 'payment_link'], body: 'Hi {{name}}, you are provisionally allotted {{portfolio}} in {{committee}}. Pay {{amount}} by {{due_date}} to keep it: {{payment_link}}' },
+  { key: 'payment_confirmed', channel: 'whatsapp', params: ['name', 'committee', 'portfolio', 'portal_link'], body: 'Hi {{name}}, payment received. Your seat is confirmed: {{portfolio}}, {{committee}}. Receipt: {{portal_link}}' },
+  { key: 'payment_reminder', channel: 'whatsapp', params: ['name', 'portfolio', 'amount', 'due_date', 'payment_link'], body: 'Hi {{name}}, your seat {{portfolio}} is held until {{due_date}}. Pay {{amount}}: {{payment_link}}' },
+  { key: 'hold_expiring', channel: 'whatsapp', params: ['name', 'portfolio', 'due_date', 'payment_link'], body: 'Hi {{name}}, your hold on {{portfolio}} ends at {{due_date}}. Pay now: {{payment_link}}' },
+  { key: 'event_reminder', channel: 'whatsapp', params: ['name', 'event_name', 'event_dates', 'venue', 'reporting_time'], body: 'Hi {{name}}, {{event_name}} runs {{event_dates}} at {{venue}}. Reporting time {{reporting_time}}.' },
+  { key: 'payment_reminder', channel: 'sms', params: ['name', 'amount', 'due_date'], body: 'Dear {{name}}, pay {{amount}} by {{due_date}} to keep your conference seat. Link in your email.' },
+  { key: 'mobile_otp', channel: 'sms', params: ['code'], body: '{{code}} is your OTP to register for {{event_name}}. Valid for 10 minutes. Do not share it.' },
+  { key: 'mobile_otp', channel: 'whatsapp', params: ['code'], body: '{{code}} is your verification code.' },
+];
+
 export function seedTemplates() {
   for (const [key, t] of Object.entries(DEFAULT_TEMPLATES)) {
     run('INSERT OR IGNORE INTO template (key, channel, subject, body, active, updated_at) VALUES (?,?,?,?,1,?)', key, 'email', t.subject, t.body, now());
   }
-  // WhatsApp copies use pre-approved template wording; only sent where the delegate consented.
-  for (const key of ['registration_saved', 'payment_confirmed', 'payment_reminder', 'hold_expiring', 'event_reminder']) {
-    const t = DEFAULT_TEMPLATES[key];
-    run('INSERT OR IGNORE INTO template (key, channel, subject, body, active, updated_at) VALUES (?,?,?,?,1,?)', key, 'whatsapp', t.subject, t.body.split('\n\n').slice(0, 3).join('\n\n'), now());
+  for (const t of CHANNEL_TEMPLATES) {
+    run('INSERT OR IGNORE INTO template (key, channel, subject, body, active, updated_at, params) VALUES (?,?,?,?,1,?,?)', t.key, t.channel, t.key, t.body, now(), JSON.stringify(t.params));
+    run("UPDATE template SET params = ? WHERE key = ? AND channel = ? AND params = '[]'", JSON.stringify(t.params), t.key, t.channel);
   }
 }
 
@@ -135,14 +156,16 @@ export function enqueue(key: string, o: EnqueueOpts) {
   insert('notification', {
     id, registration_id: o.registrationId ?? null, recipient: o.to, recipient_kind: o.recipientKind ?? 'delegate', channel,
     template_key: key, subject: render(tpl.subject, o.vars), body: render(tpl.body, o.vars),
-    attachments: JSON.stringify(o.attachments ?? []), status, last_error: lastError,
+    attachments: JSON.stringify(o.attachments ?? []), status, last_error: lastError, vars: JSON.stringify(o.vars ?? {}),
     respect_quiet_hours: o.quiet ? 1 : 0, scheduled_at: o.at ?? now(), created_at: now(),
   });
   // Optional second channel for the delegate when they opted in.
   if (channel === 'email' && o.registrationId && o.recipientKind !== 'staff') {
     const r = one('SELECT mobile, whatsapp_consent FROM registration WHERE id = ?', o.registrationId);
-    if (r?.whatsapp_consent && one("SELECT 1 FROM template WHERE key = ? AND channel = 'whatsapp' AND active = 1", key)) {
-      enqueue(key, { ...o, channel: 'whatsapp', to: r.mobile, attachments: [] });
+    if (r?.whatsapp_consent) {
+      for (const ch of ['whatsapp', 'sms'] as const) {
+        if (one('SELECT 1 FROM template WHERE key = ? AND channel = ? AND active = 1', key, ch)) enqueue(key, { ...o, channel: ch, to: r.mobile, attachments: [] });
+      }
     }
   }
   return id;
@@ -186,9 +209,8 @@ export async function deliverPending(limit?: number) {
       continue;
     }
     try {
-      await send(n);
-      run("UPDATE notification SET status = 'sent', sent_at = ?, attempts = attempts + 1, last_error = ? WHERE id = ?", now(),
-        n.channel === 'email' && !config.smtpUrl ? 'No SMTP configured: message logged, not delivered' : n.channel !== 'email' ? 'Logged: no WhatsApp/SMS provider configured' : null, n.id);
+      const out = await send(n);
+      run("UPDATE notification SET status = 'sent', sent_at = ?, attempts = attempts + 1, last_error = ?, provider_message_id = ? WHERE id = ?", now(), out.note, out.providerMessageId, n.id);
       sent++;
     } catch (e: any) {
       const attempts = n.attempts + 1;
@@ -200,20 +222,42 @@ export async function deliverPending(limit?: number) {
   return sent;
 }
 
-async function send(n: any) {
-  if (n.channel !== 'email') return; // WhatsApp/SMS: plug a BSP here (approved templates only).
+async function send(n: any): Promise<{ note: string | null; providerMessageId: string | null }> {
+  if (n.channel === 'whatsapp' || n.channel === 'sms') {
+    const provider = n.channel === 'whatsapp' ? whatsapp : sms;
+    if (!provider.configured()) return { note: `Logged: no ${n.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} provider configured`, providerMessageId: null };
+    const t = one('SELECT * FROM template WHERE key = ? AND channel = ?', n.template_key, n.channel);
+    const names: string[] = JSON.parse(t?.params || '[]');
+    const vars = JSON.parse(n.vars || '{}');
+    const msg = { to: n.recipient, providerTemplate: t?.provider_template ?? null, language: t?.language ?? 'en', params: names.map((k) => String(vars[k] ?? '')), body: n.body };
+    const r = n.channel === 'whatsapp' ? await whatsapp.send(msg) : await sms.send(msg, names);
+    return { note: null, providerMessageId: r.providerMessageId };
+  }
   const m = mailer();
-  if (!m) return;
+  if (!m) return { note: 'No SMTP configured: message logged, not delivered', providerMessageId: null };
   const atts = [];
   for (const a of JSON.parse(n.attachments || '[]')) {
     const b = attachmentBuilders[a.kind];
     if (b) atts.push(await b(a.id));
   }
   const unsubscribe = n.registration_id ? `${config.baseUrl}/api/public/unsubscribe/${n.registration_id}` : undefined;
-  await m.sendMail({
+  const info = await m.sendMail({
     from: config.mailFrom, to: n.recipient, subject: n.subject, text: n.body, attachments: atts,
     headers: unsubscribe && n.respect_quiet_hours ? { 'List-Unsubscribe': `<${unsubscribe}>` } : undefined,
   });
+  return { note: null, providerMessageId: info?.messageId ?? null };
+}
+
+/** WhatsApp delivery receipts update the message (sent -> delivered -> read, or failed with the reason). */
+export function applyDeliveryStatuses(statuses: { id: string; status: string; error?: string }[]) {
+  let n = 0;
+  for (const st of statuses) {
+    const row = one('SELECT id FROM notification WHERE provider_message_id = ?', st.id);
+    if (!row) continue;
+    run('UPDATE notification SET delivery_status = ?, status = CASE WHEN ? = \'failed\' THEN \'failed\' ELSE status END, last_error = COALESCE(?, last_error) WHERE id = ?', st.status, st.status, st.error ?? null, row.id);
+    n++;
+  }
+  return n;
 }
 
 /** Called by the email provider's bounce webhook. */
