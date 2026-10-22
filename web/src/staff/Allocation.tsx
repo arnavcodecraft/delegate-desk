@@ -3,6 +3,8 @@ import { api } from '../api';
 import { inr, dt, toPaise } from '../format';
 import { Alert, Btn, DataTable, ErrorBox, Field, Loading, Modal, Status, Tabs, useAsync, useToast, usePrompt } from '../ui';
 import { PageHead, useStaff } from './Shell';
+import { Plus, Trash2 } from 'lucide-react';
+import { CommitteeEditor, TypePicker, blankCommittee, toApi, fromApi, type CommitteeDraft } from '../platform/CommitteeEditor';
 
 export default function Allocation() {
   const { eventId, can } = useStaff();
@@ -10,13 +12,16 @@ export default function Allocation() {
   const [tab, setTab] = useState<'inventory' | 'simulate' | 'swaps' | 'board'>('inventory');
   const [open, setOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState<any>(null);
+  const [picking, setPicking] = useState(false);
+  const [editor, setEditor] = useState<CommitteeDraft | null>(null);
   const toast = useToast();
+  const openEditor = async (id: string) => { try { setEditor(fromApi(await api.get(`/api/admin/committees/${id}/detail`))); } catch (e: any) { toast(e.message, 'bad'); } };
   const ask = usePrompt();
   if (inv.error) return <ErrorBox error={inv.error} />;
   const total = (inv.data ?? []).reduce((s, c) => ({ seats: s.seats + c.seats, held: s.held + c.held, confirmed: s.confirmed + c.confirmed }), { seats: 0, held: 0, confirmed: 0 });
   return (
     <div className="stack">
-      <PageHead title="Committees & allotment" subtitle="Committees, portfolios and seat inventory. Run automatic allotment or place delegates by hand.">{can('alloc.config') && <button className="btn primary" onClick={() => setEditing({ name: '', short: '', kind: 'single', description: '', guide_url: '', sort: (inv.data?.length ?? 0) })}>+ Committee</button>}</PageHead>
+      <PageHead title="Committees & allotment" subtitle="Committees, portfolios and seat inventory. Run automatic allotment or place delegates by hand.">{can('alloc.config') && <Btn kind="primary" icon={Plus} onClick={() => setPicking(true)}>Committee</Btn>}</PageHead>
       <Tabs value={tab} onChange={setTab} tabs={[{ key: 'inventory', label: 'Seats' }, ...(can('alloc.config') ? [{ key: 'simulate' as const, label: 'Simulator' }] : []), ...(can('alloc.move') ? [{ key: 'swaps' as const, label: 'Change requests' }] : []), { key: 'board', label: 'Executive board' }]} />
       {tab === 'inventory' && (!inv.data ? <Loading /> : <>
         <p className="muted">{total.seats} seats · {total.confirmed} confirmed · {total.held} held · {total.seats - total.held - total.confirmed} open. Seats are locked in the same database transaction that saves a registration, so a portfolio can never be given twice.</p>
@@ -30,7 +35,9 @@ export default function Allocation() {
                 <div className="bar-fill" style={{ width: `${(c.confirmed / Math.max(1, c.seats)) * 100}%`, background: 'var(--series-1)' }} />
               </div>
               <span className="small num">{c.confirmed + c.held}/{c.seats}</span>
-              {can('alloc.config') && <button className="btn sm" onClick={(e) => { e.stopPropagation(); setEditing(c); }}>Edit</button>}
+              {can('alloc.config') && <button className="btn sm" onClick={(e) => { e.stopPropagation(); openEditor(c.id); }}>Edit</button>}
+              {can('alloc.config') && <button className="btn sm ghost" title="Description and study guide" onClick={(e) => { e.stopPropagation(); setEditing(c); }}>Details</button>}
+              {can('alloc.config') && c.held + c.confirmed === 0 && <button className="btn sm ghost" aria-label={`Delete ${c.short}`} onClick={async (e) => { e.stopPropagation(); if (await ask({ title: `Delete ${c.name}?`, message: 'Its portfolios and seats are removed. This cannot be undone.', danger: true, confirm: 'Delete' })) { try { await api.del(`/api/admin/committees/${c.id}`); inv.reload(); } catch (x: any) { toast(x.message, 'bad'); } } }}><Trash2 className="icon" /></button>}
             </div>
             {open === c.id && <div>
               <DataTable rows={c.portfolios} columns={[
@@ -50,6 +57,14 @@ export default function Allocation() {
       {tab === 'swaps' && <Swaps />}
       {tab === 'board' && <Board committees={inv.data ?? []} />}
       {editing && <CommitteeEdit c={editing} onClose={() => setEditing(null)} onDone={() => { setEditing(null); inv.reload(); }} />}
+      <div className="pf pf-portal">
+        {picking && <TypePicker onClose={() => setPicking(false)} onPick={(t) => { setPicking(false); setEditor(blankCommittee(t)); }} />}
+        {editor && <CommitteeEditor initial={editor} onCancel={() => setEditor(null)} onSave={async (c) => {
+          if (c.id) await api.put(`/api/admin/committees/${c.id}/full`, toApi(c));
+          else await api.post(`/api/admin/events/${eventId}/committees/full`, toApi(c));
+          toast(c.id ? 'Committee saved' : `${c.short} added with ${c.portfolios.length} portfolios`, 'ok'); setEditor(null); inv.reload();
+        }} />}
+      </div>
     </div>
   );
 }

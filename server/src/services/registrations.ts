@@ -2,7 +2,7 @@ import { all, one, run, insert, tx, update } from '../db.ts';
 import { audit, diff } from '../audit.ts';
 import { config } from '../config.ts';
 import { eventSettings, getEvent } from '../settings.ts';
-import { addHours, ageOn, bad, bp, conflict, ctx, inr, isEmail, isIndianMobile, istDate, json, normMobile, now, token, uid, notFound } from '../util.ts';
+import { addHours, ageOn, bad, bp, conflict, ctx, inr, isEmail, isIndianMobile, isIntlMobile, istDate, json, normMobile, now, token, uid, notFound } from '../util.ts';
 import { quote } from './fees.ts';
 import { allocate, seatOf, moveToSeat } from './allocation.ts';
 import { matchReferral, isSelfReferral, ensureReferralEditable } from './referrals.ts';
@@ -12,6 +12,7 @@ import { statement, reconcile } from './commission.ts';
 import { balanceOf } from './fees.ts';
 import { consumeOtpToken } from './otp.ts';
 import { checkinCode } from './badges.ts';
+import { confirmFree, normChannel } from './conference.ts';
 
 export const CLASS_OPTIONS = ['8', '9', '10', '11', '12', 'UG 1st year', 'UG 2nd year', 'UG 3rd year', 'UG 4th year', 'PG', 'Graduate', 'Faculty / Advisor'];
 
@@ -21,6 +22,8 @@ export interface RegInput {
   category?: string; coupon?: string | null; experience?: string; guardian_name?: string | null; guardian_email?: string | null;
   whatsapp_consent?: boolean;
   otp_token?: string;
+  channel?: string | null;      // where they heard about it (instagram, whatsapp ...)
+  motivation?: string | null;   // review mode: why they want to attend
 }
 
 export function validate(eventId: string, i: RegInput) {
@@ -28,7 +31,9 @@ export function validate(eventId: string, i: RegInput) {
   const name = (i.full_name ?? '').trim().replace(/\s+/g, ' ');
   if (name.length < 2) errors.full_name = 'Enter your full name as it should print on your badge';
   if (!isEmail((i.email ?? '').trim())) errors.email = 'Enter a valid email address';
-  if (!isIndianMobile(i.mobile)) errors.mobile = 'Enter a 10-digit Indian mobile number';
+  // Conferences outside India take international numbers (with country code); Indian ones need a 10-digit mobile.
+  const country = eventSettings(eventId).profile.country || 'in';
+  if (country === 'in' ? !isIndianMobile(i.mobile) && !isIntlMobile(i.mobile) : !isIntlMobile(i.mobile) && !isIndianMobile(i.mobile)) errors.mobile = country === 'in' ? 'Enter a 10-digit Indian mobile number' : 'Enter your mobile number with country code, e.g. +44 7700 900123';
   if (!(i.institution ?? '').trim()) errors.institution = 'Enter your school or college';
   if (!(i.class_year ?? '').trim()) errors.class_year = 'Choose your class or year';
   if (!(i.city ?? '').trim()) errors.city = 'Enter your city';
@@ -69,6 +74,12 @@ export function findDuplicate(eventId: string, email: string, mobile: string) {
 export function register(eventId: string, i: RegInput, o: { source?: string; delegationId?: string | null; groupSize?: number; batchId?: string } = {}) {
   const ev = getEvent(eventId);
   if (ev.status !== 'open') throw conflict('Registration for this event is closed');
+  const s0 = eventSettings(ev);
+  // Staff can still add delegates from the desk or an import after the public form closes.
+  if ((o.source ?? 'form') === 'form' || o.source === 'delegation') {
+    if (!s0.roles.delegate) throw conflict('Delegate applications are not open yet');
+    if (s0.applicationDeadline && s0.applicationDeadline < now()) throw conflict('The application deadline has passed');
+  }
   const { name, prefs, minor } = validate(eventId, i);
   const dup = findDuplicate(eventId, i.email, i.mobile);
   if (dup) {
@@ -96,8 +107,12 @@ export function register(eventId: string, i: RegInput, o: { source?: string; del
       base_paise: q0.basePaise, premium_paise: 0, discount_paise: q0.discountPaise, net_paise: q0.netPaise, gst_paise: q0.gstPaise, total_paise: q0.totalPaise,
       accepted: s.feeModel === 'two_stage' ? 0 : 1, whatsapp_consent: i.whatsapp_consent ? 1 : 0,
       consent_at: now(), source: o.source ?? 'form', import_batch_id: o.batchId ?? null, created_at: now(), updated_at: now(),
+      channel: i.channel ? normChannel(i.channel) : null, motivation: i.motivation?.trim().slice(0, 1500) || null,
     });
-    const alloc = allocate(id);
+    // Review mode: the team scores applications and assigns portfolios later; nothing is payable until then.
+    const alloc: ReturnType<typeof allocate> = s.allocationMode === 'review' && (o.source ?? 'form') !== 'import'
+      ? (update('registration', id, { allot_status: 'applied' }), { kind: 'waitlist', position: 0 } as any)
+      : allocate(id);
     // High-demand portfolios can carry a premium; re-quote with it so the fee shown is exact.
     if (alloc.kind === 'seat' && alloc.pick.premiumPaise && s.premiumPricing) {
       const q = quote(eventId, { category, couponCode: i.coupon, groupSize: o.groupSize, premiumPaise: alloc.pick.premiumPaise });
@@ -107,7 +122,9 @@ export function register(eventId: string, i: RegInput, o: { source?: string; del
     if (q0.couponId) run('UPDATE coupon SET used = used + 1 WHERE id = ?', q0.couponId);
     const reg = one('SELECT * FROM registration WHERE id = ?', id)!;
     const vars = regVars(reg);
-    if (alloc.kind === 'seat') enqueue('registration_saved', { to: reg.email, registrationId: id, vars });
+    if (reg.allot_status === 'applied') enqueue('application_received', { to: reg.email, registrationId: id, vars });
+    else if (alloc.kind === 'seat' && confirmFree(id)) enqueue('seat_confirmed_free', { to: reg.email, registrationId: id, vars: regVars(one('SELECT * FROM registration WHERE id = ?', id)!) });
+    else if (alloc.kind === 'seat') enqueue('registration_saved', { to: reg.email, registrationId: id, vars });
     else enqueue('waitlisted', { to: reg.email, registrationId: id, vars });
     if (minor) enqueue('guardian_consent', { to: reg.guardian_email, registrationId: id, recipientKind: 'guardian', vars: { ...vars, guardian_name: reg.guardian_name, consent_link: `${config.baseUrl}/consent/${reg.guardian_token}`, privacy_link: `${config.baseUrl}/privacy` } });
     if (reg.referrer_id && !reg.self_referral) notifyReferrer(reg.referrer_id, reg.full_name);
@@ -137,7 +154,9 @@ export function portalView(reg: Record<string, any>) {
   const refunds = all('SELECT id, amount_paise, status, reason, created_at FROM refund WHERE registration_id = ? ORDER BY created_at', reg.id);
   const committees = all('SELECT id, name, short FROM committee WHERE event_id = ? ORDER BY sort', reg.event_id);
   const detailsLocked = !!(s.detailsLockAt && s.detailsLockAt <= now());
+  const papers = all('SELECT id, file_name, status, score, feedback, submitted_at, reviewed_at FROM position_paper WHERE registration_id = ? ORDER BY submitted_at DESC', reg.id);
   return {
+    conference: { free: s.free, allocationMode: s.allocationMode, positionPapers: s.positionPapers, papers, logo: s.profile.logo ? `/api/public/media/${s.profile.logo}` : null, acronym: s.profile.acronym, slug: ev.code.toLowerCase() },
     event: { name: ev.name, code: ev.code, venue: ev.venue, city: ev.city, start_date: ev.start_date, end_date: ev.end_date, status: ev.status, dressCode: s.dressCode, reportingTime: s.reportingTime },
     registration: {
       ref: reg.ref, full_name: reg.full_name, email: reg.email, mobile: reg.mobile, institution: reg.institution, class_year: reg.class_year, city: reg.city,

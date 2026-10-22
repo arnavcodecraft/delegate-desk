@@ -4,20 +4,29 @@ import { api, ApiError, qs } from '../api';
 import { inr, date } from '../format';
 import { Alert, ErrorBox, Field, Loading, Suggest, useAsync } from '../ui';
 import { MapPin, CalendarDays, ShieldCheck } from 'lucide-react';
+import { bannerStyle } from '../platform/art';
 
 interface EventInfo {
   event: { code: string; name: string; venue: string; city: string; start_date: string; end_date: string; status: string };
   org: { name: string; legal_name: string; grievance: string };
   committees: { id: string; name: string; short: string; kind: string; open_seats: number; seats: number; full: boolean }[];
   classOptions: string[]; categories: string[]; gstRateBp: number; holdHours: number; feeModel: string; refundWindowDays: number; requireMobileOtp: boolean;
+  profile?: { acronym: string; logo: string | null; banner: string | null; country: string; slug: string };
+  open?: { delegate: boolean; deadline: string | null; status: string };
+  allocationMode?: 'instant' | 'review'; free?: boolean;
 }
-const EMPTY = { full_name: '', email: '', mobile: '', institution: '', class_year: '', city: '', dob: '', referral_name: '', coupon: '', guardian_name: '', guardian_email: '', whatsapp_consent: false, consent: false, preferences: [] as string[], surprise: false };
+const EMPTY = { full_name: '', email: '', mobile: '', institution: '', class_year: '', city: '', dob: '', referral_name: '', coupon: '', guardian_name: '', guardian_email: '', whatsapp_consent: false, consent: false, preferences: [] as string[], surprise: false, motivation: '', channel: '' };
+// Delegates who registered for another conference on this platform can reuse their details (kept on this device only).
+const PROFILE_KEY = 'dd-delegate-profile';
+const PROFILE_FIELDS = ['full_name', 'email', 'mobile', 'institution', 'class_year', 'city', 'dob'] as const;
+const CHANNELS: [string, string][] = [['instagram', 'Instagram'], ['whatsapp', 'WhatsApp'], ['school', 'My school or teacher'], ['friend', 'A friend'], ['explore', 'DelegateDesk Explore'], ['google', 'Google'], ['email', 'Email'], ['facebook', 'Facebook'], ['linkedin', 'LinkedIn'], ['other', 'Somewhere else']];
 type Form = typeof EMPTY;
 
-export function PublicShell({ title, subtitle, eyebrow, meta, children }: { title: React.ReactNode; subtitle?: React.ReactNode; eyebrow?: React.ReactNode; meta?: React.ReactNode; children: React.ReactNode }) {
+export function PublicShell({ title, subtitle, eyebrow, meta, children, logo, banner }: { title: React.ReactNode; subtitle?: React.ReactNode; eyebrow?: React.ReactNode; meta?: React.ReactNode; children: React.ReactNode; logo?: string | null; banner?: string | null }) {
+  const bn = banner ? bannerStyle(banner) : null;
   return (
     <div className="public">
-      <div className="public-head"><div className="inner">{eyebrow && <div className="eyebrow">{eyebrow}</div>}<h1>{title}</h1>{subtitle && <p>{subtitle}</p>}{meta && <div className="meta">{meta}</div>}</div></div>
+      <div className={`public-head ${bn?.className ?? ''}`} style={bn?.style}><div className="inner">{logo && <img className="public-logo" src={logo} alt="" />}{eyebrow && <div className="eyebrow">{eyebrow}</div>}<h1>{title}</h1>{subtitle && <p>{subtitle}</p>}{meta && <div className="meta">{meta}</div>}</div></div>
       <div className="public-body">{children}</div>
     </div>
   );
@@ -30,7 +39,11 @@ export default function Register() {
   const nav = useNavigate();
   const info = useAsync<EventInfo>(() => api.get(`/api/public/events/${code}`), [code]);
   const draftKey = `dd-draft-${code}`;
-  const [f, setF] = useState<Form>(() => { try { return { ...EMPTY, ...JSON.parse(localStorage.getItem(draftKey) ?? '{}'), consent: false }; } catch { return EMPTY; } });
+  const [f, setF] = useState<Form>(() => {
+    const src = new URLSearchParams(window.location.search).get('src') ?? '';
+    try { const d = { ...EMPTY, ...JSON.parse(localStorage.getItem(draftKey) ?? '{}'), consent: false }; return { ...d, channel: d.channel || src }; } catch { return { ...EMPTY, channel: src }; }
+  });
+  const saved = useMemo(() => { try { return JSON.parse(localStorage.getItem(PROFILE_KEY) ?? 'null'); } catch { return null; } }, []);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -75,7 +88,7 @@ export default function Register() {
     setBusy(true);
     try {
       const out = await api.post<any>(`/api/public/events/${code}/register`, { ...f, preferences: f.surprise ? [] : f.preferences, website: honey, startedAt: started.current, otp_token: otp.step === 'verified' ? otp.token : undefined });
-      try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+      try { localStorage.removeItem(draftKey); localStorage.setItem(PROFILE_KEY, JSON.stringify(Object.fromEntries(PROFILE_FIELDS.map((k) => [k, f[k]])))); } catch { /* ignore */ }
       nav(`/r/${out.token}?welcome=1`);
     } catch (err) {
       const e2 = err as ApiError;
@@ -88,15 +101,20 @@ export default function Register() {
   if (info.loading && !info.data) return <PublicShell title="Loading…"><Loading /></PublicShell>;
   if (info.error) return <PublicShell title="Registration"><ErrorBox error={info.error} /></PublicShell>;
   const ev = info.data!;
-  const closed = ev.event.status !== 'open';
+  const closed = ev.open ? !ev.open.delegate : ev.event.status !== 'open';
+  const closedWhy = ev.event.status === 'draft' ? 'Applications for this conference have not opened yet.' : ev.open?.deadline && ev.open.deadline < new Date().toISOString() ? 'The application deadline has passed.' : 'Registration for this conference is closed.';
+  const review = ev.allocationMode === 'review';
+  const intl = (ev.profile?.country ?? 'in') !== 'in';
   const err = (k: string) => errors[k];
+  const emptyForm = PROFILE_FIELDS.every((k) => !f[k]);
 
   return (
-    <PublicShell eyebrow="Delegate registration" title={ev.event.name} meta={<>{(ev.event.venue || ev.event.city) && <span><MapPin className="icon" />{[ev.event.venue, ev.event.city].filter(Boolean).join(', ')}</span>}{ev.event.start_date && <span><CalendarDays className="icon" />{date(ev.event.start_date)} – {date(ev.event.end_date)}</span>}</>}>
+    <PublicShell eyebrow={review ? 'Delegate application' : 'Delegate registration'} title={ev.event.name} logo={ev.profile?.logo} banner={ev.profile?.banner} meta={<>{(ev.event.venue || ev.event.city) && <span><MapPin className="icon" />{[ev.event.venue, ev.event.city].filter(Boolean).join(', ')}</span>}{ev.event.start_date && <span><CalendarDays className="icon" />{date(ev.event.start_date)} – {date(ev.event.end_date)}</span>}</>}>
       <div className="card stack">
-        <div className="row between"><h2 style={{ margin: 0 }}>Register in 30 seconds</h2><Link to={`/register/${code}/delegation`} className="small">Registering a whole delegation?</Link></div>
-        <p className="muted small" style={{ margin: 0 }}>No account or password. You get your committee and portfolio on the next screen.</p>
-        {closed && <Alert tone="warn">Registration for this event is closed.</Alert>}
+        <div className="row between"><h2 style={{ margin: 0 }}>{review ? 'Apply in a minute' : 'Register in 30 seconds'}</h2><Link to={`/register/${code}/delegation`} className="small">Registering a whole delegation?</Link></div>
+        <p className="muted small" style={{ margin: 0 }}>{review ? 'No account or password. The team reviews every application and emails you your committee and portfolio.' : 'No account or password. You get your committee and portfolio on the next screen.'}{ev.profile?.slug && <> · <a href={`/c/${ev.profile.slug}`}>About this conference</a></>}</p>
+        {closed && <Alert tone="warn">{closedWhy}</Alert>}
+        {saved && emptyForm && !closed && <div className="row" style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '.5rem .75rem' }}><span className="small" style={{ flex: 1 }}>Registered with us before as <b>{saved.full_name}</b>?</span><button type="button" className="btn sm" onClick={() => setF((x) => ({ ...x, ...saved }))}>Use my details</button></div>}
         {formError && <Alert tone="bad">{formError}</Alert>}
         <form className="stack" onSubmit={submit} noValidate>
           <input type="text" name="website" tabIndex={-1} autoComplete="off" value={honey} onChange={(e) => setHoney(e.target.value)} style={{ position: 'absolute', left: -9999 }} aria-hidden />
@@ -106,7 +124,7 @@ export default function Register() {
           <div className="grid g2">
             <Field label="Email" error={err('email')}><input type="email" inputMode="email" autoComplete="email" value={f.email} onChange={(e) => set('email', e.target.value)} className={err('email') ? 'invalid' : ''} required /></Field>
             <Field label="Mobile (WhatsApp)" error={err('mobile')}>
-              <input type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="10-digit number" maxLength={14} value={f.mobile} onChange={(e) => { set('mobile', e.target.value); setOtp({ step: 'idle' }); }} className={err('mobile') ? 'invalid' : ''} required />
+              <input type="tel" inputMode="tel" autoComplete={intl ? 'tel' : 'tel-national'} placeholder={intl ? '+44 7700 900123' : '10-digit number'} maxLength={18} value={f.mobile} onChange={(e) => { set('mobile', e.target.value); setOtp({ step: 'idle' }); }} className={err('mobile') ? 'invalid' : ''} required />
               {ev.requireMobileOtp && <OtpVerify code={code} mobile={f.mobile} state={otp} setState={setOtp} />}
             </Field>
           </div>
@@ -149,26 +167,29 @@ export default function Register() {
               <span className="row small" style={{ fontWeight: 400 }}>Did you mean {refHint.slice(0, 3).map((n) => <button type="button" key={n} className="chip" style={{ minHeight: 30, padding: '.15rem .6rem' }} onClick={() => set('referral_name', n)}>{n}</button>)}<span className="faint">or keep your spelling</span></span>
             )}
           </Field>
-          <details>
+          {review && <Field label="Why do you want to attend?" hint="optional, helps the team place you"><textarea rows={3} maxLength={1500} value={f.motivation} onChange={(e) => set('motivation', e.target.value)} /></Field>}
+          <Field label="How did you hear about us?" hint="optional"><select value={f.channel} onChange={(e) => set('channel', e.target.value)}><option value="">Choose…</option>{CHANNELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+          {!ev.free && <details>
             <summary className="small muted" style={{ cursor: 'pointer' }}>Have a coupon code?</summary>
             <div style={{ marginTop: '.5rem' }}><input value={f.coupon} onChange={(e) => set('coupon', e.target.value.toUpperCase())} placeholder="e.g. EARLY10" /></div>
-          </details>
-          {quote && !quote.error && (
+          </details>}
+          {ev.free && <div className="fee-box"><div className="line total"><span>Free to attend</span><span>₹0</span></div></div>}
+          {!ev.free && quote && !quote.error && (
             <div className="fee-box" aria-live="polite">
               <div className="line"><span>{quote.tierName} fee ({category})</span><span>{inr(quote.basePaise)}</span></div>
               {quote.discountPaise > 0 && <div className="line" style={{ color: 'var(--good)' }}><span>{quote.discountLabel}</span><span>−{inr(quote.discountPaise)}</span></div>}
               {quote.gstPaise > 0 && <div className="line muted"><span>GST {quote.gstRateBp / 100}%</span><span>{inr(quote.gstPaise)}</span></div>}
               <div className="line total"><span>Total</span><span>{inr(quote.totalPaise)}</span></div>
               {quote.feeModel === 'two_stage' && <div className="small muted">Pay {inr(quote.payNowPaise)} now as the application fee; the balance after acceptance.</div>}
-              <div className="small faint">High-demand portfolios may add a small premium; you’ll see the exact amount before paying.</div>
+              <div className="small faint">{review ? 'Nothing to pay now: you pay only once you are accepted and given a seat.' : 'High-demand portfolios may add a small premium; you’ll see the exact amount before paying.'}</div>
             </div>
           )}
           {quote?.error && f.coupon && <Alert tone="warn">{quote.error}</Alert>}
           <label className="check"><input type="checkbox" checked={f.whatsapp_consent} onChange={(e) => set('whatsapp_consent', e.target.checked)} /><span className="small">Also send confirmations and reminders on WhatsApp</span></label>
           <label className="check"><input type="checkbox" checked={f.consent} onChange={(e) => set('consent', e.target.checked)} /><span className="small">I agree to the <Link to="/privacy" target="_blank">privacy notice</Link> and the refund policy (refund requests close {ev.refundWindowDays} days before the event).</span></label>
           {err('consent') && <span className="small" style={{ color: 'var(--bad)' }}>{err('consent')}</span>}
-          <button className="btn primary lg block" type="submit" disabled={busy || closed}>{busy ? 'Saving…' : 'Register and get my portfolio'}</button>
-          <p className="small faint" style={{ margin: 0 }}>Your seat is held for {ev.holdHours} hours while you pay. Your progress is saved on this device.</p>
+          <button className="btn primary lg block" type="submit" disabled={busy || closed}>{busy ? 'Saving…' : review ? 'Send my application' : ev.free ? 'Register and get my seat' : 'Register and get my portfolio'}</button>
+          <p className="small faint" style={{ margin: 0 }}>{review ? 'You will hear back by email.' : ev.free ? 'Your seat is confirmed straight away.' : `Your seat is held for ${ev.holdHours} hours while you pay.`} Your progress is saved on this device.</p>
         </form>
       </div>
       <p className="small faint" style={{ textAlign: 'center', marginTop: '1rem' }}>{ev.org.legal_name}{ev.org.grievance ? ` · Grievances: ${ev.org.grievance}` : ''}</p>

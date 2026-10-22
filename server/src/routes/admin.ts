@@ -28,6 +28,8 @@ import { badgesPdf, certificatesPdf, checkIn, sendCertificates } from '../servic
 import { createBackup, verifyBackup, backupFilePath } from '../services/backup.ts';
 import { balanceOf } from '../services/fees.ts';
 import { parseMoney } from '../util.ts';
+import { currentWorkspace, claimCode } from '../platform.ts';
+import { syncListing } from '../services/conference.ts';
 
 export const authRouter = express.Router();
 
@@ -80,6 +82,7 @@ authRouter.get('/me', h((req) => {
     roles: a.roles.map((r) => ({ role: r.role, label: ROLE_LABELS[r.role as Role], committee_id: r.committee_id, event_id: r.event_id, referrer_id: r.referrer_id })),
     perms, mfaPending: a.mfaRequired && !a.session.mfa_ok, mfaEnrolled: !!a.user.totp_enabled,
     events: all('SELECT id, code, name, status, start_date FROM event ORDER BY created_at DESC'),
+    workspace: { id: currentWorkspace().id, name: getOrg().name },
   };
 }));
 authRouter.post('/password', h((req) => {
@@ -118,7 +121,11 @@ adminRouter.post('/events', requirePerm('event.config'), h((req) => {
   if (!/^[A-Z0-9]{3,12}$/.test(String(b.code ?? '').toUpperCase())) throw bad('Event code: 3–12 letters/numbers, e.g. BGYS27');
   if (!b.name?.trim()) throw bad('Name the event');
   const id = uid();
-  insert('event', { id, org_id: getOrg().id, code: b.code.toUpperCase(), name: b.name.trim(), kind: b.kind ?? 'mun', venue: b.venue ?? null, city: b.city ?? null, state_code: b.state_code ?? getOrg().state_code, start_date: b.start_date ?? null, end_date: b.end_date ?? null, status: 'draft', settings: '{}', created_at: now() });
+  tx(() => {
+    insert('event', { id, org_id: getOrg().id, code: b.code.toUpperCase(), name: b.name.trim(), kind: b.kind ?? 'mun', venue: b.venue ?? null, city: b.city ?? null, state_code: b.state_code ?? getOrg().state_code, start_date: b.start_date ?? null, end_date: b.end_date ?? null, status: 'draft', settings: '{}', created_at: now() });
+    claimCode(b.code, id);   // links are platform-wide, so the code must be free across all organisers
+  });
+  syncListing(id);
   audit('event.create', 'event', id, undefined, b);
   return getEvent(id);
 }));
@@ -132,6 +139,7 @@ adminRouter.patch('/events/:id', requirePerm('event.config'), h((req) => {
   }
   if (Object.keys(patch).length) { const d = diff(e, patch); update('event', e.id, patch); audit('event.update', 'event', e.id, d.before, d.after); }
   if (b.settings) saveEventSettings(e.id, b.settings);
+  syncListing(e.id);
   const out = getEvent(e.id);
   return { ...out, settings: eventSettings(out) };
 }));

@@ -4,7 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { all, one, run, update } from '../db.ts';
 import { audit } from '../audit.ts';
-import { config } from '../config.ts';
+import { config, uploadDir } from '../config.ts';
+import { MAIN, allWorkspaces, inWorkspace, workspaceForTagged } from '../platform.ts';
+import { submitPaper } from '../services/applications.ts';
+import { mediaFile } from '../services/conference.ts';
 import { eventSettings, getOrg } from '../settings.ts';
 import { rateLimit } from '../auth.ts';
 import { bad, conflict, notFound, now, parseMoney, uid, json } from '../util.ts';
@@ -54,10 +57,16 @@ publicRouter.get('/events/:code', h((req) => {
       (SELECT COUNT(*) FROM seat s JOIN portfolio p ON p.id = s.portfolio_id WHERE p.committee_id = c.id) AS seats
     FROM committee c WHERE c.event_id = ? ORDER BY c.sort, c.name`, e.id);
   const categories = [...new Set(all('SELECT category FROM fee_tier WHERE event_id = ? AND active = 1', e.id).map((t) => t.category))];
+  const extra = all('SELECT id, type, topics, difficulty, emblem FROM committee WHERE event_id = ?', e.id);
+  const p = s.profile;
   return {
+    profile: { acronym: p.acronym, logo: p.logo ? `/api/public/media/${p.logo}` : null, banner: p.banner && /^p[1-6]$/.test(p.banner) ? p.banner : p.banner ? `/api/public/media/${p.banner}` : null,
+      country: p.country, level: p.level, format: p.format, datesTbd: p.datesTbd, slug: e.code.toLowerCase() },
+    open: { delegate: s.roles.delegate && e.status === 'open' && !(s.applicationDeadline && s.applicationDeadline < new Date().toISOString()), deadline: s.applicationDeadline, status: e.status },
+    allocationMode: s.allocationMode, free: s.free,
     event: { code: e.code, name: e.name, venue: e.venue, city: e.city, start_date: e.start_date, end_date: e.end_date, status: e.status, kind: e.kind },
     org: { name: org.name, legal_name: org.legal_name, grievance: org.grievance_contact },
-    committees: committees.map((c) => ({ ...c, full: c.open_seats === 0 })),
+    committees: committees.map((c) => { const x = extra.find((y) => y.id === c.id) ?? {}; return { ...c, type: x.type, topics: JSON.parse(x.topics || '[]'), difficulty: x.difficulty, emblem: x.emblem, full: c.open_seats === 0 }; }),
     classOptions: CLASS_OPTIONS, categories, gstRateBp: s.gstEnabled ? s.gstRateBp : 0, holdHours: s.holdHours, feeModel: s.feeModel,
     refundWindowDays: s.refundWindowDays, requireMobileOtp: s.requireMobileOtp,
   };
@@ -134,6 +143,20 @@ publicRouter.post('/r/:token/evidence', upload.single('file'), h(async (req) => 
   rateLimit(`ev:${r.id}`, 10, 60 * 60_000);
   return submitEvidence(r, req.file, { utr: req.body.utr, amountPaise: parseMoney(req.body.amount), paidOn: req.body.paid_on });
 }));
+publicRouter.post('/r/:token/paper', upload.single('file'), h(async (req) => {
+  const r = regByToken(P(req).token);
+  if (!req.file) throw bad('Attach your position paper (PDF)');
+  await checkUpload(req.file.buffer);
+  rateLimit(`paper:${r.id}`, 10, 60 * 60_000);
+  return submitPaper(r, req.file);
+}));
+// Public images and study guides (logos, banners, payment QR codes). Names carry the workspace tag.
+publicRouter.get('/media/:name', (req, res) => {
+  const f = mediaFile(P(req).name);
+  if (!f) return res.status(404).send('Not found');
+  res.setHeader('cache-control', 'public, max-age=86400');
+  res.sendFile(f);
+});
 publicRouter.post('/r/:token/id-proof', upload.single('file'), h(async (req) => {
   const r = regByToken(P(req).token);
   if (!req.file) throw bad('Attach the ID proof');
@@ -142,8 +165,8 @@ publicRouter.post('/r/:token/id-proof', upload.single('file'), h(async (req) => 
   const mime = sniff(req.file.buffer);
   if (!mime) throw bad('Upload a JPG, PNG or PDF');
   const rel = path.join('idproof', `${r.id}-${uid().slice(0, 6)}.${mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg'}`);
-  fs.mkdirSync(path.join(config.uploadDir, 'idproof'), { recursive: true });
-  fs.writeFileSync(path.join(config.uploadDir, rel), req.file.buffer, { mode: 0o600 });
+  fs.mkdirSync(path.join(uploadDir(), 'idproof'), { recursive: true });
+  fs.writeFileSync(path.join(uploadDir(), rel), req.file.buffer, { mode: 0o600 });
   update('registration', r.id, { id_proof_path: rel, id_proof_status: 'submitted' });
   audit('idproof.upload', 'registration', r.id);
   return { ok: true };
@@ -275,8 +298,8 @@ publicRouter.get('/share/:token/csv', h((req, res) => {
 export function serveFile(req: Request, res: Response) {
   const rel = String(req.query.p ?? ''); const exp = Number(req.query.e ?? 0); const sig = String(req.query.s ?? '');
   if (!verifyFileUrl(rel, exp, sig)) return res.status(403).send('Link expired');
-  const full = path.join(config.uploadDir, rel);
-  if (!full.startsWith(config.uploadDir) || !fs.existsSync(full)) return res.status(404).send('Not found');
+  const full = path.join(uploadDir(), rel);
+  if (!full.startsWith(uploadDir()) || !fs.existsSync(full)) return res.status(404).send('Not found');
   res.setHeader('cache-control', 'private, no-store');
   res.sendFile(full);
 }
@@ -288,7 +311,8 @@ for (const g of ['razorpay', 'cashfree', 'mock'] as GatewayName[]) {
   webhookRouter.post(`/${g}`, (req, res, next) => {
     try {
       const raw = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
-      const out = handleWebhook(g, raw, req.headers as any);
+      // Order ids carry their workspace tag, so the payload says which organiser's books to post to.
+      const out = inWorkspace(workspaceForTagged(raw) ?? MAIN, () => handleWebhook(g, raw, req.headers as any));
       res.status(out.status).json({ result: out.result });
     } catch (e) { next(e); }
   });
@@ -301,12 +325,13 @@ webhookRouter.get('/whatsapp', (req, res) => {
 webhookRouter.post('/whatsapp', (req, res) => {
   const raw = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
   if (!whatsapp.verifySignature(raw, req.headers['x-hub-signature-256'] as string | undefined)) return res.status(401).json({ error: 'bad signature' });
-  res.json({ updated: applyDeliveryStatuses(whatsapp.parseStatuses(JSON.parse(raw || '{}'))) });
+  const statuses = whatsapp.parseStatuses(JSON.parse(raw || '{}'));
+  res.json({ updated: allWorkspaces().reduce((n, w) => n + inWorkspace(w, () => applyDeliveryStatuses(statuses)), 0) });
 });
 webhookRouter.post('/email-bounce', (req, res) => {
   const raw = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
   if (req.headers['x-signature'] !== hmacHex(config.appSecret, raw)) return res.status(401).json({ error: 'bad signature' });
   const b = JSON.parse(raw || '{}');
-  for (const email of [].concat(b.email ?? b.emails ?? [])) markBounced(email, b.reason ?? 'bounced');
+  for (const email of [].concat(b.email ?? b.emails ?? [])) for (const w of allWorkspaces()) inWorkspace(w, () => markBounced(email, b.reason ?? 'bounced'));
   res.json({ ok: true });
 });

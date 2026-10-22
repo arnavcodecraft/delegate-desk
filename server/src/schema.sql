@@ -610,3 +610,51 @@ CREATE TABLE IF NOT EXISTS breach_incident (
   board_notified_at TEXT, people_notified_at TEXT, people_notified_count INTEGER,
   reported_by TEXT, created_at TEXT NOT NULL, closed_at TEXT
 );
+
+-- ---------- conference platform (Explore, Job Board, applications, position papers) ----------
+-- Visits to the public conference page by source (instagram, whatsapp, direct ...), for "Where applicants come from".
+CREATE TABLE IF NOT EXISTS page_view (
+  event_id TEXT NOT NULL, day TEXT NOT NULL, channel TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (event_id, day, channel)
+);
+
+-- Roles posted on the Job Board: chairs, secretariat, staff, press, volunteers.
+CREATE TABLE IF NOT EXISTS position (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES event(id),
+  kind TEXT NOT NULL,                          -- chair | secretariat | staff | press | volunteer
+  title TEXT NOT NULL,
+  committee_id TEXT REFERENCES committee(id),
+  description TEXT, openings INTEGER NOT NULL DEFAULT 1,
+  deadline TEXT, open INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+-- Applications from chairs/secretariat/staff (via a position) and from faculty advisors and observers.
+CREATE TABLE IF NOT EXISTS role_application (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES event(id),
+  position_id TEXT REFERENCES position(id),
+  role TEXT NOT NULL,                          -- chair | secretariat | staff | press | volunteer | advisor | observer
+  full_name TEXT NOT NULL, email TEXT NOT NULL, mobile TEXT, institution TEXT, city TEXT,
+  experience TEXT, motivation TEXT, answers TEXT NOT NULL DEFAULT '{}', committee_prefs TEXT NOT NULL DEFAULT '[]',
+  cv_path TEXT,
+  status TEXT NOT NULL DEFAULT 'submitted',   -- submitted | shortlisted | accepted | rejected | withdrawn
+  score INTEGER, note TEXT,
+  assigned_committee_id TEXT, assigned_title TEXT,
+  token TEXT NOT NULL UNIQUE,
+  channel TEXT,
+  created_at TEXT NOT NULL, decided_at TEXT, decided_by TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_roleapp_event ON role_application(event_id, role, status);
+
+CREATE TABLE IF NOT EXISTS position_paper (
+  id TEXT PRIMARY KEY,
+  registration_id TEXT NOT NULL REFERENCES registration(id),
+  committee_id TEXT REFERENCES committee(id),
+  file_path TEXT NOT NULL, file_name TEXT, size INTEGER,
+  status TEXT NOT NULL DEFAULT 'submitted',    -- submitted | reviewed | revise
+  score INTEGER, feedback TEXT, reviewer_id TEXT,
+  submitted_at TEXT NOT NULL, reviewed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_paper_reg ON position_paper(registration_id);

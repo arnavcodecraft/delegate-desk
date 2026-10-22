@@ -1,6 +1,6 @@
 # DelegateDesk
 
-Delegate registration, instant committee/portfolio allotment, payments (Razorpay, Cashfree or UPI screenshot with CFO approval), referral commission and Companies Act-ready double-entry books for Model UN–style events. Built from *Delegate Registration & Event Finance Platform — Full Product Spec*.
+A Model UN conference platform. Organisers list their conference in a 10-step wizard and get a public page, a registration link and a dashboard; delegates find conferences on Explore and apply; chairs and staff apply from the Job Board; committees run live with roll call, speakers lists, motions and voting. Underneath: instant or reviewed committee/portfolio allotment, payments (bank transfer, UPI QR, payment link, in person, Razorpay, Cashfree), referral commission and Companies Act-ready double-entry books. Built from *Delegate Registration & Event Finance Platform — Full Product Spec*.
 
 ## Quick start
 
@@ -14,14 +14,49 @@ npm start                  # http://localhost:8080   (set ALLOW_SANDBOX=1 to use
 # or: npm run dev          # API on :8080 with reload + Vite on :5173
 ```
 
-- Public form: `http://localhost:8080/register/BGYS27`
-- Staff sign-in: `http://localhost:8080/login`, password `ChangeMe!2026` for every seeded user:
-  `admin@` (Secretary-General), `cfo@` and `cfo2@` (CFO), `accounts@` (Accountant), `desk@` (Registration exec), `chair.unsc@` (UNSC chair), `auditor@` — all `@example.org`.
-  Admin, CFO and Accountant set up two-factor sign-in (any authenticator app) on first sign-in.
+| Page | Address |
+|---|---|
+| Explore conferences (home) | `http://localhost:8080/` |
+| List your conference (organiser sign-up + wizard) | `http://localhost:8080/list` |
+| Demo conference page | `http://localhost:8080/c/bgys27` |
+| Delegate registration form | `http://localhost:8080/register/BGYS27` |
+| Job Board | `http://localhost:8080/jobs` |
+| Live committee session (start or join) | `http://localhost:8080/session` |
+| Staff / organiser sign-in | `http://localhost:8080/login` |
 
-Tests: `npm test` (56 tests: spec worked examples, money flows, permissions, an 8-process concurrent-registration test, and every integration exercised against a local fake that speaks its real protocol: clamd, WhatsApp Cloud API, MSG91, Google OAuth + Sheets, Anthropic Messages). Typecheck: `npm run typecheck`. Docker: `docker build -t delegatedesk . && docker run -p 8080:8080 -v dd:/data delegatedesk`.
+Demo accounts (password `ChangeMe!2026` for all, all `@example.org`):
+
+| Email | Role | Two-factor |
+|---|---|---|
+| `admin@` | Secretary-General (admin) | set up on first sign-in |
+| `cfo@`, `cfo2@` | CFO, deputy CFO (second approver) | set up on first sign-in |
+| `accounts@` | Accountant | set up on first sign-in |
+| `desk@` | Registration executive | no |
+| `chair.unsc@` | Director, UNSC (sees only UNSC) | no |
+| `auditor@` | External auditor (read-only) | no |
+
+New organisers create their own account at `/list`: they become admin + CFO of a separate workspace, are signed in straight away, and set up two-factor sign-in at their next sign-in. Chairs accepted from Applications get an account by email with a temporary password. Delegates never need a password; they use the link in their email.
+
+Tests: `npm test` (68 tests: spec worked examples, money flows, permissions, an 8-process concurrent-registration test, and every integration exercised against a local fake that speaks its real protocol: clamd, WhatsApp Cloud API, MSG91, Google OAuth + Sheets, Anthropic Messages; plus workspace isolation, onboarding, review mode, the Job Board, and the live-session voting rules). Typecheck: `npm run typecheck`. Docker: `docker build -t delegatedesk . && docker run -p 8080:8080 -v dd:/data delegatedesk`.
 
 Configuration lives in environment variables; see [`.env.example`](.env.example).
+
+## Conference platform (list your conference)
+
+| Feature | Where |
+|---|---|
+| **Separate workspaces per organiser.** Each organiser who signs up gets their own database, upload folder and books, so delegates, money and GST never mix. A small platform database routes sign-ins (by email), public links (by conference code) and tagged ids/tokens to the right workspace, and holds the Explore listing. The original demo is the "main" workspace. | `server/src/platform.ts`, `server/src/db.ts` |
+| **List your conference**: 10 steps: name, acronym, logo, banner, dates or "to be decided"; in person / online / hybrid; high school / university / both; country (flag grid) and city; expected size; committees; description and social links; free or paid (with the fee); what you'll use it for; review and create (with account sign-up). Answers are saved on the device as you go. | `web/src/platform/ListConference.tsx`, `services/conference.ts` |
+| **Committee editor**: MUN, Crisis, Custom and Press types; typing a known name (UNSC, UNHRC, DISEC, ECOSOC, WHO, NATO, EU, G20, ICJ, Lok Sabha, AIPPM, IPC, …) fills in the short name, emblem and members/portfolios; topics, difficulty, language, emblem; search with flags, quick bundles (P5, G7, BRICS+, G20, EU, NATO, ASEAN, Arab League, SAARC, GCC), paste a list; delegates per country; A–Z or importance order. Used in the wizard and on the Committees page. | `web/src/platform/CommitteeEditor.tsx`, `web/src/data/` |
+| **Public conference page** with banner, logo, dates, venue, format, level, committees with topics, seats left and study guides, fees, open positions, apply buttons per role, share link, QR code and WhatsApp share, socials and contact. Visits are counted by source (`?src=instagram`, referrer). | `web/src/platform/Explore.tsx` |
+| **Explore**: search and filter by country, level, format, free/paid and dates; platform stats. **Job Board**: chair, secretariat, staff, press and volunteer roles across all conferences. | `routes/platform.ts` |
+| **Organiser dashboard**: Draft/Publish, set-up priorities ordered by what the organiser said they need, applicants against target (delegates, advisors, observers, chairs, staff), where applicants come from, participants over time, shareable links and QR. | `web/src/staff/Organiser.tsx` |
+| **Applications**: open/close each role (delegates, faculty advisors, observers, chairs) and a deadline; **instant** allotment or **review** mode (score 1–10, assign a seat by hand or auto-assign by score, decline with a note; nothing is payable until a seat is assigned). Chair/staff/advisor/observer applications with CV upload, shortlist/accept/decline emails, and an optional chair account scoped to their committee. | `services/applications.ts` |
+| **Financials set-up**: free or paid; school, university, advisor, early-bird and late fees; GST on/off; payment methods — bank transfer (account, IFSC/SWIFT, reference, instructions), UPI ID or uploaded QR code, external payment link, in person (recorded by the organiser into petty cash). Delegates upload proof; the organiser approves it. Free conferences confirm seats immediately. | `services/conference.ts`, `routes/organiser.ts` |
+| **Documents**: study guides per committee (PDF upload or link) and position papers (PDF upload on the delegate page, chair score and feedback, revision requests, deadline). | `services/applications.ts` |
+| **Live sessions**: roll call (present / present and voting), quorum, speakers list with timer and requests to speak, motions (moderated/unmoderated caucus, close debate, set agenda…), voting with simple majority, two-thirds and Security Council rules (nine votes, P5 veto), optional voting on delegates' phones. Free for anyone at `/session`, or started from a committee so the room is filled in. | `services/live.ts`, `web/src/platform/Live.tsx` |
+
+New organisers collect fees into their own accounts. The deployment's Razorpay/Cashfree keys and the sandbox test gateway are only offered in the original (main) workspace.
 
 ## What is built (by spec section)
 

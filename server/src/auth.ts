@@ -4,6 +4,7 @@ import { all, one, run, insert } from './db.ts';
 import { audit } from './audit.ts';
 import { HttpError, bad, ctxStore, forbidden, now, token, uid } from './util.ts';
 import { config } from './config.ts';
+import { claimEmail } from './platform.ts';
 
 export const ROLES = ['superadmin', 'admin', 'cfo', 'accountant', 'registration_exec', 'chair', 'auditor', 'referrer', 'head_delegate'] as const;
 export type Role = (typeof ROLES)[number];
@@ -119,6 +120,7 @@ export function rolesOf(userId: string) {
 export function createUser(o: { name: string; email: string; password: string; roles: { role: Role; event_id?: string | null; committee_id?: string | null; referrer_id?: string | null; delegation_id?: string | null }[] }) {
   const email = o.email.trim().toLowerCase();
   if (one('SELECT 1 FROM user WHERE email = ?', email)) throw bad('A user with that email exists');
+  claimEmail(email);
   const id = uid();
   insert('user', { id, name: o.name.trim(), email, password_hash: hashPassword(o.password), created_at: now() });
   for (const r of o.roles) setRole(id, r);

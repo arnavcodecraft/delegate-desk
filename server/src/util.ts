@@ -1,8 +1,16 @@
 import crypto from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-export const uid = () => crypto.randomUUID();
-export const token = (bytes = 24) => crypto.randomBytes(bytes).toString('base64url');
+/**
+ * The organiser workspace a request or job runs in. Each workspace has its own database and upload folder.
+ * Ids and link tokens made inside a workspace start with its tag ("tabc1234."), so any link routes back to it.
+ * The original workspace ("main") has an empty tag, which keeps its existing ids and links unchanged.
+ */
+export interface Workspace { id: string; tag: string; dir: string | null; db?: unknown }
+export const workspaceStore = new AsyncLocalStorage<Workspace>();
+const tagged = (s: string) => { const w = workspaceStore.getStore(); return w?.tag ? `${w.tag}.${s}` : s; };
+export const uid = () => tagged(crypto.randomUUID());
+export const token = (bytes = 24) => tagged(crypto.randomBytes(bytes).toString('base64url'));
 export const now = () => new Date().toISOString();
 export const sha256 = (b: string | Buffer) => crypto.createHash('sha256').update(b).digest('hex');
 
@@ -111,10 +119,14 @@ export const json = <T = any>(s: string | null | undefined, fallback: T): T => {
 };
 export const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
 export const normMobile = (s: string) => {
-  const d = String(s ?? '').replace(/\D/g, '');
+  const raw = String(s ?? '').trim();
+  const d = raw.replace(/\D/g, '');
+  // International numbers keep their "+country" prefix; Indian ones are stored as the bare 10 digits.
+  if (raw.startsWith('+') && !(d.startsWith('91') && d.length === 12)) return `+${d}`;
   return d.length === 12 && d.startsWith('91') ? d.slice(2) : d.length === 11 && d.startsWith('0') ? d.slice(1) : d;
 };
 export const isIndianMobile = (s: string) => /^[6-9]\d{9}$/.test(normMobile(s));
+export const isIntlMobile = (s: string) => /^\+[1-9]\d{7,14}$/.test(normMobile(s));
 export const isPan = (s: string) => /^[A-Z]{5}[0-9]{4}[A-Z]$/.test((s ?? '').toUpperCase());
 export const isGstin = (s: string) => /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test((s ?? '').toUpperCase());
 export function ageOn(dob: string, on: string) {

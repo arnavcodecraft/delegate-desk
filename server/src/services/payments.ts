@@ -1,6 +1,7 @@
 import { all, one, run, insert, tx, update, nextCounter, scalar } from '../db.ts';
 import { audit } from '../audit.ts';
 import { config } from '../config.ts';
+import { currentWorkspace } from '../platform.ts';
 import { eventSettings, getEvent, getOrg, orgSettings } from '../settings.ts';
 import { bad, conflict, ctx, forbidden, fyOf, inr, istDate, json, now, uid, notFound, addHours } from '../util.ts';
 import { post, clearingAccount } from './ledger.ts';
@@ -34,7 +35,10 @@ export function availableGateways(eventId: string, amountPaise = 0) {
   const s = eventSettings(eventId);
   const list = (Object.keys(gateways) as GatewayName[])
     .filter((g) => s.gateways[g]?.enabled && !s.gateways[g]?.down && gateways[g].configured() && isHealthy(g))
-    .filter((g) => g !== 'mock' || config.allowSandbox);
+    .filter((g) => g !== 'mock' || config.allowSandbox)
+    // The gateway keys belong to the platform's own account, so organisers on their own workspace never get them;
+    // they collect through their own bank, QR, payment link or in person.
+    .filter(() => !currentWorkspace().tag);
   const routed = s.routing.find((r) => amountPaise <= r.maxPaise && list.includes(r.gateway))?.gateway;
   const preferred = routed ?? (list.includes(s.defaultGateway) ? s.defaultGateway : list[0]);
   return {

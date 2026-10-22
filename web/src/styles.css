@@ -328,3 +328,5 @@ table.t tfoot td { font-weight: 650; background: var(--surface-2); border-top: 1
   .card { box-shadow: none; }
   body { background: #fff; }
 }
+.public-logo { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: #fff; border: 3px solid rgb(255 255 255 / .55); margin-bottom: .6rem; display: block; }
+.public-head .inner { position: relative; z-index: 1; }

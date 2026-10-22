@@ -6,7 +6,7 @@
  */
 import { settleProofReads } from './services/evidence.ts';
 import { stopOcr } from './services/ocr.ts';
-import { openDb, one, insert, all } from './db.ts';
+import { openDb, one, insert, all, run } from './db.ts';
 import { seedChart } from './services/ledger.ts';
 import { seedTemplates } from './services/notify.ts';
 import { addPortfolio } from './services/allocation.ts';
@@ -85,6 +85,30 @@ export function seed() {
     ['Statutory Auditor', 'auditor@example.org', [{ role: 'auditor' }]],
   ];
   for (const [name, email, roles] of users) createUser({ name, email, password: PASSWORD, roles });
+  // The public profile: Explore, the conference page and the Job Board.
+  saveEventSettings(eventId, {
+    profile: {
+      acronym: 'BGYS', format: 'in_person', level: 'both', country: 'in', expected: 240,
+      description: 'Three days of debate at the Bengaluru International Centre: five committees from the Security Council to the Lok Sabha, a press corps, and socials every evening. First-time delegates get a training session on Day 1.',
+      socials: { instagram: '@bgys.mun', facebook: '', tiktok: '', whatsapp: '', website: 'bgys.example.org' },
+      logo: null, banner: 'p2', datesTbd: false, contactEmail: 'secretariat@example.org', uses: ['applications', 'payments', 'committees', 'emails'],
+    },
+    roles: { delegate: true, advisor: true, observer: true, chair: true },
+    positionPapers: { enabled: true, deadline: '2027-01-10T18:29:59.000Z' },
+  });
+  const details: Record<string, [string, string, string[], string]> = {
+    UNSC: ['mun', 'shield', ['Maritime security in the Red Sea'], 'advanced'], DISEC: ['mun', 'shield', ['Lethal autonomous weapons systems'], 'intermediate'],
+    UNHRC: ['mun', 'heart-handshake', ['Digital surveillance and the right to privacy'], 'beginner'], LS: ['custom', 'landmark', ['The One Nation, One Election Bill'], 'intermediate'],
+    IPC: ['press', 'newspaper', [], 'beginner'],
+  };
+  const codes: Record<string, string> = { 'United States': 'us', China: 'cn', 'Russian Federation': 'ru', 'United Kingdom': 'gb', France: 'fr', India: 'in', Japan: 'jp', Brazil: 'br', Germany: 'de', 'South Africa': 'za',
+    Indonesia: 'id', Mexico: 'mx', Nigeria: 'ng', Egypt: 'eg', Norway: 'no', Pakistan: 'pk', Israel: 'il', Iran: 'ir', 'North Korea': 'kp', 'South Korea': 'kr', Ukraine: 'ua', Turkey: 'tr',
+    'Saudi Arabia': 'sa', Australia: 'au', Canada: 'ca', Sudan: 'sd', Venezuela: 've', Qatar: 'qa', Bangladesh: 'bd', Argentina: 'ar', Finland: 'fi', Malawi: 'mw', Chile: 'cl', Vietnam: 'vn' };
+  for (const [short, [type, emblem, topics, difficulty]] of Object.entries(details)) run('UPDATE committee SET type = ?, emblem = ?, topics = ?, difficulty = ? WHERE id = ?', type, emblem, JSON.stringify(topics), difficulty, committeeIds[short]);
+  for (const [name, code] of Object.entries(codes)) run('UPDATE portfolio SET code = ? WHERE name = ? AND committee_id IN (SELECT id FROM committee WHERE event_id = ?)', code, name, eventId);
+  insert('position', { id: uid(), event_id: eventId, kind: 'chair', title: 'Vice-Chair, UNHRC', committee_id: committeeIds.UNHRC, description: 'Help run the Human Rights Council with the Director. At least two conferences as a delegate or chair.', openings: 1, deadline: '2026-12-20T18:29:59.000Z', open: 1, sort: 0, created_at: now() });
+  insert('position', { id: uid(), event_id: eventId, kind: 'press', title: 'Head of Press, IPC', committee_id: committeeIds.IPC, description: 'Lead the International Press Corps: assign stories, edit the daily newsletter.', openings: 1, deadline: null, open: 1, sort: 1, created_at: now() });
+  insert('position', { id: uid(), event_id: eventId, kind: 'volunteer', title: 'Logistics volunteer', committee_id: null, description: 'Registration desk, committee rooms and the socials. Certificates for all volunteers.', openings: 12, deadline: null, open: 1, sort: 2, created_at: now() });
   insert('executive_board', { id: uid(), event_id: eventId, committee_id: committeeIds.UNSC, name: 'Ananya Rao', position: 'Director', email: 'chair.unsc@example.org', phone: '9800000011' });
   insert('executive_board', { id: uid(), event_id: eventId, committee_id: committeeIds.UNSC, name: 'Kabir Singh', position: 'Vice-Director', email: 'kabir@example.org', phone: '9800000012' });
   return { orgId, eventId, committeeIds };

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { all, one, run, insert, update, scalar } from '../db.ts';
 import { audit, diff } from '../audit.ts';
-import { config } from '../config.ts';
+import { config, uploadDir } from '../config.ts';
 import { getEvent, getOrg, EXPENSE_CATEGORIES } from '../settings.ts';
 import { requirePerm, requireUser, can } from '../auth.ts';
 import { bad, conflict, forbidden, json, notFound, now, parseMoney, token, uid, istDate, isPan, normalizeName, fyOf, fyRange, inr } from '../util.ts';
@@ -45,7 +45,7 @@ financeRouter.post('/evidence/:id/ai-read', requirePerm('payments.read'), h(asyn
   rateLimit(`ai:${req.auth!.user.id}`, 40, 3600_000);
   const e = one('SELECT * FROM payment_evidence WHERE id = ?', P(req).id);
   if (!e) throw notFound('Payment proof');
-  return readProofWithAi(fs.readFileSync(path.join(config.uploadDir, e.file_path)), e.mime);
+  return readProofWithAi(fs.readFileSync(path.join(uploadDir(), e.file_path)), e.mime);
 }));
 financeRouter.post('/evidence/bulk-approve', requirePerm('payments.approve'), h((req) => bulkApprove(req.body?.ids ?? [], req.body?.requireBankMatch !== false)));
 financeRouter.post('/evidence/rematch', requirePerm('payments.read'), h(() => ({ matched: autoMatchEvidence() })));
@@ -182,8 +182,8 @@ financeRouter.post('/expenses', requirePerm('expense.create'), upload.single('bi
     const mime = sniff(req.file.buffer);
     if (!mime) throw bad('Bill must be a JPG, PNG or PDF');
     billPath = path.join('bills', `${uid()}.${mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg'}`);
-    fs.mkdirSync(path.join(config.uploadDir, 'bills'), { recursive: true });
-    fs.writeFileSync(path.join(config.uploadDir, billPath), req.file.buffer, { mode: 0o600 });
+    fs.mkdirSync(path.join(uploadDir(), 'bills'), { recursive: true });
+    fs.writeFileSync(path.join(uploadDir(), billPath), req.file.buffer, { mode: 0o600 });
   }
   return createExpense({ ...b, bill_path: billPath });
 }));

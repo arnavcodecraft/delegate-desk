@@ -6,7 +6,7 @@ import zlib from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
 import { all, getDb, insert, one, run, scalar } from '../db.ts';
 import { audit } from '../audit.ts';
-import { config } from '../config.ts';
+import { config, uploadDir, backupDir } from '../config.ts';
 import { ctx, notFound, now, uid } from '../util.ts';
 
 /*
@@ -66,15 +66,15 @@ export function liveCounts() {
 }
 
 export function createBackup() {
-  fs.mkdirSync(config.backup.dir, { recursive: true });
+  fs.mkdirSync(backupDir(), { recursive: true });
   const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ddbk-')), 'db.sqlite');
   const counts = liveCounts();
   getDb().exec(`VACUUM INTO '${tmp.replace(/'/g, "''")}'`);
-  const files = walk(config.uploadDir).map((rel) => ({ rel, data: fs.readFileSync(path.join(config.uploadDir, rel)) }));
+  const files = walk(uploadDir()).map((rel) => ({ rel, data: fs.readFileSync(path.join(uploadDir(), rel)) }));
   const sealed = seal(pack(fs.readFileSync(tmp), files, counts));
   fs.rmSync(path.dirname(tmp), { recursive: true, force: true });
   const name = `delegatedesk-${now().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-')}.ddbak`;
-  fs.writeFileSync(path.join(config.backup.dir, name), sealed, { mode: 0o600 });
+  fs.writeFileSync(path.join(backupDir(), name), sealed, { mode: 0o600 });
   const id = uid();
   insert('backup_log', { id, file: name, size: sealed.length, counts: JSON.stringify(counts), created_at: now(), created_by: ctx().userId ?? 'system' });
   audit('backup.create', 'backup', id, undefined, { file: name, size: sealed.length, files: files.length });
@@ -88,7 +88,7 @@ export function verifyBackup(id: string) {
   if (!b) throw notFound('Backup');
   let result: string;
   try {
-    const { manifest, db, files } = unpack(unseal(fs.readFileSync(path.join(config.backup.dir, b.file))));
+    const { manifest, db, files } = unpack(unseal(fs.readFileSync(path.join(backupDir(), b.file))));
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ddrs-'));
     const file = path.join(dir, 'restore.sqlite');
     fs.writeFileSync(file, db);
@@ -126,7 +126,7 @@ export function restoreTo(backupFile: string, targetDir: string, key = backupKey
 function prune() {
   const keep = all('SELECT * FROM backup_log ORDER BY created_at DESC');
   for (const b of keep.slice(config.backup.keep)) {
-    fs.rmSync(path.join(config.backup.dir, b.file), { force: true });
+    fs.rmSync(path.join(backupDir(), b.file), { force: true });
     run("UPDATE backup_log SET verify_result = 'pruned' WHERE id = ?", b.id);
   }
 }
@@ -134,7 +134,7 @@ function prune() {
 export function backupFilePath(id: string) {
   const b = one('SELECT * FROM backup_log WHERE id = ?', id);
   if (!b) throw notFound('Backup');
-  return path.join(config.backup.dir, b.file);
+  return path.join(backupDir(), b.file);
 }
 
 /** Daily job: one backup per day, verified straight away. */

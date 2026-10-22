@@ -65,6 +65,8 @@ export function payableNow(reg: Record<string, any>) {
   const bal = balanceOf(reg);
   if (bal <= 0 || reg.cancelled_at) return 0;
   const s = eventSettings(reg.event_id);
+  // Review mode: an application owes nothing until the team assigns it a seat.
+  if (reg.allot_status === 'applied') return 0;
   if (s.feeModel === 'two_stage' && !reg.accepted) return Math.max(0, Math.min(bal, s.applicationFeePaise - reg.paid_paise));
   return bal;
 }

@@ -8,6 +8,28 @@ export const EXPENSE_CATEGORIES = [
 ] as const;
 
 export interface GatewayToggle { enabled: boolean; down: boolean }
+
+/** What the public conference page and Explore show. Filled in by the onboarding wizard. */
+export interface ConferenceProfile {
+  acronym: string;
+  format: 'in_person' | 'online' | 'hybrid';
+  level: 'high_school' | 'university' | 'both';
+  country: string;                   // ISO 3166 alpha-2, lower case
+  expected: number;
+  description: string;
+  socials: { instagram: string; facebook: string; tiktok: string; whatsapp: string; website: string };
+  logo: string | null;               // media file name
+  banner: string | null;             // preset key ("p1".."p6") or media file name
+  datesTbd: boolean;
+  contactEmail: string;
+  uses: string[];
+}
+export interface PaymentMethods {
+  link: { enabled: boolean; url: string; instructions: string };
+  qr: { enabled: boolean; image: string | null; upiId: string; instructions: string };
+  bank: { enabled: boolean; accountName: string; accountNumber: string; ifsc: string; bankName: string; reference: string; instructions: string };
+  in_person: { enabled: boolean; instructions: string };
+}
 export interface EventSettings {
   holdHours: number;
   holdGraceHours: number;           // extra hold while a screenshot is under review
@@ -37,6 +59,15 @@ export interface EventSettings {
   commissionHoldDays: number;
   unverifiedAlertHours: number;
   requireMobileOtp: boolean;
+  profile: ConferenceProfile;
+  /** Which roles can apply right now. Delegates use the registration form; the others apply on the conference page. */
+  roles: { delegate: boolean; advisor: boolean; observer: boolean; chair: boolean };
+  applicationDeadline: string | null;
+  /** instant: a seat is allotted the moment a delegate registers. review: the team reviews and assigns. */
+  allocationMode: 'instant' | 'review';
+  free: boolean;
+  paymentMethods: PaymentMethods;
+  positionPapers: { enabled: boolean; deadline: string | null };
 }
 
 export const defaultEventSettings: EventSettings = {
@@ -59,6 +90,22 @@ export const defaultEventSettings: EventSettings = {
   commissionHoldDays: 7,
   unverifiedAlertHours: 24,
   requireMobileOtp: false,
+  profile: {
+    acronym: '', format: 'in_person', level: 'both', country: 'in', expected: 0, description: '',
+    socials: { instagram: '', facebook: '', tiktok: '', whatsapp: '', website: '' },
+    logo: null, banner: 'p1', datesTbd: false, contactEmail: '', uses: [],
+  },
+  roles: { delegate: true, advisor: false, observer: false, chair: false },
+  applicationDeadline: null,
+  allocationMode: 'instant',
+  free: false,
+  paymentMethods: {
+    link: { enabled: false, url: '', instructions: '' },
+    qr: { enabled: false, image: null, upiId: '', instructions: '' },
+    bank: { enabled: false, accountName: '', accountNumber: '', ifsc: '', bankName: '', reference: '', instructions: '' },
+    in_person: { enabled: false, instructions: '' },
+  },
+  positionPapers: { enabled: false, deadline: null },
 };
 
 export interface OrgSettings {

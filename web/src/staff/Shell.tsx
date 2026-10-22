@@ -4,7 +4,7 @@ import { api } from '../api';
 import { Alert, Btn, Field, Loading, useAsync, applyTheme, savedTheme, type Theme } from '../ui';
 import {
   LayoutDashboard, Users, ListChecks, Landmark, ScanLine, Mail, Upload, ReceiptText, CreditCard, Handshake, Wallet, BookOpen, Settings,
-  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, type LucideIcon,
+  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, type LucideIcon,
 } from 'lucide-react';
 
 export interface Me {
@@ -20,7 +20,10 @@ export const useStaff = () => useContext(StaffCtx);
 export function StaffGate({ children }: { children: React.ReactNode }) {
   const me = useAsync<Me>(() => api.get('/api/auth/me'), []);
   const loc = useLocation();
-  const [eventId, setEventIdState] = useState<string>(() => { try { return localStorage.getItem('dd-event') ?? ''; } catch { return ''; } });
+  const [eventId, setEventIdState] = useState<string>(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('event');
+    try { if (fromUrl) localStorage.setItem('dd-event', fromUrl); return fromUrl ?? localStorage.getItem('dd-event') ?? ''; } catch { return fromUrl ?? ''; }
+  });
   useEffect(() => {
     const h = () => me.reload();
     window.addEventListener('dd:unauthorised', h);
@@ -39,24 +42,35 @@ export function StaffGate({ children }: { children: React.ReactNode }) {
 }
 
 const NAV: { group: string; items: { to: string; label: string; perms: string[]; icon: LucideIcon }[] }[] = [
-  { group: 'Overview', items: [{ to: '/app/dashboard', label: 'Dashboard', perms: ['dashboard.read'], icon: LayoutDashboard }] },
-  { group: 'Registration', items: [
+  { group: 'Overview', items: [
+    { to: '/app/overview', label: 'Dashboard', perms: ['event.config', 'reg.read', 'dashboard.read'], icon: LayoutDashboard },
+    { to: '/app/dashboard', label: 'Break-even & money', perms: ['dashboard.read'], icon: TrendingUp },
+  ] },
+  { group: 'Manage', items: [
+    { to: '/app/applications', label: 'Applications', perms: ['reg.read'], icon: Inbox },
     { to: '/app/registrations', label: 'Delegates', perms: ['reg.read'], icon: Users },
-    { to: '/app/lists', label: 'Lists', perms: ['lists.read'], icon: ListChecks },
     { to: '/app/allocation', label: 'Committees', perms: ['reg.read', 'alloc.config'], icon: Landmark },
+    { to: '/app/documents', label: 'Documents', perms: ['alloc.config', 'lists.read'], icon: FileText },
+    { to: '/app/sessions', label: 'Live sessions', perms: ['lists.read', 'attendance.mark'], icon: Radio },
+    { to: '/app/lists', label: 'Lists', perms: ['lists.read'], icon: ListChecks },
     { to: '/app/checkin', label: 'Check-in', perms: ['attendance.mark'], icon: ScanLine },
-    { to: '/app/messages', label: 'Messages', perms: ['messages.read', 'templates.manage'], icon: Mail },
-    { to: '/app/imports', label: 'Import', perms: ['import.registrations', 'finance.import', 'alloc.config', 'referrer.manage'], icon: Upload },
+  ] },
+  { group: 'Communicate', items: [
+    { to: '/app/messages', label: 'Communications', perms: ['messages.read', 'templates.manage'], icon: Mail },
   ] },
   { group: 'Money', items: [
+    { to: '/app/financials', label: 'Financials', perms: ['event.config', 'settings.finance', 'payments.read'], icon: Banknote },
     { to: '/app/payments/review', label: 'Payment proofs', perms: ['payments.read'], icon: ReceiptText },
     { to: '/app/payments', label: 'Payments & refunds', perms: ['payments.read', 'refund.read'], icon: CreditCard },
     { to: '/app/referrals', label: 'Referrals', perms: ['commission.read', 'referral.link'], icon: Handshake },
     { to: '/app/expenses', label: 'Expenses', perms: ['expense.read', 'expense.create'], icon: Wallet },
     { to: '/app/books', label: 'Books', perms: ['books.read'], icon: BookOpen },
   ] },
-  { group: 'Admin', items: [
+  { group: 'Settings', items: [
+    { to: '/app/conference', label: 'Conference page', perms: ['event.config'], icon: Image },
+    { to: '/app/jobs', label: 'Job Board', perms: ['event.config'], icon: Briefcase },
     { to: '/app/settings', label: 'Settings', perms: ['event.config', 'settings.org', 'settings.finance', 'users.manage'], icon: Settings },
+    { to: '/app/imports', label: 'Import', perms: ['import.registrations', 'finance.import', 'alloc.config', 'referrer.manage'], icon: Upload },
     { to: '/app/audit', label: 'Audit trail', perms: ['audit.read'], icon: ShieldCheck },
   ] },
 ];
@@ -80,11 +94,13 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div className="brand"><span className="logo">D</span>DelegateDesk</div>
         {me.events.length > 0 && (
           <div className="event-switch">
-            <select aria-label="Event" value={eventId} onChange={(e) => setEventId(e.target.value)}>
+            <select aria-label="Conference" value={eventId} onChange={(e) => (e.target.value === '__new' ? nav('/list') : setEventId(e.target.value))}>
               {me.events.map((e) => <option key={e.id} value={e.id}>{e.code} · {e.name}</option>)}
+              {can('event.config') && <option value="__new">+ New conference…</option>}
             </select>
           </div>
         )}
+        {!me.events.length && can('event.config') && <NavLink to="/list" className="btn sm primary" style={{ margin: '0 .4rem .5rem' }}><Plus className="icon" />List a conference</NavLink>}
         {NAV.map((g) => {
           const items = g.items.filter((i) => can(...i.perms));
           if (!items.length) return null;
@@ -97,6 +113,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         </div>
         <div className="row" style={{ padding: '.4rem .4rem 0', gap: '.3rem' }}>
           <NavLink to="/app/account" className="btn sm ghost"><UserRound className="icon" />Account</NavLink>
+          <a href="/" className="btn sm ghost icon-only" title="Explore conferences" aria-label="Explore conferences"><Globe2 className="icon" /></a>
           <button className="btn sm ghost icon-only" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}`}><ThemeIcon className="icon" /></button>
           <span className="spacer" />
           <button className="btn sm ghost" onClick={async () => { await api.post('/api/auth/logout'); nav('/login'); }}><LogOut className="icon" />Sign out</button>
@@ -161,7 +178,7 @@ export function Login() {
   useEffect(() => { if (step === 'enroll' && !enroll) api.post<any>('/api/auth/mfa/enroll').then(setEnroll).catch((e) => setError(e.message)); }, [step, enroll]);
   async function go(fn: () => Promise<void>) { setError(null); try { await fn(); } catch (e: any) { setError(e.message); } }
   return (
-    <div className="public"><div className="public-head"><div className="inner"><h1>DelegateDesk</h1><p>Staff sign-in</p></div></div>
+    <div className="public"><div className="public-head"><div className="inner"><h1>DelegateDesk</h1><p>Sign in to manage your conference</p></div></div>
       <div className="public-body" style={{ maxWidth: 440 }}>
         <div className="card stack">
           {error && <Alert tone="bad">{error}</Alert>}
@@ -171,6 +188,7 @@ export function Login() {
             <button className="btn primary lg">Sign in</button>
             <p className="small faint" style={{ margin: 0 }}>Delegates don’t need an account — use the link in your registration email.</p>
           </form>}
+          {step === 'password' && <div className="row between small" style={{ borderTop: '1px solid var(--border)', paddingTop: '.75rem' }}><span>Running a conference? <a href="/list">List it for free</a></span><a href="/">Explore conferences</a></div>}
           {step === 'verify' && <form className="stack" onSubmit={(e) => { e.preventDefault(); go(async () => { await api.post('/api/auth/mfa/verify', { code }); nav(next); }); }}>
             <h3>Two-factor verification</h3><p className="muted small">Enter the 6-digit code from your authenticator app.</p>
             <Field label="Code"><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} autoFocus /></Field>
@@ -210,6 +228,7 @@ export function Account() {
 
 export function Home() {
   const { can, me } = useStaff();
+  if (can('event.config') || can('reg.read')) return <Navigate to="/app/overview" replace />;
   if (can('dashboard.read')) return <Navigate to="/app/dashboard" replace />;
   if (can('reg.read')) return <Navigate to="/app/registrations" replace />;
   if (can('lists.read')) return <Navigate to="/app/lists" replace />;

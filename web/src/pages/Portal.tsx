@@ -52,6 +52,7 @@ export default function Portal() {
   if (v.loading && !v.data) return <PublicShell title="Your registration"><Loading /></PublicShell>;
   if (v.error) return <PublicShell title="Your registration"><ErrorBox error={v.error} /></PublicShell>;
   const { event, registration: r, seat, payment, evidence, invoices, refunds, committees, swap } = v.data;
+  const conf = v.data.conference;
   const paid = r.payment_status === 'paid' || r.payment_status === 'part_refunded';
   const welcome = sp.get('welcome') === '1';
 
@@ -80,7 +81,7 @@ export default function Portal() {
   }
 
   return (
-    <PublicShell eyebrow="Your delegate page" title={event.name} subtitle={<>{r.full_name} · Delegate ID <strong>{r.ref}</strong></>}>
+    <PublicShell eyebrow="Your delegate page" title={event.name} logo={conf?.logo} subtitle={<>{r.full_name} · Delegate ID <strong>{r.ref}</strong></>}>
       <div className="stack">
         {orderState && orderState !== 'paid' && orderState !== 'failed' && <Alert tone="info"><strong>Processing your payment…</strong> We confirm it directly with the payment gateway. This usually takes a few seconds; you can close this page safely.</Alert>}
         {orderState === 'failed' && <Alert tone="bad">The payment did not go through. No money was taken, or it will be returned by your bank. Please try again.</Alert>}
@@ -88,7 +89,9 @@ export default function Portal() {
         {r.cancelled && <Alert tone="bad">This registration is cancelled.</Alert>}
 
         <div className="card">
-          {r.allot_status === 'waitlisted' ? (
+          {r.allot_status === 'applied' ? (
+            <div className="seat-hero">{welcome && <div className="badge good" style={{ marginBottom: '.5rem' }}>Application sent</div>}<div className="committee">Application under review</div><p className="muted">The team reviews every application and assigns committees and portfolios. We’ll email you as soon as yours is decided. Nothing is payable until then.</p></div>
+          ) : r.allot_status === 'waitlisted' ? (
             <div className="seat-hero"><div className="committee">You are on the waitlist</div><div className="portfolio">#{r.waitlist_position}</div><p className="muted">All seats in your preferred committees are taken. We’ll email you as soon as one opens. Please don’t pay until you are offered a seat.</p></div>
           ) : seat ? (
             <div className="seat-hero">
@@ -105,14 +108,15 @@ export default function Portal() {
             <div className="seat-hero"><div className="committee">Seat released</div><p className="muted">Your hold expired. Pay below and we will allot the best available seat straight away.</p></div>
           )}
           <div className="steps" style={{ justifyContent: 'center' }}>
-            <span className="done">Registered</span>
-            <span className={r.allot_status === 'held' || r.allot_status === 'confirmed' ? 'done' : 'on'}>Allotted</span>
-            <span className={paid ? 'done' : 'on'}>{r.payment_status === 'submitted' ? 'Proof under review' : 'Paid'}</span>
+            <span className="done">{conf?.allocationMode === 'review' ? 'Applied' : 'Registered'}</span>
+            <span className={r.allot_status === 'held' || r.allot_status === 'confirmed' ? 'done' : 'on'}>{conf?.allocationMode === 'review' ? 'Accepted' : 'Allotted'}</span>
+            <span className={paid ? 'done' : r.allot_status === 'applied' ? '' : 'on'}>{conf?.free ? 'Confirmed' : r.payment_status === 'submitted' ? 'Proof under review' : 'Paid'}</span>
             <span className={paid && r.dietary ? 'done' : paid ? 'on' : ''}>Profile</span>
           </div>
         </div>
 
         {v.data.checkinCode && <CheckinPass code={v.data.checkinCode} name={r.full_name} />}
+        {conf?.positionPapers?.enabled && seat && !r.cancelled && <PositionPaper token={token} conf={conf} onDone={v.reload} />}
         {payment && <PaymentCard token={token} payment={payment} reg={r} pay={pay} onDone={v.reload} />}
 
         {r.payment_status === 'submitted' && <Alert tone="info"><strong>Your payment proof is under review.</strong> The finance team checks it against the bank statement, usually within a day. Your seat stays held meanwhile.</Alert>}
@@ -185,14 +189,15 @@ function PaymentCard({ token, payment, reg, pay, onDone }: any) {
       {reg.payment_status === 'submitted' ? null : <>
         <div className="row">
           {!noGateway && <button className={`chip ${mode === 'gateway' ? 'on' : ''}`} onClick={() => setMode('gateway')}>Pay online</button>}
-          {payment.screenshot && <button className={`chip ${mode === 'upload' || noGateway ? 'on' : ''}`} onClick={() => setMode('upload')}>Paid by UPI / bank transfer</button>}
+          {payment.screenshot && payment.instructions?.proofAccepted !== false && <button className={`chip ${mode === 'upload' || noGateway ? 'on' : ''}`} onClick={() => setMode('upload')}>{payment.instructions?.link ? 'Pay and upload proof' : 'Paid by UPI / bank transfer'}</button>}
         </div>
         {mode === 'gateway' && !noGateway ? (
           <div className="stack">
             {payment.gateways.map((g: any) => <Btn key={g.name} kind={g.default ? 'primary' : undefined} size="lg" className="block" onClick={() => pay(g.name)}>{g.label}</Btn>)}
             <p className="small faint" style={{ margin: 0 }}>You will see a secure payment page. Card details never reach us.</p>
           </div>
-        ) : payment.screenshot ? <UploadProof token={token} ins={payment.instructions} onDone={onDone} /> : null}
+        ) : payment.screenshot && payment.instructions?.proofAccepted !== false ? <UploadProof token={token} ins={payment.instructions} onDone={onDone} /> : null}
+        {payment.instructions?.inPerson && <div className="callout" style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '.75rem 1rem' }}><strong>Paying in person?</strong><div className="small">{payment.instructions.inPerson.instructions}</div><div className="small faint">Quote your delegate ID {reg.ref}. The team marks it as received and you get a confirmation email.</div></div>}
       </>}
     </div>
   );
@@ -204,7 +209,7 @@ function UploadProof({ token, ins, onDone }: any) {
   const [file, setFile] = useState<File | null>(null);
   const [utr, setUtr] = useState(''); const [amount, setAmount] = useState(String(ins.amountPaise / 100)); const [paidOn, setPaidOn] = useState(today());
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (ins.upiUri) QRCode.toDataURL(ins.upiUri, { margin: 1, width: 220 }).then(setQr).catch(() => {}); }, [ins.upiUri]);
+  useEffect(() => { if (ins.qrImage) setQr(ins.qrImage); else if (ins.upiUri) QRCode.toDataURL(ins.upiUri, { margin: 1, width: 220 }).then(setQr).catch(() => {}); }, [ins.upiUri, ins.qrImage]);
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return toast('Attach the screenshot or PDF', 'bad');
@@ -216,19 +221,21 @@ function UploadProof({ token, ins, onDone }: any) {
   }
   return (
     <form className="stack" id="upload" onSubmit={submit}>
+      {ins.link && <div className="stack tight"><a className="btn primary lg" href={ins.link.url} target="_blank" rel="noreferrer">Open the payment page ↗</a>{ins.link.instructions && <p className="small muted" style={{ margin: 0 }}>{ins.link.instructions}</p>}<p className="small faint" style={{ margin: 0 }}>After paying, upload the receipt below.</p></div>}
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <dl className="kv small" style={{ margin: 0 }}>
           <dt>Amount</dt><dd>{inr(ins.amountPaise)}</dd>
           {ins.upiId && <><dt>UPI ID</dt><dd className="mono">{ins.upiId}</dd></>}
           <dt>Payee</dt><dd>{ins.payee}</dd>
-          {ins.account && <><dt>Account</dt><dd className="mono">{ins.account}</dd><dt>IFSC</dt><dd className="mono">{ins.ifsc}</dd><dt>Bank</dt><dd>{ins.bankName}</dd></>}
+          {ins.account && <>{ins.accountName && <><dt>Account name</dt><dd>{ins.accountName}</dd></>}<dt>Account</dt><dd className="mono">{ins.account} <CopyBtn v={ins.account} /></dd>{ins.ifsc && <><dt>IFSC / SWIFT</dt><dd className="mono">{ins.ifsc} <CopyBtn v={ins.ifsc} /></dd></>}{ins.bankName && <><dt>Bank</dt><dd>{ins.bankName}</dd></>}</>}
           <dt>Remark</dt><dd><strong className="mono">{ins.reference}</strong> <span className="faint">(write this in the payment note)</span></dd>
+          {(ins.bankInstructions || ins.qrInstructions) && <><dt>Note</dt><dd>{ins.bankInstructions || ins.qrInstructions}</dd></>}
         </dl>
-        {qr && <div style={{ textAlign: 'center' }}><img src={qr} alt={`UPI QR code to pay ${inr(ins.amountPaise)}`} width={180} height={180} style={{ borderRadius: 8, background: '#fff', padding: 6 }} /><div className="small faint">Scan with any UPI app</div></div>}
+        {qr && <div style={{ textAlign: 'center' }}><img src={qr} alt={`QR code to pay ${inr(ins.amountPaise)}`} width={180} height={180} style={{ borderRadius: 8, background: '#fff', padding: 6, objectFit: 'contain' }} /><div className="small faint">{ins.qrImage ? 'Scan with your banking app' : 'Scan with any UPI app'}</div></div>}
       </div>
       <Field label="Screenshot or PDF of the payment" hint="JPG, PNG or PDF, up to 5 MB"><input type="file" accept="image/jpeg,image/png,application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required /></Field>
       <div className="grid g3">
-        <Field label="UTR / transaction ID"><input value={utr} onChange={(e) => setUtr(e.target.value)} placeholder="12-digit UTR" required /></Field>
+        <Field label="Transaction reference (UTR)"><input value={utr} onChange={(e) => setUtr(e.target.value)} placeholder="e.g. 12-digit UTR" required /></Field>
         <Field label="Amount paid (₹)"><input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} required /></Field>
         <Field label="Date paid"><input type="date" value={paidOn} max={today()} onChange={(e) => setPaidOn(e.target.value)} required /></Field>
       </div>
@@ -371,6 +378,34 @@ function CheckinPass({ code, name }: { code: string; name: string }) {
         <h3 style={{ marginBottom: '.25rem' }}>Your check-in pass</h3>
         <p className="muted small" style={{ margin: 0 }}>Show this at the registration desk and committee door. It's the same code as on your printed badge.</p>
       </div>
+    </div>
+  );
+}
+
+function CopyBtn({ v }: { v: string }) {
+  const [ok, setOk] = useState(false);
+  return <button type="button" className="btn sm ghost" style={{ padding: '0 .4rem', minHeight: 0 }} onClick={async () => { try { await navigator.clipboard.writeText(v); setOk(true); setTimeout(() => setOk(false), 1200); } catch { /* blocked */ } }} aria-label="Copy">{ok ? '✓' : 'Copy'}</button>;
+}
+
+/** Position paper upload, with the chair's score and feedback once reviewed. */
+function PositionPaper({ token, conf, onDone }: { token: string; conf: any; onDone: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const latest = conf.papers?.[0];
+  const deadline = conf.positionPapers.deadline;
+  const late = deadline && deadline < new Date().toISOString();
+  return (
+    <div className="card stack">
+      <div className="row between"><h3 style={{ margin: 0 }}>Position paper</h3>{deadline && <span className={`badge ${late ? 'bad' : ''}`}>Due {new Date(deadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>}</div>
+      {latest ? <div className="stack tight">
+        <div className="row"><span className={`badge ${latest.status === 'reviewed' ? 'good' : latest.status === 'revise' ? 'warn' : ''}`}>{latest.status === 'reviewed' ? 'Reviewed' : latest.status === 'revise' ? 'Revision asked' : 'Submitted'}</span><span className="small muted">{latest.file_name}</span>{latest.score != null && <b>{latest.score}/10</b>}</div>
+        {latest.feedback && <div className="small" style={{ whiteSpace: 'pre-wrap', background: 'var(--surface-2)', padding: '.6rem .8rem', borderRadius: 8 }}>{latest.feedback}</div>}
+      </div> : <p className="small muted" style={{ margin: 0 }}>Upload your position paper as a PDF. Your chair reads it and may send feedback.</p>}
+      {!late && (!latest || latest.status === 'revise' || latest.status === 'submitted') && (
+        <label className="btn" style={{ alignSelf: 'flex-start' }}>{busy ? 'Uploading…' : latest ? 'Upload a new version' : 'Upload PDF'}
+          <input type="file" accept="application/pdf" hidden disabled={busy} onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; setBusy(true); try { const fd = new FormData(); fd.append('file', f); await api.post(`/api/public/r/${token}/paper`, fd); toast('Position paper received', 'ok'); onDone(); } catch (x: any) { toast(x.message, 'bad'); } finally { setBusy(false); } }} />
+        </label>
+      )}
     </div>
   );
 }

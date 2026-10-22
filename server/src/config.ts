@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { workspaceStore } from './util.ts';
 
 const root = path.resolve(import.meta.dirname, '../..');
 
@@ -47,3 +48,14 @@ export const config = {
   isProd: process.env.NODE_ENV === 'production',
   timezone: 'Asia/Kolkata',
 };
+
+/** Upload folder of the current workspace (each organiser's files are kept apart). */
+export function uploadDir() {
+  const w = workspaceStore.getStore();
+  return w?.dir ? path.join(w.dir, 'uploads') : config.uploadDir;
+}
+/** Backup folder of the current workspace. */
+export function backupDir() {
+  const w = workspaceStore.getStore();
+  return w?.dir ? path.join(w.dir, 'backups') : config.backup.dir;
+}

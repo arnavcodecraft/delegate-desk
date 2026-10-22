@@ -2,7 +2,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import '@fontsource-variable/inter';
+import 'flag-icons/css/flag-icons.min.css';
 import './styles.css';
+import './platform.css';
 import { applyTheme, savedTheme } from './ui';
 import { ToastHost } from './ui';
 import Register from './pages/Register';
@@ -19,6 +21,10 @@ import Books from './staff/Books';
 import { Imports, Messages, Audit } from './staff/Misc';
 import Settings from './staff/Settings';
 import CheckIn from './staff/CheckIn';
+import ListConference from './platform/ListConference';
+import { Explore, ConferencePage, Jobs, ApplicationStatus } from './platform/Explore';
+import { StartSession, SessionView, ChairConsole } from './platform/Live';
+import { Overview, ConferenceSettings, Financials, Applications, JobBoard, Documents, Sessions } from './staff/Organiser';
 
 applyTheme(savedTheme());
 
@@ -27,7 +33,15 @@ const staff = (el: React.ReactNode) => <StaffGate>{el}</StaffGate>;
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<Explore home />} />
+      <Route path="/explore" element={<Explore />} />
+      <Route path="/c/:slug" element={<ConferencePage />} />
+      <Route path="/jobs" element={<Jobs />} />
+      <Route path="/list" element={<ListConference />} />
+      <Route path="/application/:token" element={<ApplicationStatus />} />
+      <Route path="/session" element={<StartSession />} />
+      <Route path="/session/:code" element={<SessionView />} />
+      <Route path="/session/:code/chair" element={<ChairConsole />} />
       <Route path="/register/:code" element={<Register />} />
       <Route path="/register/:code/delegation" element={<DelegationRegister />} />
       <Route path="/r/:token" element={<Portal />} />
@@ -55,6 +69,13 @@ function App() {
       <Route path="/app/settings" element={staff(<Settings />)} />
       <Route path="/app/audit" element={staff(<Audit />)} />
       <Route path="/app/checkin" element={staff(<CheckIn />)} />
+      <Route path="/app/overview" element={staff(<Overview />)} />
+      <Route path="/app/conference" element={staff(<ConferenceSettings />)} />
+      <Route path="/app/financials" element={staff(<Financials />)} />
+      <Route path="/app/applications" element={staff(<Applications />)} />
+      <Route path="/app/jobs" element={staff(<JobBoard />)} />
+      <Route path="/app/documents" element={staff(<Documents />)} />
+      <Route path="/app/sessions" element={staff(<Sessions />)} />
       <Route path="*" element={<div className="empty"><h1>Page not found</h1><a href="/login">Go to sign-in</a></div>} />
     </Routes>
   );

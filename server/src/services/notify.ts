@@ -8,6 +8,38 @@ import { whatsapp, sms } from './channels.ts';
 type Tpl = { subject: string; body: string };
 // Admins edit these from the Templates screen; these are only the first-run defaults.
 export const DEFAULT_TEMPLATES: Record<string, Tpl> = {
+  application_received: {
+    subject: 'Application received: {{event_name}} ({{ref}})',
+    body: `Hi {{name}},\n\nThank you for applying to {{event_name}}. The team reviews every application and assigns committees and portfolios; we will email you as soon as yours is decided.\n\nYour application page (no password needed): {{portal_link}}\n\nRegards,\n{{event_name}} Secretariat`,
+  },
+  seat_assigned: {
+    subject: 'You have been accepted: {{committee}} – {{portfolio}}',
+    body: `Hi {{name}},\n\nGood news: you have been accepted to {{event_name}}.\n\nCommittee: {{committee}}\nPortfolio: {{portfolio}}\n\nAmount due: {{amount}}. Please pay by {{due_date}} to keep this seat.\nPay now: {{payment_link}}\n\nYour delegate page: {{portal_link}}`,
+  },
+  seat_confirmed_free: {
+    subject: 'Your seat is confirmed: {{committee}} – {{portfolio}}',
+    body: `Hi {{name}},\n\nYour place at {{event_name}} is confirmed.\n\nCommittee: {{committee}}\nPortfolio: {{portfolio}}\nBackground guide: {{guide_link}}\n\nYour delegate page (no password needed): {{portal_link}}\n\nSee you there,\n{{event_name}} Secretariat`,
+  },
+  role_application_received: {
+    subject: 'We received your application: {{role}} at {{event_name}}',
+    body: `Hi {{name}},\n\nThank you for applying for {{role}} at {{event_name}}. The secretariat will review it and email you with a decision.\n\nYou can check its status here: {{status_link}}`,
+  },
+  role_application_accepted: {
+    subject: 'Congratulations: {{role}} at {{event_name}}',
+    body: `Hi {{name}},\n\nWe are delighted to offer you the role of {{role}} at {{event_name}}.{{assignment}}\n\n{{note}}\n\nStatus page: {{status_link}}\n\nWelcome aboard,\n{{event_name}} Secretariat`,
+  },
+  role_application_rejected: {
+    subject: 'Your application to {{event_name}}',
+    body: `Hi {{name}},\n\nThank you for applying for {{role}} at {{event_name}}. We received many strong applications and are unable to offer you this role this time.\n\n{{note}}\n\nWe hope to see you at a future conference.`,
+  },
+  staff_invite: {
+    subject: 'Your {{event_name}} team account',
+    body: `Hi {{name}},\n\nYou have been added to the {{event_name}} team as {{role}}.\n\nSign in at {{login_link}} with this email and the temporary password below, then change it under My account.\n\nTemporary password: {{password}}`,
+  },
+  position_paper_reviewed: {
+    subject: 'Feedback on your position paper ({{committee}})',
+    body: `Hi {{name}},\n\nYour chair has reviewed your position paper for {{committee}}.\n\nScore: {{score}}\nFeedback: {{feedback}}\n\n{{next_step}}\n\nYour delegate page: {{portal_link}}`,
+  },
   registration_saved: {
     subject: 'You are in: {{committee}} – {{portfolio}} ({{ref}})',
     body: `Hi {{name}},\n\nThank you for registering for {{event_name}}. We have provisionally allotted you:\n\nCommittee: {{committee}}\nPortfolio: {{portfolio}}\n\nAmount due: {{amount}}\nPlease pay by {{due_date}} to keep this seat. After that it returns to the pool.\n\nPay now: {{payment_link}}\n\nYour delegate page (no password needed): {{portal_link}}\n\nRegards,\n{{event_name}} Secretariat`,

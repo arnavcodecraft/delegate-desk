@@ -2,19 +2,26 @@ import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.ts';
+import { workspaceStore } from './util.ts';
 
 export type Row = any;
 type Params = any[];
 
-let db: DatabaseSync;
-let depth = 0;
+let db: DatabaseSync;   // the main workspace's database
+const depthOf = new WeakMap<DatabaseSync, number>();
+
+/** Open a database file with the full schema applied (used for the main workspace and each organiser's). */
+export function openDatabase(file: string) {
+  if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
+  const d = new DatabaseSync(file);
+  d.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;');
+  d.exec(fs.readFileSync(path.join(import.meta.dirname, 'schema.sql'), 'utf8'));
+  migrate(d);
+  return d;
+}
 
 export function openDb(file = config.dbPath) {
-  if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
-  db = new DatabaseSync(file);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;');
-  db.exec(fs.readFileSync(path.join(import.meta.dirname, 'schema.sql'), 'utf8'));
-  migrate();
+  db = openDatabase(file);
   return db;
 }
 
@@ -27,26 +34,43 @@ const COLUMNS: [table: string, column: string, ddl: string][] = [
   ['notification', 'provider_message_id', 'TEXT'],
   ['notification', 'delivery_status', 'TEXT'],
   ['expense', 'is_po', 'INTEGER NOT NULL DEFAULT 0'],
+  ['committee', 'type', "TEXT NOT NULL DEFAULT 'mun'"],          // mun | crisis | custom | press
+  ['committee', 'topics', "TEXT NOT NULL DEFAULT '[]'"],
+  ['committee', 'difficulty', "TEXT NOT NULL DEFAULT 'intermediate'"],
+  ['committee', 'language', "TEXT NOT NULL DEFAULT 'English'"],
+  ['committee', 'emblem', 'TEXT'],
+  ['portfolio', 'code', 'TEXT'],                                  // ISO country code, for flags
+  ['registration', 'channel', 'TEXT'],                            // where the delegate came from (instagram, whatsapp ...)
+  ['registration', 'review_score', 'INTEGER'],
+  ['registration', 'review_note', 'TEXT'],
+  ['registration', 'motivation', 'TEXT'],
 ];
-function migrate() {
+function migrate(db: DatabaseSync) {
   for (const [table, column, ddl] of COLUMNS) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
     if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
   }
 }
 
-export function getDb() {
+/** The database of the workspace this code runs in (the main one outside any organiser workspace). */
+export function getDb(): DatabaseSync {
+  const w = workspaceStore.getStore();
+  if (w?.db) return w.db as DatabaseSync;
   if (!db) openDb();
   return db;
 }
+export const mainDb = () => { if (!db) openDb(); return db; };
 
-const stmtCache = new Map<string, ReturnType<DatabaseSync['prepare']>>();
+const stmtCaches = new WeakMap<DatabaseSync, Map<string, ReturnType<DatabaseSync['prepare']>>>();
 function stmt(sql: string) {
-  let s = stmtCache.get(sql);
-  if (!s) { s = getDb().prepare(sql); stmtCache.set(sql, s); }
+  const d = getDb();
+  let cache = stmtCaches.get(d);
+  if (!cache) { cache = new Map(); stmtCaches.set(d, cache); }
+  let s = cache.get(sql);
+  if (!s) { s = d.prepare(sql); cache.set(sql, s); }
   return s;
 }
-export function resetStatementCache() { stmtCache.clear(); }
+export function resetStatementCache() { stmtCaches.delete(getDb()); }
 
 function norm(params: any[]): any[] {
   return params.map((p) => (p === undefined ? null : typeof p === 'boolean' ? (p ? 1 : 0) : p));
@@ -87,16 +111,17 @@ export function update(table: string, id: string, patch: Row, idCol = 'id') {
  */
 export function tx<T>(fn: () => T): T {
   const d = getDb();
+  const depth = depthOf.get(d) ?? 0;
   const sp = `sp${depth}`;
   d.exec(depth === 0 ? 'BEGIN IMMEDIATE' : `SAVEPOINT ${sp}`);
-  depth++;
+  depthOf.set(d, depth + 1);
   try {
     const out = fn();
-    depth--;
+    depthOf.set(d, depth);
     d.exec(depth === 0 ? 'COMMIT' : `RELEASE ${sp}`);
     return out;
   } catch (e) {
-    depth--;
+    depthOf.set(d, depth);
     d.exec(depth === 0 ? 'ROLLBACK' : `ROLLBACK TO ${sp}; RELEASE ${sp}`);
     throw e;
   }

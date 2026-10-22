@@ -3,15 +3,19 @@ import cookieParser from 'cookie-parser';
 import path from 'node:path';
 import fs from 'node:fs';
 import { config } from './config.ts';
-import { openDb } from './db.ts';
+import { openDb, all } from './db.ts';
 import { seedChart } from './services/ledger.ts';
 import { seedTemplates } from './services/notify.ts';
 import { startJobs } from './services/jobs.ts';
 import { sessionMiddleware } from './auth.ts';
-import { HttpError, asSystem } from './util.ts';
+import { HttpError, asSystem, workspaceStore } from './util.ts';
+import { resolveWorkspace, allWorkspaces, inWorkspace, claimCode } from './platform.ts';
+import { syncListing } from './services/conference.ts';
 import { publicRouter, webhookRouter, serveFile } from './routes/public.ts';
 import { authRouter, adminRouter } from './routes/admin.ts';
 import { financeRouter } from './routes/finance.ts';
+import { organiserRouter } from './routes/organiser.ts';
+import { platformRouter, liveRouter } from './routes/platform.ts';
 import './services/documents.ts'; // registers email attachment builders
 import './services/badges.ts';
 
@@ -29,11 +33,15 @@ export function createApp() {
   });
   // Webhooks need the raw body for signature checks, so they are mounted before the JSON parser.
   app.use('/api/webhooks', webhookRouter);
+  // The onboarding wizard sends the logo and banner inline, so its one call gets a larger body limit.
+  app.use('/api/platform/launch', express.json({ limit: '14mb' }));
   app.use(express.json({ limit: '2mb' }));
   app.use(cookieParser());
+  // Every request runs inside one organiser's workspace (its own database and files).
+  app.use((req, _res, next) => workspaceStore.run(resolveWorkspace(req), next));
   app.use(sessionMiddleware);
   // CSRF: state-changing staff calls must carry a custom header that cross-site forms cannot set.
-  app.use(['/api/admin', '/api/finance', '/api/auth'], (req, _res, next) => {
+  app.use(['/api/admin', '/api/finance', '/api/auth', '/api/platform'], (req, _res, next) => {
     if (req.method !== 'GET' && req.headers['x-dd'] !== '1') return next(new HttpError(403, 'Missing request header'));
     next();
   });
@@ -41,6 +49,9 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/admin', adminRouter);
+  app.use('/api/admin', organiserRouter);
+  app.use('/api/platform', platformRouter);
+  app.use('/api/live', liveRouter);
   app.use('/api/finance', financeRouter);
   app.get('/api/files', serveFile);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found')));
@@ -65,6 +76,8 @@ export function createApp() {
 export function boot(dbFile?: string) {
   openDb(dbFile);
   asSystem(() => { seedChart(); seedTemplates(); });
+  // Register the main workspace's conference codes and listings so public links and Explore can find them.
+  for (const w of allWorkspaces()) inWorkspace(w, () => asSystem(() => { for (const e of all('SELECT id, code FROM event')) { try { claimCode(e.code, e.id); syncListing(e.id); } catch (err) { console.warn('[listing]', (err as Error).message); } } }));
 }
 
 if (/[\\/]index\.ts$/.test(process.argv[1] ?? '')) {

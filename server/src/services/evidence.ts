@@ -3,9 +3,9 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { all, one, run, insert, tx, update } from '../db.ts';
 import { audit } from '../audit.ts';
-import { config } from '../config.ts';
+import { config, uploadDir } from '../config.ts';
 import { eventSettings } from '../settings.ts';
-import { addHours, bad, conflict, ctx, forbidden, inr, istDate, now, sha256, uid, notFound } from '../util.ts';
+import { addHours, bad, conflict, ctx, forbidden, inr, istDate, now, sha256, uid, notFound, workspaceStore } from '../util.ts';
 import { enqueue, notifyStaff } from './notify.ts';
 import { payableNow } from './fees.ts';
 import { receive, regVars } from './payments.ts';
@@ -56,8 +56,21 @@ export const normUtr = (u: string) => String(u ?? '').toUpperCase().replace(/[^A
 export function payInstructions(reg: Record<string, any>) {
   const org = one('SELECT * FROM organization LIMIT 1')!;
   const amount = payableNow(reg);
-  const upi = org.upi_id ? `upi://pay?pa=${encodeURIComponent(org.upi_id)}&pn=${encodeURIComponent(org.legal_name)}&am=${(amount / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(reg.ref)}` : null;
-  return { upiId: org.upi_id, payee: org.legal_name, bankName: org.bank_name, account: org.bank_account, ifsc: org.bank_ifsc, amountPaise: amount, reference: reg.ref, upiUri: upi };
+  const m = eventSettings(reg.event_id).paymentMethods;
+  const custom = m.link.enabled || m.qr.enabled || m.bank.enabled || m.in_person.enabled;
+  // Organisers who set up Financials get exactly what they chose; older events fall back to the organisation's UPI and bank.
+  const upiId = custom ? (m.qr.enabled ? m.qr.upiId || null : null) : org.upi_id;
+  const payee = (custom && m.bank.accountName) || org.legal_name;
+  const upi = upiId ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payee)}&am=${(amount / 100).toFixed(2)}&cu=INR&tn=${encodeURIComponent(reg.ref)}` : null;
+  const bank = custom ? (m.bank.enabled ? m.bank : null) : org.bank_account ? { accountName: org.legal_name, accountNumber: org.bank_account, ifsc: org.bank_ifsc, bankName: org.bank_name, reference: '', instructions: '' } : null;
+  return {
+    upiId, payee, bankName: bank?.bankName ?? null, account: bank?.accountNumber ?? null, ifsc: bank?.ifsc ?? null, accountName: bank?.accountName ?? null,
+    bankInstructions: bank?.instructions || null, amountPaise: amount, reference: (bank?.reference ? `${bank.reference} ` : '') + reg.ref, upiUri: upi,
+    qrImage: custom && m.qr.enabled && m.qr.image ? `/api/public/media/${m.qr.image}` : null, qrInstructions: custom && m.qr.enabled ? m.qr.instructions || null : null,
+    link: custom && m.link.enabled ? { url: m.link.url, instructions: m.link.instructions || null } : null,
+    inPerson: custom && m.in_person.enabled ? { instructions: m.in_person.instructions || 'Pay at the registration desk. The team will mark your payment as received.' } : null,
+    proofAccepted: custom ? m.link.enabled || m.qr.enabled || m.bank.enabled : true,
+  };
 }
 
 const pendingReads = new Set<Promise<void>>();
@@ -95,8 +108,8 @@ export function submitEvidence(reg: Record<string, any>, file: { buffer: Buffer;
   const ext = mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg';
   const id = uid();
   const rel = path.join('evidence', `${id}.${ext}`);
-  fs.mkdirSync(path.join(config.uploadDir, 'evidence'), { recursive: true });
-  fs.writeFileSync(path.join(config.uploadDir, rel), file.buffer, { mode: 0o600 });
+  fs.mkdirSync(path.join(uploadDir(), 'evidence'), { recursive: true });
+  fs.writeFileSync(path.join(uploadDir(), rel), file.buffer, { mode: 0o600 });
   const extracted = extract(file.buffer, mime);
   if (extracted?.utr && normUtr(extracted.utr) !== utr) flags.push(`File shows UTR ${extracted.utr}, entered ${utr}`);
   if (extracted?.amount && extracted.amount !== input.amountPaise) flags.push(`File shows ${inr(extracted.amount)}, entered ${inr(input.amountPaise)}`);
@@ -206,12 +219,14 @@ export function escalateStale() {
 /** Expiring, signed link for private files (payment proofs, bills, ID proofs). */
 export function signedFileUrl(rel: string, minutes = 15) {
   const exp = Date.now() + minutes * 60_000;
-  const sig = crypto.createHmac('sha256', config.appSecret).update(`${rel}:${exp}`).digest('base64url');
-  return `/api/files?p=${encodeURIComponent(rel)}&e=${exp}&s=${sig}`;
+  const w = workspaceStore.getStore()?.tag ?? '';
+  const sig = crypto.createHmac('sha256', config.appSecret).update(`${w}:${rel}:${exp}`).digest('base64url');
+  return `/api/files?p=${encodeURIComponent(rel)}&e=${exp}&s=${sig}${w ? `&w=${w}` : ''}`;
 }
 export function verifyFileUrl(rel: string, exp: number, sig: string) {
   if (!rel || rel.includes('..') || exp < Date.now()) return false;
-  const want = crypto.createHmac('sha256', config.appSecret).update(`${rel}:${exp}`).digest('base64url');
+  // The workspace is part of the signature, so a link only opens files in the workspace that issued it.
+  const want = crypto.createHmac('sha256', config.appSecret).update(`${workspaceStore.getStore()?.tag ?? ''}:${rel}:${exp}`).digest('base64url');
   return want.length === sig.length && crypto.timingSafeEqual(Buffer.from(want), Buffer.from(sig));
 }
 
@@ -222,7 +237,7 @@ export function verifyFileUrl(rel: string, exp: number, sig: string) {
 export async function readProof(evidenceId: string) {
   const e = one('SELECT * FROM payment_evidence WHERE id = ?', evidenceId);
   if (!e || e.mime === 'application/pdf') return null;
-  const text = await ocrImage(fs.readFileSync(path.join(config.uploadDir, e.file_path)));
+  const text = await ocrImage(fs.readFileSync(path.join(uploadDir(), e.file_path)));
   if (!text.trim()) return null;
   const found = parseProof(text, e.amount_paise);
   const flags: string[] = JSON.parse(e.tamper_flags || '[]').filter((f: string) => !f.startsWith('Screenshot '));

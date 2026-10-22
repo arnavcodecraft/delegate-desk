@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 process.env.UPLOAD_DIR ??= fs.mkdtempSync(path.join(os.tmpdir(), 'dd-up-'));
 process.env.JOBS = 'off';
+process.env.DB_PATH ??= path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dd-main-')), 'main.db');
+process.env.PLATFORM_DB_PATH ??= path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dd-pf-')), 'platform.db');
 process.env.OCR ??= 'off';
 const { openDb, one, all } = await import('../src/db.ts');
 const { seed } = await import('../src/seed.ts');

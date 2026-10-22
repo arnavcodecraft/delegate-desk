@@ -9,6 +9,8 @@ import { releaseHolds } from './commission.ts';
 import { audit } from '../audit.ts';
 import { syncDue } from './sheets.ts';
 import { dailyBackup } from './backup.ts';
+import { syncAllListings } from './conference.ts';
+import { allWorkspaces, inWorkspace, currentWorkspace } from '../platform.ts';
 
 /** Unpaid holds return to the pool; a proof under review keeps the seat up to the grace limit. */
 export function expireHolds() {
@@ -70,11 +72,12 @@ export async function resolveProcessing() {
   }
 }
 
-let lastDaily = '';
+const lastDaily = new Map<string, string>();
 function daily() {
   const day = now().slice(0, 10);
-  if (day === lastDaily) return;
-  lastDaily = day;
+  const w = currentWorkspace().id;
+  if (lastDaily.get(w) === day) return;
+  lastDaily.set(w, day);
   try { dailyBackup(); } catch (e) { console.error('[backup]', e); notifyStaff(['admin', 'superadmin'], 'staff_alert', { title: 'Daily backup failed', message: String((e as Error).message) }); }
   const u = unsettledPayments(3);
   if (u.length) notifyStaff(['cfo', 'accountant'], 'staff_alert', { title: 'Daily reconciliation', message: `${u.length} captured gateway payment(s) older than 3 days are not in any settlement. Import the settlement report and check for mismatches.` });
@@ -85,18 +88,24 @@ export async function tick() {
     const out = { expired: expireHolds(), warned: holdWarnings(), reminded: paymentReminders(), escalated: escalateStale(), commissionReleased: Number(releaseHolds()) };
     await resolveProcessing();
     await syncDue().catch((e) => console.error('[sheets]', e));
+    syncAllListings();
     daily();
     out['sent' as keyof typeof out] = await deliverPending();
     return out;
   });
 }
 
+/** Run a job once in every organiser workspace; one workspace failing never stops the others. */
+async function everyWorkspace(name: string, fn: () => Promise<unknown>) {
+  for (const w of allWorkspaces()) await inWorkspace(w, fn).catch((e) => console.error(`[${name}:${w.id}]`, e));
+}
+
 let timer: NodeJS.Timeout | null = null;
 export function startJobs(intervalMs = 60_000) {
   if (timer) return;
-  const loop = () => tick().catch((e) => console.error('[jobs]', e));
+  const loop = () => everyWorkspace('jobs', tick);
   setTimeout(loop, 3000);
   timer = setInterval(loop, intervalMs);
   // Deliver the outbox quickly so confirmation emails arrive within seconds.
-  setInterval(() => asSystem(() => deliverPending()).catch((e) => console.error('[mail]', e)), 5000);
+  setInterval(() => everyWorkspace('mail', () => asSystem(() => deliverPending())), 5000);
 }
