@@ -4,7 +4,6 @@
  *   npm run seed            # base setup
  *   npm run seed -- --demo  # plus sample activity
  */
-import { pathToFileURL } from 'node:url';
 import { settleProofReads } from './services/evidence.ts';
 import { stopOcr } from './services/ocr.ts';
 import { openDb, one, insert, all } from './db.ts';
@@ -144,7 +143,7 @@ async function demo(eventId: string) {
   asUser(cfo.id, ['cfo'], () => { approveExpense(venueExp); approveExpense(cateringExp); });
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+if (/[\\/]seed\.ts$/.test(process.argv[1] ?? '')) {
   openDb();
   const res = asSystem(() => seed());
   if (res && process.argv.includes('--demo')) await asSystem(() => demo(res.eventId));

@@ -4,7 +4,7 @@ Delegate registration, instant committee/portfolio allotment, payments (Razorpay
 
 ## Quick start
 
-Needs Node.js 22.13 or newer (Windows, macOS or Linux).
+Needs Node.js 22.13 or newer (Windows, macOS or Linux). On Windows you can just double-click `start.bat`: it installs, loads the demo on first run, starts the app and opens the browser.
 
 ```bash
 npm install
