@@ -23,7 +23,8 @@ import './services/badges.ts';
 
 export function createApp() {
   const app = express();
-  app.set('trust proxy', 1);
+  // Hops of trusted proxies in front of the app (1 = one load balancer; 2 = Cloudflare Pages in front of a hosting platform's proxy).
+  app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
   app.disable('x-powered-by');
   app.use((_req, res, next) => {
     res.setHeader('x-content-type-options', 'nosniff');
@@ -48,6 +49,8 @@ export function createApp() {
     next();
   });
   app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+  // Behind Cloudflare Pages: with PROXY_SECRET set, only requests forwarded by the Pages worker are served.
+  if (process.env.PROXY_SECRET) app.use('/api', (req, _res, next) => (req.headers['x-proxy-secret'] === process.env.PROXY_SECRET ? next() : next(new HttpError(403, 'Use the site address, not the server address'))));
   app.use('/api/public', publicRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/admin', adminRouter);

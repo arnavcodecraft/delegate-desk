@@ -12,7 +12,8 @@
     "test": "node --import tsx --test --test-concurrency=1 \"server/test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
     "restore": "tsx server/src/restore.ts",
-    "e2e": "node e2e/run.mjs"
+    "e2e": "node e2e/run.mjs",
+    "build:pages": "npm run build && node scripts/pages.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",

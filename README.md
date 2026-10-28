@@ -91,7 +91,9 @@ Open a committee's console (Live sessions → Start / Open, or `/session`) and s
 
 AI features use Claude (`ANTHROPIC_API_KEY`) and are metered per person (`AI_DAILY_LIMIT`, default 50 a day). Without a key every tool that doesn't need AI still works and AI features say so. AI answers can be wrong: open the source.
 
-Configuration lives in environment variables; see [`.env.example`](.env.example).
+Configuration lives in environment variables or a `.env` file next to `package.json`; see [`.env.example`](.env.example).
+
+**Cloudflare:** the website goes on Cloudflare Pages (`npm run build:pages`, 157 files) and forwards `/api` to the server running on Render, a VPS or your PC through Cloudflare Tunnel. Step-by-step guide: [`CLOUDFLARE.md`](CLOUDFLARE.md).
 
 ## Conference platform (list your conference)
 

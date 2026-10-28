@@ -5,3 +5,4 @@ data/
 *.log
 e2e/screenshots/
 e2e/e2e-report.json
+cloudflare-pages/

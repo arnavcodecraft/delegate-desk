@@ -2,6 +2,8 @@ import path from 'node:path';
 import { workspaceStore } from './util.ts';
 
 const root = path.resolve(import.meta.dirname, '../..');
+// Settings can live in a .env file next to package.json (values already in the environment win). Tests never load it.
+if (!process.env.NODE_TEST_CONTEXT && !process.env.DD_NO_ENV_FILE) { try { process.loadEnvFile(path.join(root, '.env')); } catch { /* no .env file */ } }
 
 export const config = {
   root,

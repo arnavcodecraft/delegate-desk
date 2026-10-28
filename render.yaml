@@ -1,0 +1,25 @@
+# Render blueprint for the DelegateDesk server (the part Cloudflare Pages forwards /api to).
+# Render → New → Blueprint → pick this repository. The disk keeps the database and uploads between deploys.
+services:
+  - type: web
+    name: delegatedesk-api
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: BASE_URL
+        sync: false          # your Cloudflare Pages address, e.g. https://delegatedesk.pages.dev
+      - key: PROXY_SECRET
+        sync: false          # the same value you set in Cloudflare Pages
+      - key: TRUST_PROXY
+        value: "2"
+      - key: APP_SECRET
+        generateValue: true
+      - key: SMTP_URL
+        sync: false          # e.g. smtps://user:pass@smtp.gmail.com:465 (optional)
+      - key: ANTHROPIC_API_KEY
+        sync: false          # optional: turns on AI research and drafting
