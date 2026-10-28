@@ -29,7 +29,8 @@ import './services/badges.ts';
 export function createApp() {
   const app = express();
   // Hops of trusted proxies in front of the app (1 = one load balancer; 2 = Cloudflare Pages in front of a hosting platform's proxy).
-  app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
+  // "true" trusts the left-most address (only safe with PROXY_SECRET, where the Cloudflare worker sets it).
+  app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? true : Number(process.env.TRUST_PROXY ?? 1));
   app.disable('x-powered-by');
   app.use((_req, res, next) => {
     res.setHeader('x-content-type-options', 'nosniff');

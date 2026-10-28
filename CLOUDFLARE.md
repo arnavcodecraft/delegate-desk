@@ -22,7 +22,23 @@ Cloudflare Pages only hosts files. It cannot run the database or the server, so 
    - Optional: `SMTP_URL` for real emails, `ANTHROPIC_API_KEY` for AI in Prep.
 4. Note the server address Render gives you, e.g. `https://delegatedesk-api.onrender.com`.
 
-### B. Your own Windows PC with Cloudflare Tunnel (free; the PC must stay on)
+### B. Your own Windows PC with Cloudflare Tunnel: `start-live.bat` (free; the PC must stay on)
+1. Unzip `DelegateDesk-server.zip` and double-click **`start-live.bat`**. You need Node.js from nodejs.org.
+2. The first time, it asks for:
+   - your Cloudflare site address,
+   - your Google AI Studio key (optional),
+   - your Brevo key and verified sender email (for sign-up codes).
+
+   It saves them in `.env`.
+3. It downloads `cloudflared`, starts the server and the tunnel, and shows two lines, already copied:
+   ```
+   BACKEND_URL=https://something.trycloudflare.com
+   PROXY_SECRET=…
+   ```
+4. In Cloudflare, open your site → **Settings → Variables and Secrets → Import .env**, press Ctrl+V, then deploy again.
+5. Keep the window open. Each time you start it, the tunnel address changes: paste the new `BACKEND_URL` and deploy again. A permanent address needs a named tunnel on your own domain (below).
+
+#### Doing it by hand instead
 1. Unzip `DelegateDesk-server.zip` and create a file called `.env` next to `start.bat`:
    ```
    BASE_URL=https://delegatedesk.pages.dev
