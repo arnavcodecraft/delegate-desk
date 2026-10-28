@@ -6,7 +6,7 @@ import { config } from '../config.ts';
 import { eventSettings, getEvent, getOrg, orgSettings, saveEventSettings, saveOrgSettings, EXPENSE_CATEGORIES } from '../settings.ts';
 import {
   requirePerm, requireUser, can, committeeScope, createUser, setRole, rolesOf, verifyPassword, hashPassword, startSession, endSession,
-  verifyTotp, newTotpSecret, MFA_ROLES, ROLES, ROLE_LABELS, permissionMatrix, rateLimit, type Role,
+  verifyTotp, newTotpSecret, MFA_ROLES, ROLES, ROLE_LABELS, ROLE_HELP, permissionMatrix, rateLimit, type Role,
 } from '../auth.ts';
 import { bad, conflict, ctx, forbidden, json, notFound, now, token, uid, istDate, addHours, isEmail } from '../util.ts';
 import { h, upload, P } from './public.ts';
@@ -31,6 +31,8 @@ import { parseMoney } from '../util.ts';
 import { currentWorkspace } from '../platform.ts';
 import { syncListing } from '../services/conference.ts';
 
+import { forgotPassword, inviteStaff, issueUserToken, peekUserToken, resendInvite, useUserToken } from '../services/accounts.ts';
+
 export const authRouter = express.Router();
 
 authRouter.post('/login', h((req, res) => {
@@ -43,7 +45,24 @@ authRouter.post('/login', h((req, res) => {
   const roles = rolesOf(user.id).map((r) => r.role);
   const needsMfa = roles.some((r) => MFA_ROLES.includes(r as Role));
   startSession(res, req, user.id, !needsMfa);
+  run('UPDATE user SET last_login_at = ? WHERE id = ?', now(), user.id);
   return { ok: true, mfa: needsMfa ? (user.totp_enabled ? 'verify' : 'enroll') : null };
+}));
+authRouter.post('/forgot', h((req) => {
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  rateLimit(`forgot:${req.ip}`, 5, 15 * 60_000);
+  forgotPassword(email);
+  return { ok: true };
+}));
+authRouter.get('/link/:token', h((req) => { const p = peekUserToken(P(req).token); return { kind: p.kind, name: p.name, email: p.email, org: p.org }; }));
+authRouter.post('/link/:token', h((req, res) => {
+  rateLimit(`link:${req.ip}`, 10, 15 * 60_000);
+  const p = useUserToken(P(req).token, String(req.body?.password ?? ''), req.body?.name);
+  const roles = rolesOf(p.userId).map((r) => r.role);
+  const needsMfa = roles.some((r) => MFA_ROLES.includes(r as Role));
+  startSession(res, req, p.userId, !needsMfa);
+  run('UPDATE user SET last_login_at = ? WHERE id = ?', now(), p.userId);
+  return { ok: true, mfa: needsMfa ? 'enroll' : null };
 }));
 authRouter.post('/mfa/verify', h((req) => {
   if (!req.auth) throw bad('Sign in first');
@@ -417,17 +436,17 @@ adminRouter.post('/events/:id/bulk-message', requirePerm('messages.send'), h((re
 
 // ---------- users & roles ----------
 adminRouter.get('/users', requirePerm('users.manage'), h(() => ({
-  users: all('SELECT id, name, email, active, totp_enabled, created_at FROM user ORDER BY name').map((u) => ({ ...u, roles: all('SELECT ur.*, c.name AS committee FROM user_role ur LEFT JOIN committee c ON c.id = ur.committee_id WHERE ur.user_id = ?', u.id) })),
-  roles: ROLES.map((r) => ({ role: r, label: ROLE_LABELS[r], mfa: MFA_ROLES.includes(r) })),
+  users: all("SELECT id, name, email, active, totp_enabled, created_at, last_login_at, (SELECT COUNT(*) FROM user_token t WHERE t.user_id = user.id AND t.kind = 'invite' AND t.used_at IS NULL AND t.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now')) AS invite_pending FROM user ORDER BY name").map((u) => ({ ...u, roles: all('SELECT ur.*, c.name AS committee FROM user_role ur LEFT JOIN committee c ON c.id = ur.committee_id WHERE ur.user_id = ?', u.id) })),
+  roles: ROLES.map((r) => ({ role: r, label: ROLE_LABELS[r], help: ROLE_HELP[r], mfa: MFA_ROLES.includes(r) })),
   permissions: permissionMatrix(),
 })));
 adminRouter.post('/users', requirePerm('users.manage'), h((req) => {
   const b = req.body ?? {};
   if ((b.roles ?? []).some((r: any) => r.role === 'superadmin') && !req.auth!.roleNames.includes('superadmin')) throw forbidden('Only a super admin can create super admins');
-  const temp = b.password || token(9);
-  const id = createUser({ name: b.name, email: b.email, password: temp, roles: b.roles ?? [] });
-  return { id, temporaryPassword: b.password ? undefined : temp };
+  const out = inviteStaff({ name: String(b.name ?? ''), email: String(b.email ?? ''), roles: b.roles ?? [] });
+  return out;
 }));
+adminRouter.post('/users/:id/invite', requirePerm('users.manage'), h((req) => resendInvite(P(req).id)));
 adminRouter.patch('/users/:id', requirePerm('users.manage'), h((req) => {
   const u = one('SELECT * FROM user WHERE id = ?', P(req).id);
   if (!u) throw notFound('User');
@@ -459,11 +478,13 @@ adminRouter.post('/users/:id/reset-mfa', requirePerm('users.manage'), h((req) =>
   return { ok: true };
 }));
 adminRouter.post('/users/:id/reset-password', requirePerm('users.manage'), h((req) => {
-  const temp = token(9);
-  run('UPDATE user SET password_hash = ? WHERE id = ?', hashPassword(temp), P(req).id);
-  run('DELETE FROM session WHERE user_id = ?', P(req).id);
-  audit('user.password_reset', 'user', P(req).id);
-  return { temporaryPassword: temp };
+  const u = one('SELECT * FROM user WHERE id = ?', P(req).id);
+  if (!u) throw notFound('User');
+  const link = issueUserToken(u.id, 'reset');
+  enqueue('staff_password_reset', { to: u.email, recipientKind: 'staff', vars: { name: u.name, reset_link: link } });
+  run('DELETE FROM session WHERE user_id = ?', u.id);
+  audit('user.password_reset', 'user', u.id);
+  return { resetLink: link };
 }));
 adminRouter.get('/login-log', requirePerm('audit.read'), h(() => all('SELECT * FROM login_log ORDER BY at DESC LIMIT 300')));
 

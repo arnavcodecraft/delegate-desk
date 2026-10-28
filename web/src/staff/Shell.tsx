@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { DASHBOARD_TOUR, Tour, tourSeen } from './Tour';
 import { Alert, Btn, Field, Loading, useAsync, applyTheme, savedTheme, type Theme } from '../ui';
 import {
   LayoutDashboard, Users, ListChecks, Landmark, ScanLine, Mail, Upload, ReceiptText, CreditCard, Handshake, Wallet, BookOpen, Settings,
-  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, type LucideIcon,
+  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, type LucideIcon,
 } from 'lucide-react';
 
 export interface Me {
@@ -82,10 +83,13 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>(savedTheme());
   const [assistant, setAssistant] = useState(false);
+  const [tour, setTour] = useState(false);
   const ai = useAsync<{ enabled: boolean }>(() => api.get('/api/admin/ai/status'), []);
   const nav = useNavigate();
   const loc = useLocation();
   useEffect(() => setOpen(false), [loc.pathname]);
+  // First visit to the dashboard: offer the tour once (organisers with set-up rights).
+  useEffect(() => { if (loc.pathname === '/app/overview' && can('event.config') && me.events.length && !tourSeen(me.user!.id) && window.innerWidth > 900) { const t = setTimeout(() => setTour(true), 900); return () => clearTimeout(t); } }, [loc.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
   const cycleTheme = () => { const t: Theme = theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system'; setTheme(t); applyTheme(t); };
   const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
   return (
@@ -93,7 +97,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <aside className={`side ${open ? 'open' : ''}`} aria-label="Main navigation">
         <div className="brand"><span className="logo">D</span>DelegateDesk</div>
         {me.events.length > 0 && (
-          <div className="event-switch">
+          <div className="event-switch" data-tour="switch">
             <select aria-label="Conference" value={eventId} onChange={(e) => (e.target.value === '__new' ? nav('/list') : setEventId(e.target.value))}>
               {me.events.map((e) => <option key={e.id} value={e.id}>{e.code} · {e.name}</option>)}
               {can('event.config') && <option value="__new">+ New conference…</option>}
@@ -104,7 +108,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         {NAV.map((g) => {
           const items = g.items.filter((i) => can(...i.perms));
           if (!items.length) return null;
-          return <React.Fragment key={g.group}><div className="group">{g.group}</div>{items.map((i) => <NavLink key={i.to} to={i.to} end={i.to === '/app/payments'} className={({ isActive }) => `nav ${isActive ? 'active' : ''}`}><i.icon className="icon" aria-hidden />{i.label}</NavLink>)}</React.Fragment>;
+          return <React.Fragment key={g.group}><div className="group" data-tour={`nav-${g.group.toLowerCase()}`}>{g.group}</div>{items.map((i) => <NavLink key={i.to} to={i.to} end={i.to === '/app/payments'} className={({ isActive }) => `nav ${isActive ? 'active' : ''}`}><i.icon className="icon" aria-hidden />{i.label}</NavLink>)}</React.Fragment>;
         })}
         <span className="spacer" />
         <div className="user-box">
@@ -115,6 +119,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <NavLink to="/app/account" className="btn sm ghost"><UserRound className="icon" />Account</NavLink>
           <a href="/" className="btn sm ghost icon-only" title="Explore conferences" aria-label="Explore conferences"><Globe2 className="icon" /></a>
           <button className="btn sm ghost icon-only" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}`}><ThemeIcon className="icon" /></button>
+          {can('event.config') && <button className="btn sm ghost icon-only" data-tour="help" onClick={() => { if (loc.pathname !== '/app/overview') nav('/app/overview'); setTour(true); }} title="Take the tour" aria-label="Take the tour"><CircleHelp className="icon" /></button>}
           <span className="spacer" />
           <button className="btn sm ghost" onClick={async () => { await api.post('/api/auth/logout'); nav('/login'); }}><LogOut className="icon" />Sign out</button>
         </div>
@@ -126,6 +131,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       </div>
       {ai.data?.enabled && eventId && !assistant && <button className="btn primary fab no-print" onClick={() => setAssistant(true)}><Sparkles className="icon" />Ask</button>}
       {assistant && <Assistant eventId={eventId} onClose={() => setAssistant(false)} />}
+      {tour && <Tour steps={DASHBOARD_TOUR} who={me.user!.id} onClose={() => setTour(false)} />}
     </div>
   );
 }
@@ -170,7 +176,7 @@ export function PageHead({ title, subtitle, children }: { title: React.ReactNode
 export function Login() {
   const nav = useNavigate();
   const next = new URLSearchParams(window.location.search).get('next') || '/app';
-  const [step, setStep] = useState<'password' | 'verify' | 'enroll'>('password');
+  const [step, setStep] = useState<'password' | 'verify' | 'enroll' | 'forgot' | 'sent'>('password');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [code, setCode] = useState('');
   const [enroll, setEnroll] = useState<{ qr: string; secret: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -178,7 +184,7 @@ export function Login() {
   useEffect(() => { if (step === 'enroll' && !enroll) api.post<any>('/api/auth/mfa/enroll').then(setEnroll).catch((e) => setError(e.message)); }, [step, enroll]);
   async function go(fn: () => Promise<void>) { setError(null); try { await fn(); } catch (e: any) { setError(e.message); } }
   return (
-    <div className="public"><div className="public-head"><div className="inner"><h1>DelegateDesk</h1><p>Sign in to manage your conference</p></div></div>
+    <div className="public"><div className="public-head"><div className="inner"><div className="eyebrow">Organisers &amp; conference teams</div><h1>Sign in to DelegateDesk</h1><p>Manage applications, payments, committees and sessions.</p></div></div>
       <div className="public-body" style={{ maxWidth: 440 }}>
         <div className="card stack">
           {error && <Alert tone="bad">{error}</Alert>}
@@ -186,8 +192,15 @@ export function Login() {
             <Field label="Email"><input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></Field>
             <Field label="Password"><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
             <button className="btn primary lg">Sign in</button>
-            <p className="small faint" style={{ margin: 0 }}>Delegates don’t need an account — use the link in your registration email.</p>
+            <div className="row between small"><button type="button" className="btn ghost sm" onClick={() => { setError(null); setStep('forgot'); }}>Forgot password?</button><a href="/account">Delegate, advisor or chair? Sign in here</a></div>
           </form>}
+          {step === 'forgot' && <form className="stack" onSubmit={(e) => { e.preventDefault(); go(async () => { await api.post('/api/auth/forgot', { email }); setStep('sent'); }); }}>
+            <h3>Reset your password</h3><p className="muted small">Enter your work email. If it has an account, we email a link to choose a new password.</p>
+            <Field label="Email"><input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></Field>
+            <button className="btn primary lg">Email me a link</button>
+            <button type="button" className="btn ghost" onClick={() => setStep('password')}>Back to sign in</button>
+          </form>}
+          {step === 'sent' && <div className="stack"><h3>Check your email</h3><p className="muted small">If {email} has an account, a reset link is on its way. It works once and expires in an hour.</p><button className="btn" onClick={() => setStep('password')}>Back to sign in</button></div>}
           {step === 'password' && <div className="row between small" style={{ borderTop: '1px solid var(--border)', paddingTop: '.75rem' }}><span>Running a conference? <a href="/list">List it for free</a></span><a href="/">Explore conferences</a></div>}
           {step === 'verify' && <form className="stack" onSubmit={(e) => { e.preventDefault(); go(async () => { await api.post('/api/auth/mfa/verify', { code }); nav(next); }); }}>
             <h3>Two-factor verification</h3><p className="muted small">Enter the 6-digit code from your authenticator app.</p>

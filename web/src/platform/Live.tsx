@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
-  Play, Pause, RotateCcw, SkipForward, Hand, Users, Gavel, Timer, Vote, Plus, X, Check, Copy, LogIn, Radio, Power, Trash2, ShieldAlert, Smartphone,
+  Play, Pause, RotateCcw, SkipForward, Hand, Users, Gavel, Timer, Vote, Plus, X, Check, Copy, LogIn, Radio, Power, Trash2, ShieldAlert, Smartphone, ClipboardList,
 } from 'lucide-react';
 import { api } from '../api';
 import { PlatformShell } from './Shell';
 import { Flag } from './art';
 import { CommitteeEditor, blankCommittee } from './CommitteeEditor';
+import { Amendments, FloorMarking, MarkingBoard, MarkingOff } from './Marking';
 
 type Presence = 'absent' | 'present' | 'present_voting';
 const keyFor = (code: string) => `dd-live-key-${code}`;
@@ -150,6 +151,7 @@ export function SessionView() {
               : <div className={`lv-result ${s.vote.result.passed ? 'pass' : 'fail'}`}>{s.vote.result.passed ? 'Passed' : s.vote.result.vetoedBy?.length ? `Failed: veto by ${s.vote.result.vetoedBy.join(', ')}` : 'Failed'} · {s.vote.result.for}–{s.vote.result.against}–{s.vote.result.abstain}</div>}
           </div>
         </div>
+        <div style={{ marginTop: 16 }}><Amendments s={s} /></div>
       </div>
     </PlatformShell>
   );
@@ -171,6 +173,8 @@ export function ChairConsole() {
   const [motion, setMotion] = useState({ motionType: 'moderated', proposer: '', duration: '10', speakingTime: '45', topic: '' });
   const [voteForm, setVoteForm] = useState({ title: '', kind: 'substantive', rule: 'simple', deviceVoting: false });
   const [addSpeaker, setAddSpeaker] = useState('');
+  const [view, setView] = useState<'floor' | 'marking'>(() => (store.get(`dd-live-view-${code}`) as any) || 'floor');
+  useEffect(() => store.set(`dd-live-view-${code}`, view), [view, code]);
   const [meta, setMeta] = useState<any>(null);
   useEffect(() => { api.get('/api/live/meta').then(setMeta).catch(() => {}); }, []);
   const run = async (a: any) => { setErr(null); try { await act(a); } catch (e: any) { setErr(e.message); } };
@@ -199,6 +203,11 @@ export function ChairConsole() {
         <button className="pf-btn danger sm" onClick={async () => { if (confirm('End this session? It becomes read-only.')) { await fetch(`/api/live/${code}/end`, { method: 'POST', headers: { 'x-chair-key': key } }); nav('/session'); } }}><Power className="icon" />End</button>
       </div>
       {err && <div className="pf-note" style={{ marginBottom: 12, background: 'var(--pf-red-soft)', color: 'var(--pf-red)' }}><ShieldAlert className="icon" /><span>{err}</span></div>}
+      <div className="mk-switch" role="tablist" aria-label="Console view">
+        <button role="tab" aria-selected={view === 'floor'} className={view === 'floor' ? 'on' : ''} onClick={() => setView('floor')}><Gavel className="icon" />Floor</button>
+        <button role="tab" aria-selected={view === 'marking'} className={view === 'marking' ? 'on' : ''} onClick={() => setView('marking')}><ClipboardList className="icon" />EB marking{s.marking ? '' : ' (off)'}</button>
+      </div>
+      {view === 'marking' ? (s.marking ? <MarkingBoard s={s} run={run} code={code} chairKey={key} /> : <MarkingOff run={run} presets={meta?.presets ?? []} />) : <>
       <div className="lv">
         {/* roll call */}
         <div className="pf-card" style={{ padding: 12 }}>
@@ -234,6 +243,7 @@ export function ChairConsole() {
             </div>
             <div className="pf-small pf-muted" style={{ marginTop: 10 }}>Speaking time <input type="number" min={10} max={600} defaultValue={s.speakers.speakingTime} style={{ width: 70 }} onBlur={(e) => Number(e.target.value) !== s.speakers.speakingTime && run({ type: 'speaking_time', seconds: Number(e.target.value) })} aria-label="Speaking time in seconds" /> seconds</div>
           </div>
+          {s.marking?.enabled && <FloorMarking s={s} run={run} />}
           <div className="pf-card pad">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}><b style={{ flex: 1 }}>Speakers list</b>{s.speakers.queue.length > 0 && <button className="pf-btn link" onClick={() => run({ type: 'speaker_clear' })}>Clear</button>}</div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
@@ -305,8 +315,10 @@ export function ChairConsole() {
               </div>
             )}
           </div>
+          <Amendments s={s} run={run} />
         </div>
       </div>
+      </>}
       <div className="pf-small pf-muted pf-center" style={{ marginTop: 16 }}><Radio className="icon" style={{ width: 13, height: 13, verticalAlign: -2 }} /> Delegates see changes within two seconds. ★ marks veto holders.</div>
     </PlatformShell>
   );

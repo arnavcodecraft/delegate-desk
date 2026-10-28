@@ -51,6 +51,10 @@ export default function Register() {
   const [refHint, setRefHint] = useState<string[]>([]);
   const started = useRef(Date.now());
   const [honey, setHoney] = useState('');
+  // Signed in to a DelegateDesk account: fill in the name, email and school once.
+  useEffect(() => {
+    api.get<any>('/api/me').then((m) => { if (m.person) setF((x) => (x.full_name || x.email ? x : { ...x, full_name: m.person.name, email: m.person.email, institution: m.person.school ?? '', city: m.person.city ?? '' })); }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [otp, setOtp] = useState<OtpState>({ step: 'idle' });
 
   // Draft saved every few seconds so a dropped connection loses nothing.
@@ -112,7 +116,7 @@ export default function Register() {
     <PublicShell eyebrow={review ? 'Delegate application' : 'Delegate registration'} title={ev.event.name} logo={ev.profile?.logo} banner={ev.profile?.banner} meta={<>{(ev.event.venue || ev.event.city) && <span><MapPin className="icon" />{[ev.event.venue, ev.event.city].filter(Boolean).join(', ')}</span>}{ev.event.start_date && <span><CalendarDays className="icon" />{date(ev.event.start_date)} – {date(ev.event.end_date)}</span>}</>}>
       <div className="card stack">
         <div className="row between"><h2 style={{ margin: 0 }}>{review ? 'Apply in a minute' : 'Register in 30 seconds'}</h2><Link to={`/register/${code}/delegation`} className="small">Registering a whole delegation?</Link></div>
-        <p className="muted small" style={{ margin: 0 }}>{review ? 'No account or password. The team reviews every application and emails you your committee and portfolio.' : 'No account or password. You get your committee and portfolio on the next screen.'}{ev.profile?.slug && <> · <a href={`/c/${ev.profile.slug}`}>About this conference</a></>}</p>
+        <p className="muted small" style={{ margin: 0 }}>{review ? 'The team reviews every application and emails you your committee and portfolio.' : 'You get your committee and portfolio on the next screen.'}{ev.profile?.slug && <> · <a href={`/c/${ev.profile.slug}`}>About this conference</a></>}</p>
         {closed && <Alert tone="warn">{closedWhy}</Alert>}
         {saved && emptyForm && !closed && <div className="row" style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '.5rem .75rem' }}><span className="small" style={{ flex: 1 }}>Registered with us before as <b>{saved.full_name}</b>?</span><button type="button" className="btn sm" onClick={() => setF((x) => ({ ...x, ...saved }))}>Use my details</button></div>}
         {formError && <Alert tone="bad">{formError}</Alert>}

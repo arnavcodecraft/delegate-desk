@@ -18,7 +18,7 @@ import {
   papers, reviewPaper,
 } from '../services/applications.ts';
 import { receive } from '../services/payments.ts';
-import { createSession, sessionsFor, sessionRow, rotateChairKey } from '../services/live.ts';
+import { createSession, sessionsFor, sessionRow, rotateChairKey, sessionMarks } from '../services/live.ts';
 import { currentWorkspace } from '../platform.ts';
 import { checkUpload } from '../services/scanner.ts';
 
@@ -162,4 +162,26 @@ organiserRouter.post('/live/:code/open', requirePerm('lists.read', 'attendance.m
   if (row.workspace_id !== currentWorkspace().id) throw notFound('Session');
   mayRunCommittee(req, row.committee_id);
   return { code: row.code, chairKey: rotateChairKey(row.code) };
+}));
+
+/** Hand the EB's awards to the delegates holding those portfolios, so certificates print them. */
+organiserRouter.post('/live/:code/awards', requirePerm('attendance.mark'), h((req) => {
+  const { row, marksheet } = sessionMarks(P(req).code);
+  if (row.workspace_id !== currentWorkspace().id || !row.committee_id) throw notFound('Session');
+  mayRunCommittee(req, row.committee_id);
+  if (!marksheet) throw bad('Turn on EB marking first');
+  const holders = all(`SELECT r.id, r.award, p.name AS portfolio FROM portfolio p JOIN seat s ON s.portfolio_id = p.id JOIN registration r ON r.id = s.registration_id
+    WHERE p.committee_id = ? AND r.cancelled_at IS NULL`, row.committee_id);
+  const given: { portfolio: string; award: string; delegates: number }[] = [];
+  tx(() => {
+    for (const h of holders) {
+      const r = marksheet.rows.find((x) => x.portfolio.toLowerCase() === String(h.portfolio).toLowerCase());
+      const award = r?.award ?? null;
+      if ((h.award ?? null) === award) continue;
+      update('registration', h.id, { award });
+      audit('award.set', 'registration', h.id, { award: h.award }, { award, from: 'eb_marking' });
+    }
+    for (const r of marksheet.rows.filter((x) => x.award)) given.push({ portfolio: r.portfolio, award: r.award!, delegates: holders.filter((h) => String(h.portfolio).toLowerCase() === r.portfolio.toLowerCase()).length });
+  });
+  return { given };
 }));

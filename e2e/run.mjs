@@ -17,13 +17,13 @@ const dec = (s) => { let b = 0, v = 0; const o = []; for (const c of s) { v = (v
 const totp = (s) => { const b = Buffer.alloc(8); b.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000))); const m = crypto.createHmac('sha1', dec(s)).update(b).digest(); const o = m[m.length - 1] & 15; return String((m.readUInt32BE(o) & 0x7fffffff) % 1e6).padStart(6, '0'); };
 
 const br = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
-const expected = [/\/api\/auth\/me/, /checkin\b.*400/];
+const expected = [/\/api\/auth\/me/, /checkin\b.*400/, /\/api\/prep\/(research|draft|coach|practice|briefing|compare)/, /\/api\/prep\/projects\/[^/]+\/tasks/];
 function watch(page, who) {
   page.on('pageerror', (e) => problems.push(`[${who}] JS error on ${page.url()}: ${e.message}`));
   page.on('response', (r) => { const s = r.status(); if (s >= 500 || (s >= 400 && s !== 401 && !expected.some((x) => x.test(r.url())))) problems.push(`[${who}] HTTP ${s} ${r.request().method()} ${r.url().replace(B, '')}`); });
   page.on('dialog', (d) => d.accept());
 }
-async function newPage(who, mobile = false) { const ctx = await br.newContext({ viewport: mobile ? { width: 400, height: 860 } : { width: 1360, height: 900 }, acceptDownloads: true }); const p = await ctx.newPage(); watch(p, who); return p; }
+async function newPage(who, mobile = false) { const ctx = await br.newContext({ viewport: mobile ? { width: 400, height: 860 } : { width: 1360, height: 900 }, acceptDownloads: true }); if (who !== 'organiser') await ctx.addInitScript(() => { try { localStorage.setItem('dd-tour-off', '1'); } catch {} }); const p = await ctx.newPage(); watch(p, who); return p; }
 let current = '';
 async function step(name, page, fn) {
   current = name;
@@ -78,6 +78,16 @@ await step('wizard: create Test Model United Nations', org, async () => {
   const me = await api(org, 'GET', '/api/auth/me');
   eventId = me.events[0].id; code = me.events[0].code; slug = code.toLowerCase();
   if (!/^TMUN/.test(code)) throw new Error('unexpected code ' + code);
+});
+await step('dashboard tour runs on first visit and can be replayed', org, async () => {
+  await org.goto(`${B}/app/overview`); await org.waitForSelector('.tour-card', { timeout: 8000 });
+  for (let i = 0; i < 12 && await org.getByRole('button', { name: 'Next', exact: true }).count(); i++) { await org.getByRole('button', { name: 'Next', exact: true }).click(); await org.waitForTimeout(450); }
+  await org.getByRole('button', { name: 'Done', exact: true }).click(); await org.waitForTimeout(300);
+  if (await org.locator('.tour-card').count()) throw new Error('tour did not close');
+  await org.reload(); await org.waitForTimeout(1500);
+  if (await org.locator('.tour-card').count()) throw new Error('tour came back after finishing');
+  await org.getByRole('button', { name: 'Take the tour' }).click(); await org.waitForSelector('.tour-card');
+  await org.getByRole('button', { name: 'Skip' }).click();
 });
 await step('dashboard shows draft and priorities', org, async () => {
   await org.goto(`${B}/app/overview`); await org.waitForSelector('text=Set-up priorities');
@@ -226,7 +236,7 @@ await step('faculty advisor applies; organiser accepts', org, async () => {
   await org.getByRole('button', { name: 'Accept', exact: true }).click(); await org.waitForTimeout(800);
   await a.getByRole('link', { name: 'Check its status' }).click(); await a.waitForSelector('text=Accepted');
 });
-let chairPass = '';
+let chairInvite = '';
 await step('chair applies from the Job Board with a CV; organiser accepts with an account', org, async () => {
   const c = await newPage('chair applicant');
   await c.goto(`${B}/jobs`); await c.locator('.pf-job', { hasText: 'Director, UNSC' }).getByRole('button', { name: 'Apply' }).click();
@@ -237,12 +247,14 @@ await step('chair applies from the Job Board with a CV; organiser accepts with a
   await org.goto(`${B}/app/applications?tab=team`); await org.getByText('Charu Chair').click();
   await org.getByRole('button', { name: 'Accept', exact: true }).click(); await org.waitForTimeout(1000);
   const mail = (await api(org, 'GET', '/api/admin/notifications?q=charu')).find((n) => n.template_key === 'staff_invite');
-  chairPass = /Temporary password: (\S+)/.exec(mail?.body ?? '')?.[1] ?? '';
-  if (!chairPass) throw new Error('no staff invite email with a password');
+  chairInvite = /(https?:\/\/\S+\/invite\/\S+)/.exec(mail?.body ?? '')?.[1] ?? '';
+  if (!chairInvite) throw new Error('no staff invite email with a link');
 });
 await step('chair signs in, reviews the position paper and runs a live session', org, async () => {
   const ch = await newPage('chair');
-  await ch.goto(`${B}/login`); await ch.getByLabel('Email').fill('charu@chairs.example'); await ch.getByLabel('Password').fill(chairPass); await ch.getByRole('button', { name: 'Sign in' }).click();
+  await ch.goto(chairInvite.replace(/^https?:\/\/[^/]+/, B)); await ch.waitForSelector('text=For charu@chairs.example');
+  await ch.getByLabel('Password', { exact: true }).fill('charu-chair-pass'); await ch.getByLabel('Type it again').fill('charu-chair-pass');
+  await ch.getByRole('button', { name: /Set password and open the dashboard/ }).click();
   await ch.waitForURL(/\/app/); await ch.goto(`${B}/app/documents`); await ch.waitForSelector('text=Position papers');
   await ch.getByText('Aisha Delegate').click(); await ch.getByLabel('Score (0–10)').selectOption('8'); await ch.getByLabel('Feedback').fill('Clear and well researched.');
   await ch.getByRole('button', { name: 'Send feedback' }).click(); await ch.waitForTimeout(700);
@@ -255,6 +267,28 @@ await step('chair signs in, reviews the position paper and runs a live session',
   for (const y of await con.locator('.lv-ballot button.for').all()) await y.click();
   await con.getByRole('button', { name: 'Close the vote' }).click(); await con.waitForSelector('text=Passes');
   await con.screenshot({ path: `${SHOTS}/07-chair-console.png`, fullPage: true });
+  // EB marking: a caucus segment, a recognised speech with a mark and verbatim, a POI, a chit, lobbying, the export and awards.
+  await con.getByRole('tab', { name: /EB marking/ }).click(); await con.getByRole('button', { name: 'Start marking' }).click(); await con.waitForSelector('text=Segments');
+  await con.getByPlaceholder('Topic (optional)').fill('Maritime security'); await con.getByRole('button', { name: 'Add', exact: true }).click(); await con.waitForSelector('text=MOD-1');
+  const rec = con.getByLabel('Recognise a delegation').last(); await rec.selectOption({ index: 1 }); await con.getByRole('button', { name: 'Recognise' }).last().click();
+  await con.waitForSelector('.mk-speech'); const score = con.locator('.mk-speech .mk-score').first(); await score.fill('4.5'); await score.press('Enter');
+  await con.locator('.mk-speech textarea').first().fill('Cited UNCLOS article 87 and called for joint patrols.'); await con.waitForTimeout(1200);
+  await con.getByLabel('Asked by').last().selectOption({ index: 2 }); await con.getByRole('button', { name: 'Add POI' }).click(); await con.waitForTimeout(400);
+  await con.locator('.mk-line .mk-score').first().fill('0.5'); await con.locator('.mk-line .mk-score').first().press('Enter'); await con.waitForTimeout(400);
+  await con.getByLabel('From').selectOption({ index: 1 }); await con.getByLabel('Chit mark').fill('8'); await con.getByRole('button', { name: 'Add chit' }).click(); await con.waitForTimeout(500);
+  await con.getByRole('tab', { name: 'Marksheet' }).click(); await con.waitForSelector('.mk-table');
+  const lob = con.locator('.mk-table input[aria-label^="Lobbying"]').first(); await lob.fill('3'); await lob.press('Enter'); await con.waitForTimeout(600);
+  const top = await con.locator('.mk-table tbody tr').first().locator('td.tot').innerText();
+  if (!(Number(top) > 0)) throw new Error('marksheet total not computed: ' + top);
+  const [dl] = await Promise.all([con.waitForEvent('download'), con.getByRole('button', { name: 'Export Excel' }).click()]);
+  if (!/marksheet\.xlsx$/.test(dl.suggestedFilename())) throw new Error('bad export name ' + dl.suggestedFilename());
+  await con.getByRole('tab', { name: 'Verbatim' }).click(); await con.waitForSelector('text=Cited UNCLOS article 87');
+  await con.getByRole('tab', { name: 'Recognition' }).click(); await con.waitForSelector('text=Least recognised first');
+  await con.getByRole('tab', { name: 'Scheme' }).click(); await con.getByRole('button', { name: 'Save scheme' }).click(); await con.waitForTimeout(400);
+  await con.getByRole('button', { name: 'Send awards to certificates' }).click(); await con.waitForTimeout(1200);
+  await con.screenshot({ path: `${SHOTS}/08-eb-marking.png`, fullPage: true });
+  const pub = await (await fetch(`${B}/api/live/${con.url().split('/session/')[1].split('/')[0]}`)).json();
+  if (pub.marking !== undefined || pub.marksheet !== undefined) throw new Error('marks leaked to the public view');
   await delA.reload(); await delA.waitForSelector('text=8/10');
 });
 await step('documents: upload a study guide PDF', org, async () => {
@@ -311,6 +345,14 @@ await step('settings: every tab loads; invite a team member; back up now', org, 
   await org.getByRole('tab', { name: 'Event rules' }).click(); await org.getByRole('button', { name: 'Save event settings' }).click(); await org.waitForTimeout(500);
   await org.getByRole('tab', { name: 'Users & roles' }).click(); await org.getByRole('button', { name: /Invite staff/ }).click();
   await org.getByLabel('Name').fill('Dev Desk'); await org.getByLabel('Email').fill('dev@testmun.example'); await org.getByRole('button', { name: 'Confirm' }).click(); await org.getByRole('button', { name: 'Done' }).click(); await org.waitForSelector('text=Dev Desk');
+  await org.waitForSelector('text=Invited');
+  const inviteMail = (await api(org, 'GET', '/api/admin/notifications?q=dev@testmun')).find((n) => n.template_key === 'staff_invite');
+  const link = /(https?:\/\/\S+\/invite\/\S+)/.exec(inviteMail?.body ?? '')?.[1];
+  if (!link) throw new Error('no invite link emailed');
+  const dev = await newPage('invited staff');
+  await dev.goto(link.replace(/^https?:\/\/[^/]+/, B)); await dev.getByLabel('Password', { exact: true }).fill('dev-desk-pass-1'); await dev.getByLabel('Type it again').fill('dev-desk-pass-1');
+  await dev.getByRole('button', { name: /Set password/ }).click(); await dev.waitForURL(/\/app/);
+  await dev.context().close();
   await org.getByRole('tab', { name: 'Backups' }).click(); await org.getByRole('button', { name: 'Back up now' }).click(); await org.waitForSelector('text=Passed', { timeout: 15000 });
 });
 await step('every organiser screen opens without errors', org, async () => {
@@ -319,6 +361,43 @@ await step('every organiser screen opens without errors', org, async () => {
 });
 await step('organiser cannot see the demo organiser\'s conference', org, async () => {
   const me = await api(org, 'GET', '/api/auth/me'); if (me.events.some((e) => e.code === 'BGYS27')) throw new Error('isolation broken');
+});
+
+// ============ delegate account and Prep ============
+await step('delegate account: sign up, confirm the email, see the conference', org, async () => {
+  const s = await newPage('student');
+  await s.goto(`${B}/account?mode=signup`); await s.getByLabel('Your name').fill('Aisha Delegate'); await s.getByLabel('Email').fill('aisha@example.com');
+  await s.getByLabel('Password').fill('aisha-pass-123'); await s.getByRole('button', { name: 'Create account' }).click();
+  await s.waitForSelector('text=Confirm your email');
+  const code = (await s.locator('text=/here is your code/').innerText()).match(/\d{6}/)[0];
+  await s.getByLabel('Verification code').fill(code); await s.getByRole('button', { name: 'Confirm' }).click();
+  await s.waitForSelector('text=Test Model United Nations');
+  await s.screenshot({ path: `${SHOTS}/09-account.png`, fullPage: true });
+  globalThis.student = s;
+});
+await step('prep: tools work without AI or an account', org, async () => {
+  const s = await newPage('tools visitor');
+  await s.goto(`${B}/prep/tools`); await s.waitForSelector('text=Resolution formatter');
+  await s.goto(`${B}/prep/tools/formatter`); await s.waitForSelector('text=Decides to remain seized of the matter.');
+  await s.goto(`${B}/prep/tools/voting`); await s.getByLabel('Yes').fill('10'); await s.getByLabel('No').fill('4'); await s.waitForSelector('text=Passes');
+  await s.getByRole('button', { name: 'Security Council (substantive)' }).click(); await s.getByLabel('P5 voting no').fill('1'); await s.waitForSelector('text=Fails');
+  await s.goto(`${B}/prep/tools/decoder`); await s.waitForSelector('text=Security Council');
+  for (const t of ['timer', 'speakers', 'quorum', 'motions', 'acronyms', 'placards', 'allocation', 'packing']) { await s.goto(`${B}/prep/tools/${t}`); await s.waitForTimeout(400); if (await s.locator('text=Tool not found').count()) throw new Error(t); }
+  await s.goto(`${B}/prep/countries`); await s.getByLabel('Search countries').fill('India'); await s.waitForSelector('text=New Delhi');
+  await s.goto(`${B}/prep/coach`); await s.locator('.pp-editor').fill('Background: the topic. '.repeat(30)); await s.waitForSelector('text=Country policy');
+  await s.context().close();
+});
+await step('prep: research project, team invite, learning streak (AI off reports clearly)', org, async () => {
+  const s = globalThis.student;
+  await s.goto(`${B}/prep/research`); await s.getByLabel('Delegation').fill('Pakistan'); await s.getByLabel('Committee').fill('UNSC'); await s.getByLabel('Topic').fill('Maritime security');
+  await s.getByRole('button', { name: 'Create project' }).click(); await s.waitForURL(/\/prep\/projects\//);
+  await s.getByRole('button', { name: /Run \d+ tasks?/ }).click(); await s.waitForSelector('text=/not switched on/');
+  await s.getByPlaceholder('Teammate or advisor email').fill('advisor@example.com'); await s.getByRole('button', { name: 'Invite' }).click(); await s.waitForSelector('text=advisor@example.com');
+  await s.getByPlaceholder('Paste a quote, a link or your own notes').fill('Our red line: no new sanctions.'); await s.getByRole('button', { name: 'Add', exact: true }).click(); await s.waitForSelector('text=Our red line');
+  await s.goto(`${B}/prep/learn/un-1`); for (const q of await s.locator('.pp-q').all()) await q.locator('.pp-opts button').first().click();
+  await s.waitForSelector('text=Saved to your progress'); await s.goto(`${B}/prep/learn`); await s.waitForSelector('text=1 day streak');
+  for (const pg of ['/prep', '/prep/write', '/prep/practice', '/prep/discover']) { await s.goto(B + pg); await s.waitForTimeout(500); }
+  await s.context().close();
 });
 
 // ============ standalone live session ============

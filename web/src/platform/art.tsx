@@ -4,77 +4,68 @@ import {
 } from 'lucide-react';
 import { EMBLEMS } from '../data/committees';
 
-/* Flat illustrations for the wizard's choice cards, drawn in the platform palette. */
-const W = 400, H = 275;
-const Svg = ({ children, bg }: { children: React.ReactNode; bg: string }) => (
-  <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice" role="img" aria-hidden="true"><rect width={W} height={H} fill={bg} />{children}</svg>
+/* Choice-card illustrations: blue duotone, geometric, on a soft grid. */
+const W = 400, H = 225;
+const B = { deep: '#0b2a8a', main: '#1f4fe0', mid: '#4d84ff', light: '#a9c4ff', pale: '#dbe6ff', paper: '#f4f7ff', white: '#ffffff' };
+const Svg = ({ children, id }: { children: React.ReactNode; id: string }) => (
+  <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice" role="img" aria-hidden="true">
+    <defs>
+      <pattern id={`${id}-grid`} width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke={B.pale} strokeWidth="1" /></pattern>
+      <linearGradient id={`${id}-g`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={B.main} /><stop offset="1" stopColor={B.mid} /></linearGradient>
+    </defs>
+    <rect width={W} height={H} fill={B.paper} /><rect width={W} height={H} fill={`url(#${id}-grid)`} />
+    {children}
+  </svg>
+);
+const Person = ({ x, y, s = 1, c = B.main }: { x: number; y: number; s?: number; c?: string }) => (
+  <g transform={`translate(${x} ${y}) scale(${s})`}><circle cx="0" cy="-26" r="9" fill={c} /><path d="M-15 0 q0-16 15-16 q15 0 15 16z" fill={c} /></g>
 );
 
 export function InPersonArt() {
   return (
-    <Svg bg="#23211c">
-      <defs>
-        <radialGradient id="ip-spot" cx="50%" cy="10%" r="70%"><stop offset="0" stopColor="#f6e7b0" stopOpacity=".55" /><stop offset="1" stopColor="#f6e7b0" stopOpacity="0" /></radialGradient>
-      </defs>
-      {Array.from({ length: 7 }, (_, r) => Array.from({ length: 14 }, (_, c) => <circle key={`${r}-${c}`} cx={20 + c * 28 + (r % 2) * 14} cy={18 + r * 14} r={4.5} fill="#f1e3b6" opacity={0.08 + r * 0.03} />))}
-      <rect width={W} height={H} fill="url(#ip-spot)" />
-      <rect x="150" y="96" width="100" height="58" rx="6" fill="#17366f" /><rect x="164" y="104" width="72" height="8" rx="4" fill="#d6b25e" />
-      <rect x="186" y="74" width="28" height="24" rx="3" fill="#3d3a33" /><rect x="198" y="58" width="4" height="18" fill="#8d8572" /><circle cx="200" cy="56" r="5" fill="#bdb39c" />
-      {Array.from({ length: 4 }, (_, r) => Array.from({ length: 9 - (r % 2) }, (_, c) => (
-        <g key={`p${r}-${c}`} transform={`translate(${30 + c * 42 + (r % 2) * 21} ${170 + r * 26})`}>
-          <circle cx="12" cy="0" r={9 + r} fill={['#4b4639', '#3f3b31', '#5a5343', '#36332b'][(r + c) % 4]} />
-          <rect x={-2 - r} y={8 + r} width={28 + r * 2} height={30} rx={10} fill={['#2c2a24', '#34312a', '#3a362d', '#2f2c25'][(r + c) % 4]} />
-        </g>
-      )))}
+    <Svg id="ip">
+      <circle cx="200" cy="112" r="92" fill={B.pale} />
+      <rect x="138" y="70" width="124" height="70" rx="12" fill="url(#ip-g)" />
+      <rect x="154" y="84" width="58" height="8" rx="4" fill={B.white} opacity=".9" /><rect x="154" y="100" width="92" height="6" rx="3" fill={B.white} opacity=".55" /><rect x="154" y="112" width="74" height="6" rx="3" fill={B.white} opacity=".55" />
+      <rect x="194" y="140" width="12" height="22" fill={B.deep} />
+      {[-120, -80, -40, 40, 80, 120].map((dx, i) => <Person key={i} x={200 + dx} y={196 - (Math.abs(dx) === 40 ? 6 : 0)} s={0.9} c={i % 2 ? B.mid : B.main} />)}
+      <Person x={200} y={200} s={1} c={B.deep} />
     </Svg>
   );
 }
 export function OnlineArt() {
   return (
-    <Svg bg="#eef0ee">
-      <rect x="0" y="210" width={W} height="65" fill="#d9d4c7" />
-      <rect x="250" y="40" width="130" height="90" rx="6" fill="#20201d" /><rect x="256" y="46" width="118" height="78" rx="3" fill="#dfe7e1" />
-      <rect x="306" y="130" width="18" height="34" fill="#9a9686" />
-      <rect x="92" y="88" width="190" height="122" rx="10" fill="#c9cbc6" /><rect x="100" y="96" width="174" height="106" rx="5" fill="#1f2a25" />
-      {[0, 1, 2].map((r) => [0, 1, 2].map((c) => (
-        <g key={`${r}${c}`}><rect x={106 + c * 56} y={102 + r * 33} width="52" height="29" rx="4" fill={['#17366f', '#3b4d63', '#5b3d48', '#8a6d2a'][(r * 3 + c) % 4]} />
-          <circle cx={132 + c * 56} cy={112 + r * 33} r="5" fill="#e9dcc0" /><rect x={124 + c * 56} y={118 + r * 33} width="16" height="9" rx="4" fill="#e9dcc0" /></g>
+    <Svg id="on">
+      <rect x="90" y="40" width="220" height="140" rx="14" fill={B.white} stroke={B.light} strokeWidth="2" />
+      <rect x="90" y="40" width="220" height="24" rx="14" fill={B.pale} /><circle cx="108" cy="52" r="4" fill={B.light} /><circle cx="122" cy="52" r="4" fill={B.light} />
+      {[0, 1].map((r) => [0, 1, 2].map((c) => (
+        <g key={`${r}${c}`}><rect x={104 + c * 66} y={74 + r * 50} width="60" height="44" rx="8" fill={(r + c) % 2 ? B.pale : 'url(#on-g)'} />
+          <Person x={134 + c * 66} y={112 + r * 50} s={0.7} c={(r + c) % 2 ? B.main : B.white} /></g>
       )))}
-      <path d="M70 210h234l14 10H56z" fill="#b8b9b3" />
-      <rect x="44" y="176" width="34" height="34" rx="4" fill="#fff" /><path d="M78 186c10 0 10 14 0 14" stroke="#fff" strokeWidth="4" fill="none" />
-      <rect x="330" y="182" width="40" height="28" rx="3" fill="#2a2a27" />
+      <rect x="170" y="186" width="60" height="8" rx="4" fill={B.light} />
     </Svg>
   );
 }
 export function SchoolArt() {
   return (
-    <Svg bg="#e9ece9">
-      <rect x="0" y="215" width={W} height="60" fill="#cfd2cc" />
-      <rect x="40" y="40" width="320" height="10" fill="#d5d8d2" />
-      <rect x="150" y="62" width="100" height="62" rx="4" fill="#2f4a3a" /><rect x="156" y="68" width="88" height="50" rx="2" fill="#3c5f4a" />
-      <path d="M165 82h40M165 92h60M165 102h30" stroke="#e7efe6" strokeWidth="2.5" strokeLinecap="round" opacity=".7" />
-      <rect x="186" y="130" width="28" height="22" fill="#8a6a46" /><rect x="190" y="152" width="20" height="30" fill="#6f5338" />
-      {Array.from({ length: 3 }, (_, r) => Array.from({ length: 4 }, (_, c) => (
-        <g key={`${r}${c}`} transform={`translate(${48 + c * 86 + (c > 1 ? 40 : 0)} ${150 + r * 26})`}>
-          <rect width="56" height="8" rx="2" fill="#b08a5f" /><rect x="6" y="8" width="4" height="16" fill="#5f5f5a" /><rect x="46" y="8" width="4" height="16" fill="#5f5f5a" />
-          <rect x="20" y="10" width="16" height="4" rx="1" fill="#6b6b66" />
-        </g>
-      )))}
-      <rect x="320" y="70" width="44" height="54" rx="2" fill="#fff" stroke="#d1d1cb" /><path d="M326 82h32M326 92h24M326 102h28" stroke="#c9c9c2" strokeWidth="3" />
+    <Svg id="sc">
+      <rect x="110" y="38" width="180" height="86" rx="10" fill={B.deep} />
+      <path d="M130 62h70M130 78h100M130 94h56" stroke={B.light} strokeWidth="5" strokeLinecap="round" />
+      <circle cx="252" cy="80" r="18" fill="none" stroke={B.mid} strokeWidth="5" />
+      {[0, 1, 2].map((c) => <g key={c} transform={`translate(${96 + c * 76} 150)`}><rect width="56" height="10" rx="5" fill={B.main} /><rect x="8" y="10" width="5" height="22" fill={B.light} /><rect x="43" y="10" width="5" height="22" fill={B.light} /></g>)}
+      {[0, 1, 2].map((c) => <Person key={c} x={124 + c * 76} y={150} s={0.75} c={c === 1 ? B.mid : B.main} />)}
     </Svg>
   );
 }
 export function UniversityArt() {
   return (
-    <Svg bg="#a8cbe6">
-      <rect x="0" y="170" width={W} height="105" fill="#6aa156" /><rect x="0" y="230" width={W} height="45" fill="#5b8f49" />
-      <circle cx="60" cy="150" r="34" fill="#4d7f3e" /><circle cx="350" cy="148" r="38" fill="#4d7f3e" />
-      <rect x="90" y="86" width="220" height="92" fill="#b8593d" /><rect x="90" y="80" width="220" height="10" fill="#e6dfd2" />
-      <polygon points="200,40 120,82 280,82" fill="#e6dfd2" /><rect x="192" y="18" width="16" height="26" fill="#e6dfd2" /><polygon points="200,8 190,20 210,20" fill="#c8c0b2" />
-      {Array.from({ length: 2 }, (_, r) => Array.from({ length: 9 }, (_, c) => <rect key={`${r}${c}`} x={100 + c * 23} y={96 + r * 36} width="12" height="24" rx="1" fill="#e9eef2" opacity=".9" />))}
-      {Array.from({ length: 6 }, (_, c) => <rect key={c} x={150 + c * 18} y="132" width="6" height="46" fill="#ece5d6" />)}
-      <rect x="140" y="128" width="120" height="6" fill="#ece5d6" />
-      <path d="M0 255 Q200 210 400 255 V275 H0z" fill="#d7c7a2" opacity=".55" />
+    <Svg id="un">
+      <circle cx="320" cy="56" r="26" fill={B.pale} />
+      <polygon points="200,28 104,74 296,74" fill="url(#un-g)" />
+      <rect x="112" y="74" width="176" height="10" fill={B.deep} />
+      {Array.from({ length: 6 }, (_, c) => <rect key={c} x={126 + c * 28} y="88" width="12" height="78" rx="3" fill={c % 2 ? B.mid : B.main} />)}
+      <rect x="104" y="166" width="192" height="12" rx="3" fill={B.deep} /><rect x="92" y="178" width="216" height="10" rx="3" fill={B.light} />
+      <circle cx="200" cy="54" r="7" fill={B.white} />
     </Svg>
   );
 }
@@ -84,17 +75,16 @@ export function People({ n }: { n: 1 | 2 | 3 | 4 }) {
   const fig = (x: number, c: string, s = 1) => <g transform={`translate(${x} ${70 - 64 * s}) scale(${s})`}><circle cx="16" cy="14" r="12" fill={c} /><path d="M0 64 q0-32 16-32 q16 0 16 32z" fill={c} /></g>;
   if (n === 4) return (
     <svg viewBox="0 0 90 72" width="86" height="70" aria-hidden="true">
-      <rect x="6" y="30" width="78" height="40" rx="4" fill="#5a4a7a" /><polygon points="45,6 4,32 86,32" fill="#7a6aa0" />
-      {[0, 1, 2, 3].map((i) => <rect key={i} x={14 + i * 18} y="44" width="10" height="26" rx="5" fill="#2b2240" />)}
-      <rect x="10" y="22" width="70" height="6" fill="#c9a227" /><circle cx="20" cy="18" r="3" fill="#e34" /><circle cx="70" cy="18" r="3" fill="#3a8" />
+      <polygon points="45,6 4,30 86,30" fill={B.main} /><rect x="8" y="30" width="74" height="6" fill={B.deep} />
+      {[0, 1, 2, 3].map((i) => <rect key={i} x={14 + i * 18} y="40" width="10" height="26" rx="3" fill={i % 2 ? B.mid : B.main} />)}
+      <rect x="4" y="66" width="82" height="6" rx="2" fill={B.light} />
     </svg>
   );
-  const cs = ['#3a2f45', '#4b3c58', '#5e4a6e', '#2c2433'];
   return (
     <svg viewBox="0 0 90 72" width="86" height="70" aria-hidden="true">
-      {n === 1 && fig(29, cs[0])}
-      {n === 2 && <>{fig(14, cs[1], 0.92)}{fig(44, cs[0], 0.92)}</>}
-      {n === 3 && <>{fig(4, cs[2], 0.8)}{fig(54, cs[1], 0.8)}{fig(28, '#7b5fb0', 1)}</>}
+      {n === 1 && fig(29, B.main)}
+      {n === 2 && <>{fig(14, B.mid, 0.92)}{fig(44, B.main, 0.92)}</>}
+      {n === 3 && <>{fig(4, B.light, 0.8)}{fig(54, B.mid, 0.8)}{fig(28, B.main, 1)}</>}
     </svg>
   );
 }

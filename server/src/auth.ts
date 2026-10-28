@@ -6,22 +6,35 @@ import { HttpError, bad, ctxStore, forbidden, now, token, uid } from './util.ts'
 import { config } from './config.ts';
 import { claimEmail } from './platform.ts';
 
-export const ROLES = ['superadmin', 'admin', 'cfo', 'accountant', 'registration_exec', 'chair', 'auditor', 'referrer', 'head_delegate'] as const;
+export const ROLES = ['superadmin', 'admin', 'secretariat', 'cfo', 'accountant', 'registration_exec', 'chair', 'auditor', 'referrer', 'head_delegate'] as const;
 export type Role = (typeof ROLES)[number];
 export const ROLE_LABELS: Record<Role, string> = {
-  superadmin: 'Super admin', admin: 'Secretary-General / admin', cfo: 'CFO', accountant: 'Accountant', registration_exec: 'Registration executive',
+  superadmin: 'Super admin', admin: 'Secretary-General / admin', secretariat: 'Secretariat (USG / Deputy SG)', cfo: 'CFO', accountant: 'Accountant', registration_exec: 'Registration executive',
   chair: 'Committee director / chair', auditor: 'External auditor', referrer: 'Referrer / ambassador', head_delegate: 'Head delegate / advisor',
+};
+/** One line on what each role is for, shown when inviting people. */
+export const ROLE_HELP: Record<Role, string> = {
+  superadmin: 'Everything, across the whole organisation.',
+  admin: 'Runs the conference: settings, committees, team, emails. Cannot approve money unless also CFO.',
+  secretariat: 'Committees, portfolios, documents, applications, delegates, emails and check-in. No money or settings.',
+  cfo: 'Approves payments, refunds and expenses; owns fees, books and payouts.',
+  accountant: 'Records payments and expenses and keeps the books. Approves expenses.',
+  registration_exec: 'The registration desk: applications, delegates, seat moves, check-in, payment proofs (view).',
+  chair: 'Runs one committee: its delegates, position papers, live sessions and EB marking.',
+  auditor: 'Read-only access to delegates, money, books and the audit trail.',
+  referrer: 'An ambassador who sees their own referrals and commission.',
+  head_delegate: 'A school advisor who sees their own delegation.',
 };
 export const MFA_ROLES: Role[] = ['superadmin', 'admin', 'cfo', 'accountant'];
 
 // Money-moving rights are split: nobody can both approve a payment and edit configuration or post journals alone.
 const PERMS: Record<string, Role[]> = {
-  'reg.read': ['superadmin', 'admin', 'registration_exec', 'cfo', 'accountant', 'auditor'],
-  'reg.edit': ['superadmin', 'admin', 'registration_exec'],
+  'reg.read': ['secretariat', 'superadmin', 'admin', 'registration_exec', 'cfo', 'accountant', 'auditor'],
+  'reg.edit': ['secretariat', 'superadmin', 'admin', 'registration_exec'],
   'reg.cancel': ['superadmin', 'admin', 'registration_exec'],
   'reg.erase': ['superadmin', 'admin'],
-  'alloc.move': ['superadmin', 'admin', 'registration_exec'],
-  'alloc.config': ['superadmin', 'admin'],
+  'alloc.move': ['secretariat', 'superadmin', 'admin', 'registration_exec'],
+  'alloc.config': ['secretariat', 'superadmin', 'admin'],
   'event.config': ['superadmin', 'admin'],
   'event.held': ['cfo'],
   'event.cancel': ['superadmin', 'admin'],
@@ -56,12 +69,12 @@ const PERMS: Record<string, Role[]> = {
   'audit.read': ['superadmin', 'admin', 'cfo', 'auditor'],
   'users.manage': ['superadmin', 'admin'],
   'templates.manage': ['superadmin', 'admin'],
-  'messages.send': ['superadmin', 'admin', 'registration_exec'],
-  'messages.read': ['superadmin', 'admin', 'registration_exec', 'cfo'],
-  'lists.read': ['superadmin', 'admin', 'registration_exec', 'cfo', 'accountant', 'auditor', 'chair'],
+  'messages.send': ['secretariat', 'superadmin', 'admin', 'registration_exec'],
+  'messages.read': ['secretariat', 'superadmin', 'admin', 'registration_exec', 'cfo'],
+  'lists.read': ['secretariat', 'superadmin', 'admin', 'registration_exec', 'cfo', 'accountant', 'auditor', 'chair'],
   'lists.share': ['superadmin', 'admin'],
-  'import.registrations': ['superadmin', 'admin', 'registration_exec'],
-  'attendance.mark': ['superadmin', 'admin', 'registration_exec', 'chair'],
+  'import.registrations': ['secretariat', 'superadmin', 'admin', 'registration_exec'],
+  'attendance.mark': ['secretariat', 'superadmin', 'admin', 'registration_exec', 'chair'],
   'settings.org': ['superadmin', 'admin'],
   'settings.finance': ['cfo'],
 };

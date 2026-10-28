@@ -9,6 +9,7 @@
 import crypto from 'node:crypto';
 import { platformDb } from '../platform.ts';
 import { bad, conflict, forbidden, notFound, now } from '../util.ts';
+import { applyMark, follow, marksheet, marksheetXlsx, recognition, type Marking, type MarkAction } from './marking.ts';
 
 export type Presence = 'absent' | 'present' | 'present_voting';
 export type Ballot = 'for' | 'against' | 'abstain';
@@ -30,7 +31,10 @@ export interface LiveState {
   topic: string | null;
   log: { at: string; text: string }[];
   claims: Record<string, string>;      // delegate id -> hashed device token
+  marking?: Marking;                   // EB marks: never shown to delegates
+  amendments?: Amendment[];
 }
+export interface Amendment { id: string; draft: string; clause: string; text: string; proposer: string | null; kind: 'friendly' | 'unfriendly'; status: 'pending' | 'passed' | 'failed' | 'incorporated' | 'withdrawn'; at: string }
 
 export const P5 = ['us', 'gb', 'fr', 'ru', 'cn'];
 export const MOTION_TYPES: Record<string, { label: string; rule: 'simple' | 'two_thirds'; needsDuration: boolean; needsSpeakingTime: boolean }> = {
@@ -109,7 +113,10 @@ export type Action =
   | { type: 'ballot'; delegateId: string; ballot: Ballot | null }
   | { type: 'vote_close' }
   | { type: 'vote_clear' }
-  | { type: 'mode'; mode: LiveState['mode'] };
+  | { type: 'mode'; mode: LiveState['mode'] }
+  | { type: 'amend_add'; draft?: string; clause: string; text: string; proposer?: string | null; kind: Amendment['kind'] }
+  | { type: 'amend_status'; amendmentId: string; status: Amendment['status'] }
+  | MarkAction;
 
 function remaining(t: LiveState['timer']) {
   if (!t.startedAt) return t.remaining;
@@ -121,6 +128,23 @@ const mustHave = (s: LiveState, id: string) => { if (!s.delegates.some((d) => d.
 /** The chair's actions. Pure apart from timestamps: takes a state and returns the next one. */
 export function apply(prev: LiveState, a: Action): LiveState {
   const s: LiveState = structuredClone(prev);
+  if (a.type.startsWith('eb_')) {
+    applyMark(s, a as MarkAction);
+    // Recognising a delegation in a caucus gives them the floor too.
+    if (a.type === 'eb_recognise') {
+      const seg = s.marking!.segments.find((x) => x.id === s.marking!.currentSegment);
+      s.speakers.current = a.delegateId; s.speakers.queue = s.speakers.queue.filter((x) => x !== a.delegateId);
+      if (a.startTimer !== false) startTimer(s, seg?.speakingSeconds ?? s.speakers.speakingTime, nameOf(s, a.delegateId));
+      log(s, `${nameOf(s, a.delegateId)} recognised${seg ? ` (${seg.label})` : ''}`);
+    }
+    return s;
+  }
+  const out = step(s, a);
+  follow(out, prev, a);
+  return out;
+}
+
+function step(s: LiveState, a: Action): LiveState {
   switch (a.type) {
     case 'presence': {
       mustHave(s, a.delegateId);
@@ -166,7 +190,7 @@ export function apply(prev: LiveState, a: Action): LiveState {
     case 'speaking_time': if (!(a.seconds >= 10 && a.seconds <= 600)) throw bad('Speaking time must be between 10 seconds and 10 minutes'); s.speakers.speakingTime = Math.round(a.seconds); break;
     case 'request_decide':
       s.speakers.requests = s.speakers.requests.filter((x) => x !== a.delegateId);
-      if (a.accept) return apply(s, { type: 'speaker_add', delegateId: a.delegateId });
+      if (a.accept) return step(s, { type: 'speaker_add', delegateId: a.delegateId });
       break;
     case 'timer': {
       if (a.op === 'start') {
@@ -236,6 +260,21 @@ export function apply(prev: LiveState, a: Action): LiveState {
     }
     case 'vote_clear': s.vote = null; if (s.mode === 'voting') s.mode = 'idle'; break;
     case 'mode': s.mode = a.mode; break;
+    case 'amend_add': {
+      if (!String(a.clause ?? '').trim() || !String(a.text ?? '').trim()) throw bad('Give the clause and the amendment text');
+      if (!['friendly', 'unfriendly'].includes(a.kind)) throw bad('Friendly or unfriendly?');
+      if (a.proposer) mustHave(s, a.proposer);
+      // Friendly amendments have every sponsor's agreement and go straight in; unfriendly ones are voted on.
+      (s.amendments ??= []).push({ id: rid(), draft: String(a.draft ?? '').trim() || 'Draft resolution', clause: a.clause.trim(), text: a.text.trim(), proposer: a.proposer ?? null, kind: a.kind, status: a.kind === 'friendly' ? 'incorporated' : 'pending', at: now() });
+      log(s, `${a.kind === 'friendly' ? 'Friendly' : 'Unfriendly'} amendment to ${a.clause.trim()}${a.proposer ? ` by ${nameOf(s, a.proposer)}` : ''}`);
+      break;
+    }
+    case 'amend_status': {
+      const x = (s.amendments ?? []).find((y) => y.id === a.amendmentId); if (!x) throw notFound('Amendment');
+      if (!['pending', 'passed', 'failed', 'incorporated', 'withdrawn'].includes(a.status)) throw bad('Unknown status');
+      x.status = a.status; log(s, `Amendment to ${x.clause}: ${a.status}`);
+      break;
+    }
     default: throw bad('Unknown action');
   }
   return s;
@@ -288,11 +327,15 @@ export function view(code: string, o: { chairKey?: string; since?: number } = {}
   const { row, state } = load(code);
   const isChair = !!o.chairKey && hash(o.chairKey) === row.chair_key_hash;
   if (o.since && o.since === row.version) return { unchanged: true, version: row.version };
-  const { claims, ...pub } = state;
+  const { claims, marking, ...pub } = state;
   return {
+    marking: isChair ? marking ?? null : undefined,
+    marksheet: isChair ? marksheet(state) : undefined,
+    recognition: isChair ? recognition(state, (t) => MOTION_TYPES[t]?.label ?? t) : undefined,
     code: row.code, version: row.version, isChair, ended: !!row.ended_at, ...pub,
     timer: { ...state.timer, remaining: remaining(state.timer) }, serverTime: now(), quorum: quorum(state),
     claimed: isChair ? Object.keys(claims) : undefined,
+    linked: isChair ? !!row.event_id : undefined,
     tally: state.vote ? tally(state, state.vote) : null,
   };
 }
@@ -339,4 +382,17 @@ export function deviceBallot(code: string, delegateId: string, seatToken: string
   seatOwner(state, delegateId, seatToken);
   if (!state.vote?.open || !state.vote.deviceVoting) throw conflict('Voting on devices is not open');
   save(code, apply(state, { type: 'ballot', delegateId, ballot }));
+}
+
+/** The EB's marksheet as an Excel workbook (chair only). */
+export async function exportMarks(code: string, chairKey: string) {
+  const { row, state } = load(code);
+  if (!chairKey || hash(chairKey) !== row.chair_key_hash) throw forbidden('Only the chair can do that');
+  return { name: row.name as string, file: await marksheetXlsx(state, (t) => MOTION_TYPES[t]?.label ?? t) };
+}
+
+/** The marksheet for a session (chair only), for handing awards to the conference. */
+export function sessionMarks(code: string) {
+  const { row, state } = load(code);
+  return { row, marksheet: marksheet(state), delegates: state.delegates };
 }

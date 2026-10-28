@@ -230,7 +230,8 @@ function Users() {
   const [matrix, setMatrix] = useState(false);
   if (!u.data) return <Loading />;
   // Super admin is only grantable by a super admin; the most common hire (registration desk) comes first.
-  const order = ['registration_exec', 'chair', 'accountant', 'cfo', 'admin', 'auditor', 'referrer', 'head_delegate', 'superadmin'];
+  const order = ['registration_exec', 'secretariat', 'chair', 'accountant', 'cfo', 'admin', 'auditor', 'referrer', 'head_delegate', 'superadmin'];
+  const roleName = (r: string) => u.data.roles.find((x: any) => x.role === r)?.label ?? label(r);
   const roleOpts = u.data.roles.filter((r: any) => r.role !== 'superadmin' || me.roles.some((x) => x.role === 'superadmin'))
     .sort((a: any, b: any) => order.indexOf(a.role) - order.indexOf(b.role)).map((r: any) => ({ value: r.role, label: r.label }));
   const addRole = async (userId: string) => {
@@ -244,15 +245,19 @@ function Users() {
       <div className="row"><Btn kind="primary" onClick={async () => {
         const r = await ask({ title: 'Invite staff', fields: [{ key: 'name', label: 'Name', required: true }, { key: 'email', label: 'Email', type: 'email', required: true }, { key: 'role', label: 'Role', options: roleOpts }, { key: 'committee_id', label: 'Committee (chairs only)', options: [{ value: '', label: '—' }, ...(inv.data ?? []).map((c) => ({ value: c.id, label: c.name }))] }] });
         if (!r) return;
-        try { const x = await api.post<any>('/api/admin/users', { name: r.name, email: r.email, roles: [{ role: r.role, committee_id: r.committee_id || null, event_id: r.committee_id ? eventId : null }] }); u.reload(); void ask({ title: 'User created', message: `Share this temporary password securely: ${x.temporaryPassword}\nThey should change it after signing in.`, confirm: 'Done', info: true }); } catch (e: any) { toast(e.message, 'bad'); }
+        try { const x = await api.post<any>('/api/admin/users', { name: r.name, email: r.email, roles: [{ role: r.role, committee_id: r.committee_id || null, event_id: r.committee_id ? eventId : null }] }); u.reload(); void ask({ title: 'Invitation sent', message: `We emailed ${r.email} a link to set their password and sign in. If email isn't set up yet, send them this link yourself (it works once, for 7 days):\n\n${x.inviteLink}`, confirm: 'Done', info: true }); } catch (e: any) { toast(e.message, 'bad'); }
       }}>+ Invite staff</Btn><button className="btn" onClick={() => setMatrix(true)}>Permission matrix</button></div>
+      <details className="card role-guide"><summary><strong>What each role can do</strong></summary>
+        <div className="role-grid">{u.data.roles.filter((r: any) => roleOpts.some((o: any) => o.value === r.role)).sort((a: any, b: any) => order.indexOf(a.role) - order.indexOf(b.role)).map((r: any) => <div key={r.role}><strong>{r.label}</strong>{r.mfa && <span className="badge info" style={{ marginLeft: 6 }}>2FA</span>}<div className="small muted">{r.help}</div></div>)}</div>
+      </details>
       <div className="card flush"><DataTable rows={u.data.users} columns={[
-        { key: 'name', label: 'Name', render: (x: any) => <><strong>{x.name}</strong><div className="small faint">{x.email}</div></> },
-        { key: 'roles', label: 'Roles', sort: false, render: (x: any) => <span className="row">{x.roles.map((r: any) => <span key={r.id} className="badge">{label(r.role)}{r.committee ? ` · ${r.committee}` : ''} <button className="btn ghost sm" style={{ minHeight: 0, padding: 0 }} aria-label="Remove role" onClick={async () => { await api.del(`/api/admin/users/${x.id}/roles/${r.id}`); u.reload(); }}>✕</button></span>)}<button className="btn sm" onClick={() => addRole(x.id)}>+</button></span> },
-        { key: 'totp_enabled', label: '2FA', render: (x: any) => (x.totp_enabled ? 'On' : 'Off') }, { key: 'active', label: 'Active', render: (x: any) => (x.active ? 'Yes' : 'No') },
+        { key: 'name', label: 'Name', render: (x: any) => <><strong>{x.name}</strong>{x.invite_pending && !x.last_login_at ? <span className="badge warn" style={{ marginLeft: 6 }}>Invited</span> : null}<div className="small faint">{x.email}</div></> },
+        { key: 'roles', label: 'Roles', sort: false, render: (x: any) => <span className="row">{x.roles.map((r: any) => <span key={r.id} className="badge">{roleName(r.role)}{r.committee ? ` · ${r.committee}` : ''} <button className="btn ghost sm" style={{ minHeight: 0, padding: 0 }} aria-label="Remove role" onClick={async () => { await api.del(`/api/admin/users/${x.id}/roles/${r.id}`); u.reload(); }}>✕</button></span>)}<button className="btn sm" onClick={() => addRole(x.id)}>+</button></span> },
+        { key: 'totp_enabled', label: '2FA', render: (x: any) => (x.totp_enabled ? 'On' : 'Off') }, { key: 'active', label: 'Active', render: (x: any) => (x.active ? 'Yes' : 'No') }, { key: 'last_login_at', label: 'Last sign-in', render: (x: any) => (x.last_login_at ? new Date(x.last_login_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—') },
         { key: 'act', label: '', sort: false, render: (x: any) => <span className="row">
           <Btn size="sm" onClick={async () => { await api.patch(`/api/admin/users/${x.id}`, { active: !x.active }); u.reload(); }}>{x.active ? 'Deactivate' : 'Activate'}</Btn>
-          <Btn size="sm" onClick={async () => { const r = await api.post<any>(`/api/admin/users/${x.id}/reset-password`); await ask({ title: 'Password reset', message: `Temporary password: ${r.temporaryPassword}`, confirm: 'Done', info: true }); }}>Reset password</Btn>
+          {!x.last_login_at ? <Btn size="sm" onClick={async () => { try { const r = await api.post<any>(`/api/admin/users/${x.id}/invite`); u.reload(); void ask({ title: 'Invitation sent again', message: `New link (the old one no longer works):\n\n${r.inviteLink}`, confirm: 'Done', info: true }); } catch (e: any) { toast(e.message, 'bad'); } }}>Resend invite</Btn>
+            : <Btn size="sm" onClick={async () => { const r = await api.post<any>(`/api/admin/users/${x.id}/reset-password`); void ask({ title: 'Reset link sent', message: `We emailed ${x.email} a link to choose a new password (valid for an hour) and signed them out everywhere:\n\n${r.resetLink}`, confirm: 'Done', info: true }); }}>Reset password</Btn>}
           {x.totp_enabled ? <Btn size="sm" onClick={async () => { await api.post(`/api/admin/users/${x.id}/reset-mfa`); u.reload(); }}>Reset 2FA</Btn> : null}
         </span> },
       ]} /></div>

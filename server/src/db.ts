@@ -27,6 +27,7 @@ export function openDb(file = config.dbPath) {
 
 /** Columns added after the first release, applied to every database at startup (each ALTER runs once). */
 const COLUMNS: [table: string, column: string, ddl: string][] = [
+  ['user', 'last_login_at', 'TEXT'],
   ['template', 'provider_template', 'TEXT'],
   ['template', 'language', "TEXT NOT NULL DEFAULT 'en'"],
   ['template', 'params', "TEXT NOT NULL DEFAULT '[]'"],

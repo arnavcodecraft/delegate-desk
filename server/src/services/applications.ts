@@ -12,6 +12,7 @@ import { config, uploadDir } from '../config.ts';
 import { eventSettings, getEvent } from '../settings.ts';
 import { bad, conflict, forbidden, isEmail, normMobile, notFound, now, token, uid, json } from '../util.ts';
 import { allocate, moveToSeat, seatOf } from './allocation.ts';
+import { inviteStaff } from './accounts.ts';
 import { enqueue } from './notify.ts';
 import { regVars, cancelRegistration } from './payments.ts';
 import { confirmFree, syncListing, normChannel } from './conference.ts';
@@ -203,7 +204,7 @@ export function decideRoleApplication(id: string, d: { status: string; score?: n
   const position = a.position_id ? one('SELECT * FROM position WHERE id = ?', a.position_id) : null;
   const committeeId = d.committee_id ?? position?.committee_id ?? null;
   const title = d.title?.trim() || position?.title || ROLE_LABELS[a.role];
-  let account: { email: string; password?: string; existing: boolean } | null = null;
+  let account: { email: string; inviteLink?: string; existing: boolean } | null = null;
   tx(() => {
     update('role_application', id, { status: d.status, score: d.score ?? a.score, note: d.note?.trim() || a.note, assigned_committee_id: d.status === 'accepted' ? committeeId : a.assigned_committee_id,
       assigned_title: d.status === 'accepted' ? title : a.assigned_title, decided_at: ['accepted', 'rejected'].includes(d.status) ? now() : a.decided_at, decided_by: null });
@@ -214,10 +215,8 @@ export function decideRoleApplication(id: string, d: { status: string; score?: n
         const existing = one('SELECT * FROM user WHERE email = ?', a.email);
         if (existing) { setRole(existing.id, { role: 'chair' as Role, committee_id: committeeId, event_id: a.event_id }); account = { email: a.email, existing: true }; }
         else {
-          const password = crypto.randomBytes(9).toString('base64url') + 'a1';
-          createUser({ name: a.full_name, email: a.email, password, roles: [{ role: 'chair' as Role, committee_id: committeeId, event_id: a.event_id }] });
-          account = { email: a.email, password, existing: false };
-          enqueue('staff_invite', { to: a.email, vars: { name: a.full_name, event_name: ev.name, role: title, login_link: `${config.baseUrl}/login`, password } });
+          const out = inviteStaff({ name: a.full_name, email: a.email, roles: [{ role: 'chair' as Role, committee_id: committeeId, event_id: a.event_id }], eventName: ev.name });
+          account = { email: a.email, inviteLink: out.inviteLink, existing: false };
         }
       }
     }

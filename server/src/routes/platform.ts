@@ -14,7 +14,8 @@ import {
 } from '../platform.ts';
 import { launchConference, suggestCode, syncListing, trackView, normChannel, publicLink, registrationLink, acronymFrom, type Draft } from '../services/conference.ts';
 import { applyForRole, roleApplicationView, withdrawRoleApplication } from '../services/applications.ts';
-import { createSession, view, chairAction, endSession, claimSeat, releaseClaim, requestToSpeak, deviceBallot, MOTION_TYPES, P5 } from '../services/live.ts';
+import { createSession, view, chairAction, endSession, claimSeat, releaseClaim, requestToSpeak, deviceBallot, exportMarks, MOTION_TYPES, P5 } from '../services/live.ts';
+import { PRESETS } from '../services/marking.ts';
 import { getEvent } from '../settings.ts';
 import { h, upload, P } from './public.ts';
 
@@ -142,7 +143,16 @@ function result(eventId: string) {
 // ---------- live committee sessions ----------
 export const liveRouter = express.Router();
 const key = (req: express.Request) => String(req.headers['x-chair-key'] ?? '');
-liveRouter.get('/meta', h(() => ({ motions: Object.entries(MOTION_TYPES).map(([k, v]) => ({ key: k, ...v })), p5: P5 })));
+liveRouter.get('/meta', h(() => ({ motions: Object.entries(MOTION_TYPES).map(([k, v]) => ({ key: k, ...v })), p5: P5, presets: Object.entries(PRESETS).map(([k, v]) => ({ key: k, label: v.label })) })));
+liveRouter.get('/:code/marksheet.xlsx', async (req, res, next) => {
+  try {
+    const { name, file } = await exportMarks(P(req).code, key(req));
+    res.setHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('content-disposition', `attachment; filename="${name.replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'committee'} marksheet.xlsx"`);
+    res.setHeader('cache-control', 'no-store');
+    res.end(file);
+  } catch (e) { next(e); }
+});
 liveRouter.post('/', h((req) => {
   rateLimit(`live:${req.ip}`, 20, 60 * 60_000);
   const b = req.body ?? {};

@@ -2,7 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import '@fontsource-variable/inter';
-import '@fontsource-variable/playfair-display';
+import '@fontsource-variable/plus-jakarta-sans';
 import 'flag-icons/css/flag-icons.min.css';
 import './styles.css';
 import './platform.css';
@@ -25,6 +25,12 @@ import CheckIn from './staff/CheckIn';
 import ListConference from './platform/ListConference';
 import { Explore, ConferencePage, Jobs, ApplicationStatus } from './platform/Explore';
 import { StartSession, SessionView, ChairConsole } from './platform/Live';
+import { AccountPage, SetPasswordPage } from './platform/Account';
+import { PrepHome, ResearchHome, ProjectPage, ItemPage } from './prep/Research';
+import { WritePage, CoachPage } from './prep/Write';
+import { PracticePage, LearnHome, LessonPage, DiscoverPage } from './prep/Learn';
+import { CountriesPage } from './prep/Countries';
+import { ToolsHome, ToolPage } from './prep/Tools';
 import { Overview, ConferenceSettings, Financials, Applications, JobBoard, Documents, Sessions } from './staff/Organiser';
 
 applyTheme(savedTheme());
@@ -53,6 +59,22 @@ function App() {
       <Route path="/referrer/:token" element={<ReferrerStatement />} />
       <Route path="/share/:token" element={<SharedList />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/account" element={<AccountPage />} />
+      <Route path="/prep" element={<PrepHome />} />
+      <Route path="/prep/research" element={<ResearchHome />} />
+      <Route path="/prep/projects/:id" element={<ProjectPage />} />
+      <Route path="/prep/items/:id" element={<ItemPage />} />
+      <Route path="/prep/write" element={<WritePage />} />
+      <Route path="/prep/coach" element={<CoachPage />} />
+      <Route path="/prep/practice" element={<PracticePage />} />
+      <Route path="/prep/learn" element={<LearnHome />} />
+      <Route path="/prep/learn/:id" element={<LessonPage />} />
+      <Route path="/prep/discover" element={<DiscoverPage />} />
+      <Route path="/prep/countries" element={<CountriesPage />} />
+      <Route path="/prep/tools" element={<ToolsHome />} />
+      <Route path="/prep/tools/:tool" element={<ToolPage />} />
+      <Route path="/invite/:token" element={<SetPasswordPage kind="invite" />} />
+      <Route path="/reset/:token" element={<SetPasswordPage kind="reset" />} />
       <Route path="/app" element={staff(<Home />)} />
       <Route path="/app/account" element={staff(<Account />)} />
       <Route path="/app/dashboard" element={staff(<Dashboard />)} />

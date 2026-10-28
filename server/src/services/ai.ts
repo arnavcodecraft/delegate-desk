@@ -18,19 +18,19 @@ import { statement } from './commission.ts';
  * or edits journals, starts refunds or changes allotments - every tool below is read-only and permission-filtered.
  */
 
-const MODEL = 'claude-opus-5-5';
+export const MODEL = 'claude-opus-5-5';
 // Server-side refusal fallback: a declined request is re-run on Anthropic's recommended model for that category.
-const FALLBACK = { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const };
+export const FALLBACK = { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const };
 
 let client: Anthropic | null = null;
-function anthropic() {
+export function anthropic() {
   if (!config.ai.enabled) throw conflict('AI assistance is not configured. Set ANTHROPIC_API_KEY to turn it on.');
   client ??= new Anthropic(config.ai.baseUrl ? { baseURL: config.ai.baseUrl } : {});
   return client;
 }
 export function resetAiClient() { client = null; }
 
-function textOf(msg: Anthropic.Beta.BetaMessage) {
+export function textOf(msg: Anthropic.Beta.BetaMessage) {
   if (msg.stop_reason === 'refusal') throw new HttpError(422, 'The assistant declined this request. Please handle it manually.');
   return msg.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map((b) => b.text).join('\n').trim();
 }

@@ -52,12 +52,12 @@ export function Overview() {
     <div className="stack">
       <PageHead title={<span className="row" style={{ gap: '.6rem' }}>{d.profile.logoUrl && <img src={d.profile.logoUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} />}{d.event.name}<span className={`badge ${live ? 'good' : 'warn'}`}>{live ? 'Live' : d.event.status === 'draft' ? 'Draft' : label(d.event.status)}</span></span>}
         subtitle={<>{d.event.start_date ? `${date(d.event.start_date)}${d.event.end_date && d.event.end_date !== d.event.start_date ? ` – ${date(d.event.end_date)}` : ''}` : 'Dates to be decided'}{d.event.city ? ` · ${d.event.city}` : ''} · <a href={`/c/${d.event.code.toLowerCase()}${live ? '' : '?preview=1'}`} target="_blank" rel="noreferrer">View page <ExternalLink className="icon" style={{ width: 13, height: 13, verticalAlign: -2 }} /></a></>}>
-        {can('event.config') && (live ? <Btn icon={EyeOff} onClick={() => publish(false)}>Unpublish</Btn> : <Btn kind="primary" icon={Rocket} onClick={() => publish(true)}>Publish</Btn>)}
+        {can('event.config') && <span data-tour="publish">{live ? <Btn icon={EyeOff} onClick={() => publish(false)}>Unpublish</Btn> : <Btn kind="primary" icon={Rocket} onClick={() => publish(true)}>Publish</Btn>}</span>}
       </PageHead>
       {!live && <Alert tone="warn">This conference is a draft: it isn't on Explore and the registration form is closed. Add committees and press <b>Publish</b> when you're ready.</Alert>}
       {!d.free && !d.priorities.find((p: any) => p.key === 'financial')?.done && <Alert tone="info">No way to pay is set up yet. <Link to="/app/financials">Set up Financials</Link> so accepted delegates can pay you.</Alert>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem', alignItems: 'start' }}>
-        <div className="card">
+        <div className="card" data-tour="priorities">
           <div className="row between"><h3 style={{ margin: 0 }}>Set-up priorities</h3><span className="badge info">{d.done}/{d.priorities.length}</span></div>
           <p className="small muted" style={{ margin: '.25rem 0 .75rem' }}>Ordered around what you told us you need.</p>
           <div className="stack tight">
@@ -69,13 +69,13 @@ export function Overview() {
                 : <div key={p.key} className="row" style={{ gap: '.7rem', padding: '.55rem .5rem', borderRadius: 10, flexWrap: 'nowrap', border: '1px solid var(--border)' }}>{body}</div>;
             })}
           </div>
-          <div style={{ marginTop: '.9rem' }}><div className="small row" style={{ fontWeight: 600, marginBottom: '.35rem', gap: '.35rem' }}>{d.priorities.find((p: any) => p.key === 'share')?.done && <Check className="icon" style={{ color: 'var(--good)' }} />}Share your conference link</div><CopyBox value={d.links.page} />
+          <div style={{ marginTop: '.9rem' }} data-tour="share"><div className="small row" style={{ fontWeight: 600, marginBottom: '.35rem', gap: '.35rem' }}>{d.priorities.find((p: any) => p.key === 'share')?.done && <Check className="icon" style={{ color: 'var(--good)' }} />}Share your conference link</div><CopyBox value={d.links.page} />
             <div className="small" style={{ fontWeight: 600, margin: '.6rem 0 .35rem' }}>Delegate registration form</div><CopyBox value={d.links.register} />
             {qr && <div className="row" style={{ marginTop: '.6rem' }}><img src={qr} alt="QR code for the conference page" style={{ width: 92, height: 92, borderRadius: 8, background: '#fff', padding: 4 }} /><div className="small muted">Print this on posters. Add <span className="mono">?src=instagram</span> (or whatsapp, school…) to links to see where applicants come from.<br /><a href={qr} download={`${d.event.code}-qr.png`}>Download QR</a></div></div>}
           </div>
         </div>
         <div className="stack">
-          <div className="card">
+          <div className="card" data-tour="target">
             <div className="row between"><h3 style={{ margin: 0 }}>Applicants against target</h3>{can('reg.read') && <Link className="small" to="/app/applications">Review applications →</Link>}</div>
             <div className="row" style={{ gap: '1.25rem', marginTop: '.5rem', flexWrap: 'wrap' }}>
               <Donut value={a.delegates.applied} total={d.target} label="applied" />
@@ -464,7 +464,7 @@ function DecideRole({ a, committees, canAccount, onClose, onDone }: { a: any; co
   const decide = async (status: string) => {
     try {
       const r = await api.post<any>(`/api/admin/role-applications/${a.id}/decide`, { ...f, status, createAccount: status === 'accepted' && f.createAccount && canAccount });
-      if (r.account?.password) toast(`Accepted. Their chair account was created and the sign-in details emailed to ${r.account.email}.`, 'ok');
+      if (r.account?.inviteLink) toast(`Accepted. Their chair account was created and an invitation to set their password emailed to ${r.account.email}.`, 'ok');
       else toast(status === 'accepted' ? 'Accepted and emailed' : status === 'rejected' ? 'Declined and emailed' : 'Saved', 'ok');
       onDone();
     } catch (e: any) { toast(e.message, 'bad'); }

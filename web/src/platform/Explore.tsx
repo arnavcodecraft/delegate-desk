@@ -62,13 +62,14 @@ export function Explore({ home }: { home?: boolean }) {
   const setF = (k: string, v: string) => { const n = new URLSearchParams(sp); if (v) n.set(k, v); else n.delete(k); setSp(n, { replace: true }); };
   return (
     <PlatformShell>
-      <div className="pf-hero">
-        <div className="pf-eyebrow">Model UN conferences</div>
-        <h1 className="pf-h1" style={{ marginTop: 10 }}>{home ? 'Find your next conference' : 'Explore conferences'}</h1>
-        <p className="pf-sub">Search Model UN conferences, see committees, fees and dates, and apply in a minute. Running one? List it for free and manage applications, payments and committees in one place.</p>
-        {stats && <div className="pf-stats"><div><b>{stats.conferences}</b><span>conferences</span></div><div><b>{stats.delegates.toLocaleString('en-IN')}</b><span>delegates registered</span></div><div><b>{stats.countries}</b><span>countries</span></div><div><b>{stats.organisers}</b><span>organisers</span></div></div>}
-        {home && <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 18 }}><Link className="pf-btn primary" to="/list"><Plus className="icon" />List your conference</Link><Link className="pf-btn ghost" to="/jobs"><Briefcase className="icon" />Chair &amp; staff roles</Link></div>}
-      </div>
+      {home ? <Landing stats={stats} /> : (
+        <div className="pf-pagehead">
+          <div><div className="pf-eyebrow">Model UN conferences</div><h1 className="pf-h1 left">Explore conferences</h1>
+            <p className="pf-sub left">Committees, fees and dates for every listed conference. Apply in a minute.</p></div>
+          {stats && <div className="pf-stats compact"><div><b>{stats.conferences}</b><span>conferences</span></div><div><b>{stats.delegates.toLocaleString('en-IN')}</b><span>delegates</span></div><div><b>{stats.countries}</b><span>countries</span></div></div>}
+        </div>
+      )}
+      {home && <div className="pf-sec-head"><h2 className="pf-h2">Upcoming conferences</h2><Link to="/explore" className="pf-btn link">See all</Link></div>}
       <div className="pf-filters">
         <div className="pf-search grow"><Search className="icon" /><input className="pf-input" style={{ width: '100%' }} value={q} onChange={(e) => { setQ(e.target.value); setF('q', e.target.value); }} placeholder="Search by name, city, committee…" aria-label="Search conferences" /></div>
         <select className="pf-input" value={f.country} onChange={(e) => setF('country', e.target.value)} aria-label="Country"><option value="">Any country</option>{(data?.countries ?? []).map((c) => <option key={c} value={c}>{countryName(c)}</option>)}</select>
@@ -82,6 +83,41 @@ export function Explore({ home }: { home?: boolean }) {
           <div className="pf-empty pf-card"><Gavel className="icon" style={{ width: 34, height: 34, color: 'var(--pf-ink-3)' }} /><h2 className="pf-h2" style={{ marginTop: 10 }}>No conferences match</h2><p>Try fewer filters, or be the first: list yours in a few minutes.</p><Link className="pf-btn primary" to="/list">List your conference</Link></div>
         ) : <div className="pf-confs">{data.conferences.map((c) => <ConfCard key={c.slug} c={c} />)}</div>}
     </PlatformShell>
+  );
+}
+
+/** The home page: what DelegateDesk does, for organisers, delegates and chairs. */
+function Landing({ stats }: { stats: any }) {
+  return (
+    <>
+      <section className="pf-land">
+        <div className="pf-land-copy">
+          <div className="pf-eyebrow"><span className="pf-dot" />For Model UN organisers, delegates and chairs</div>
+          <h1 className="pf-h1 left">Run your conference. <span className="pf-grad-text">Win your committee.</span></h1>
+          <p className="pf-sub left">Applications, allotments, payments, emails and live committee sessions with full EB marking for organisers. Research, position papers, speeches and practice for delegates. One account, every conference.</p>
+          <div className="pf-land-cta"><Link className="pf-btn primary" to="/list"><Plus className="icon" />List your conference</Link><Link className="pf-btn ghost" to="/prep">Start preparing</Link></div>
+          {stats && <div className="pf-stats compact"><div><b>{stats.conferences}</b><span>conferences</span></div><div><b>{stats.delegates.toLocaleString('en-IN')}</b><span>delegates</span></div><div><b>{stats.organisers}</b><span>organisers</span></div></div>}
+        </div>
+        <div className="pf-land-visual" aria-hidden="true">
+          <div className="pf-mock pf-mock-a">
+            <div className="pf-mock-h"><span>UNSC · Moderated caucus</span><b>1:00</b></div>
+            {[['Latvia', '4.8'], ['Denmark', '5.0'], ['Greece', '4.5'], ['India', '—']].map(([n, m], i) => <div key={n} className={`pf-mock-r ${i === 3 ? 'now' : ''}`}><span>{n}</span><em>{i === 3 ? 'Speaking' : m}</em></div>)}
+          </div>
+          <div className="pf-mock pf-mock-b">
+            <div className="pf-mock-h"><span>Marksheet</span><b>Verbatim 80 · Chits 20</b></div>
+            <div className="pf-mock-bars">{[92, 84, 77, 70, 63].map((w, i) => <i key={i} style={{ width: `${w}%` }} />)}</div>
+          </div>
+          <div className="pf-mock pf-mock-c"><b>₹1,600</b><span>Payment confirmed · TMUN27-R-000001</span></div>
+        </div>
+      </section>
+      <section className="pf-pillars">
+        {[
+          { t: 'For organisers', d: 'A 10-step set-up, a public page and registration link, applications and seat allotment, UPI and bank payments with proof review, emails, check-in, certificates and accounts.', to: '/list', l: 'List your conference' },
+          { t: 'For delegates', d: 'Research briefs with sources, position paper and speech builders, a resolution formatter, practice negotiations, courses and daily challenges, and every conference you join in one account.', to: '/prep', l: 'Open Prep' },
+          { t: 'For chairs', d: 'Roll call, speakers list, motions and voting, plus EB marking for every speech, POI and chit, with the marksheet, verbatim and recognition exported to Excel.', to: '/session', l: 'Start a session' },
+        ].map((x) => <Link key={x.t} to={x.to} className="pf-pillar"><b>{x.t}</b><p>{x.d}</p><span>{x.l} →</span></Link>)}
+      </section>
+    </>
   );
 }
 

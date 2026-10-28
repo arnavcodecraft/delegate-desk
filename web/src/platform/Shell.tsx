@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
+import { UserRound } from 'lucide-react';
 import { api } from '../api';
 
 export interface PfMe { user: { name: string; email: string } | null; perms?: string[]; workspace?: { id: string; name: string }; mfaPending?: boolean }
@@ -16,24 +17,46 @@ export function useMe() {
   return me;
 }
 
-/** The public platform frame: pill navigation like a conference directory, warm palette. */
+export interface Person { id: string; name: string; email: string; verified: boolean; school: string | null; city: string | null; role: string; prefs: Record<string, any> }
+let personCache: { person: Person | null; conferences?: any[] } | null = null;
+/** The signed-in participant (delegate, advisor, chair), if any. */
+export function usePerson() {
+  const [p, setP] = useState(personCache);
+  useEffect(() => {
+    const load = () => api.get<{ person: Person | null; conferences?: any[] }>('/api/me').then((m) => { personCache = m; setP(m); }).catch(() => setP({ person: null }));
+    load();
+    window.addEventListener('dd:me', load);
+    return () => window.removeEventListener('dd:me', load);
+  }, []);
+  return p;
+}
+
+/** The public frame: a white top bar, then the page. */
 export function PlatformShell({ children }: { children: React.ReactNode }) {
   const me = useMe();
+  const person = usePerson();
   useEffect(() => { document.body.classList.add('pf-body'); return () => document.body.classList.remove('pf-body'); }, []);
   const signedIn = !!me?.user && !me.mfaPending;
   return (
     <div className="pf">
-      <div className="pf-top">
+      <header className="pf-top">
         <nav className="pf-nav" aria-label="Main">
           <Link to="/" className="brand"><span className="mark">D</span><span>DelegateDesk</span></Link>
-          <NavLink to="/session"><small>Start</small><span>Session</span></NavLink>
-          <NavLink to="/list"><small>List your</small><span>Conference</span></NavLink>
-          <NavLink to="/explore"><span>Explore</span></NavLink>
-          <NavLink to="/jobs"><span>Job Board</span></NavLink>
-          {signedIn ? <Link to="/app" className="cta"><span>Dashboard</span></Link> : <Link to="/login" className="cta"><span>Sign in</span></Link>}
+          <NavLink to="/explore">Explore</NavLink>
+          <NavLink to="/jobs">Job Board</NavLink>
+          <NavLink to="/prep">Prep</NavLink>
+          <NavLink to="/session" className="hide-sm">Live session</NavLink>
+          <span className="spacer" />
+          {person?.person ? <NavLink to="/account" className="ghost-cta"><span className="pf-avatar">{person.person.name.slice(0, 1).toUpperCase()}</span><span className="hide-sm">My account</span></NavLink>
+            : !signedIn && <><NavLink to="/account" className="hide-sm">Sign in</NavLink><NavLink to="/account" className="show-sm" aria-label="Sign in"><UserRound className="icon" style={{ width: 18, height: 18 }} /></NavLink></>}
+          {signedIn ? <Link to="/app" className="cta">Dashboard</Link> : <Link to="/list" className="cta">List your conference</Link>}
         </nav>
-      </div>
-      <div className="pf-wrap">{children}</div>
+      </header>
+      <main className="pf-wrap">{children}</main>
+      <footer className="pf-foot">
+        <div><b>DelegateDesk</b><span>Run your conference. Prepare for committee.</span></div>
+        <nav><Link to="/explore">Explore</Link><Link to="/jobs">Job Board</Link><Link to="/prep">Prep</Link><Link to="/prep/tools">MUN tools</Link><Link to="/list">List your conference</Link><Link to="/login">Organiser sign-in</Link><Link to="/privacy">Privacy</Link></nav>
+      </footer>
     </div>
   );
 }

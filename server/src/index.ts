@@ -15,6 +15,8 @@ import { publicRouter, webhookRouter, serveFile } from './routes/public.ts';
 import { authRouter, adminRouter } from './routes/admin.ts';
 import { financeRouter } from './routes/finance.ts';
 import { organiserRouter } from './routes/organiser.ts';
+import { meRouter } from './routes/me.ts';
+import { prepRouter } from './routes/prep.ts';
 import { platformRouter, liveRouter } from './routes/platform.ts';
 import './services/documents.ts'; // registers email attachment builders
 import './services/badges.ts';
@@ -41,7 +43,7 @@ export function createApp() {
   app.use((req, _res, next) => workspaceStore.run(resolveWorkspace(req), next));
   app.use(sessionMiddleware);
   // CSRF: state-changing staff calls must carry a custom header that cross-site forms cannot set.
-  app.use(['/api/admin', '/api/finance', '/api/auth', '/api/platform'], (req, _res, next) => {
+  app.use(['/api/admin', '/api/finance', '/api/auth', '/api/platform', '/api/me', '/api/prep'], (req, _res, next) => {
     if (req.method !== 'GET' && req.headers['x-dd'] !== '1') return next(new HttpError(403, 'Missing request header'));
     next();
   });
@@ -52,6 +54,8 @@ export function createApp() {
   app.use('/api/admin', organiserRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/live', liveRouter);
+  app.use('/api/me', meRouter);
+  app.use('/api/prep', prepRouter);
   app.use('/api/finance', financeRouter);
   app.get('/api/files', serveFile);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found')));

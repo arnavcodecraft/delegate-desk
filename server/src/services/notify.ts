@@ -33,8 +33,16 @@ export const DEFAULT_TEMPLATES: Record<string, Tpl> = {
     body: `Hi {{name}},\n\nThank you for applying for {{role}} at {{event_name}}. We received many strong applications and are unable to offer you this role this time.\n\n{{note}}\n\nWe hope to see you at a future conference.`,
   },
   staff_invite: {
-    subject: 'Your {{event_name}} team account',
-    body: `Hi {{name}},\n\nYou have been added to the {{event_name}} team as {{role}}.\n\nSign in at {{login_link}} with this email and the temporary password below, then change it under My account.\n\nTemporary password: {{password}}`,
+    subject: 'You have been invited to the {{event_name}} team',
+    body: `Hi {{name}},\n\nYou have been added to the {{org_name}} team on DelegateDesk as {{role}}.\n\nSet your password and sign in here (the link works once and expires in 7 days):\n{{invite_link}}`,
+  },
+  staff_password_reset: {
+    subject: 'Reset your DelegateDesk password',
+    body: `Hi {{name}},\n\nUse this link to choose a new password. It works once and expires in an hour:\n{{reset_link}}\n\nIf you did not ask for this, ignore this email.`,
+  },
+  account_code: {
+    subject: '{{code}} is your DelegateDesk code',
+    body: `Hi {{name}},\n\nYour code is {{code}}. It expires in 15 minutes.\n\n{{purpose}}\n\nIf you did not ask for this, ignore this email.`,
   },
   position_paper_reviewed: {
     subject: 'Feedback on your position paper ({{committee}})',

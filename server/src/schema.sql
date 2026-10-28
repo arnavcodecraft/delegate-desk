@@ -658,3 +658,9 @@ CREATE TABLE IF NOT EXISTS position_paper (
   submitted_at TEXT NOT NULL, reviewed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_paper_reg ON position_paper(registration_id);
+
+-- One-time links for staff: invitations (set your password) and password resets.
+CREATE TABLE IF NOT EXISTS user_token (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES user(id), kind TEXT NOT NULL,   -- invite | reset
+  token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, used_at TEXT, created_at TEXT NOT NULL
+);

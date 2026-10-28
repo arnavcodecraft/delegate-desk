@@ -120,8 +120,10 @@ test('Job Board: a chair applies, is accepted with an account, and can sign in t
   assert.equal(status.status, 'submitted');
   const list = await (await json('GET', `/api/admin/events/${eventId}/role-applications?role=chair`, undefined, owner)).json();
   const decided = await (await json('POST', `/api/admin/role-applications/${list[0].id}/decide`, { status: 'accepted', createAccount: true }, owner)).json();
-  assert.ok(decided.account?.password);
-  const login = await json('POST', '/api/auth/login', { email: 'chloe@example.com', password: decided.account.password });
+  assert.match(decided.account?.inviteLink ?? '', /\/invite\/t[a-z0-9]{7}\./, 'the invite link carries the workspace tag');
+  const tok = decided.account.inviteLink.split('/invite/')[1];
+  assert.equal((await json('POST', `/api/auth/link/${tok}`, { password: 'chloe-chair-pass' })).status, 200);
+  const login = await json('POST', '/api/auth/login', { email: 'chloe@example.com', password: 'chloe-chair-pass' });
   assert.equal(login.status, 200);
   const chair = cookieOf(login);
   const live = await (await json('GET', `/api/admin/events/${eventId}/live`, undefined, chair)).json();

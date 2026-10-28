@@ -35,9 +35,14 @@ Demo accounts (password `ChangeMe!2026` for all, all `@example.org`):
 | `chair.unsc@` | Director, UNSC (sees only UNSC) | no |
 | `auditor@` | External auditor (read-only) | no |
 
-New organisers create their own account at `/list`: they become admin + CFO of a separate workspace, are signed in straight away, and set up two-factor sign-in at their next sign-in. Chairs accepted from Applications get an account by email with a temporary password. Delegates never need a password; they use the link in their email.
+New organisers create their own account at `/list`: they become admin + CFO of a separate workspace, are signed in straight away, and set up two-factor sign-in at their next sign-in.
 
-Tests: `npm test` (70 tests: spec worked examples, money flows, permissions, an 8-process concurrent-registration test, and every integration exercised against a local fake that speaks its real protocol: clamd, WhatsApp Cloud API, MSG91, Google OAuth + Sheets, Anthropic Messages; plus workspace isolation, onboarding, review mode, the Job Board, and the live-session voting rules). Typecheck: `npm run typecheck`. Docker: `docker build -t delegatedesk . && docker run -p 8080:8080 -v dd:/data delegatedesk`.
+Accounts and roles:
+- **Organiser team.** Settings → Users & roles → Invite staff emails a one-time link (7 days) to set a password; the link is also shown on screen in case email isn't set up. Roles: Secretary-General/admin, Secretariat (USG/DSG: committees, documents, applications, delegates, emails, check-in; no money), CFO, Accountant, Registration desk, Chair (one committee), Auditor (read-only), Referrer, Head delegate/advisor. "What each role can do" explains them; the permission matrix shows every right. Pending invites show as *Invited* with *Resend invite*; admins can send a reset link. Chairs accepted from Applications get the same invite link.
+- **Forgotten passwords.** Staff: "Forgot password?" on `/login` emails a one-hour link. Participants: a 6-digit code.
+- **Delegates, advisors and chairs** can create a free account at `/account` (optional: the delegate link in their email still works without one). After confirming their email with a 6-digit code, *My conferences* lists every registration and application made with that email, across all organisers. Registration forms fill themselves in. If no mail server is configured (`SMTP_URL`), the code is shown on screen so a local install still works.
+
+Tests: `npm test` (83 tests: spec worked examples, money flows, permissions, an 8-process concurrent-registration test, and every integration exercised against a local fake that speaks its real protocol: clamd, WhatsApp Cloud API, MSG91, Google OAuth + Sheets, Anthropic Messages; plus workspace isolation, onboarding, review mode, the Job Board, and the live-session voting rules). Typecheck: `npm run typecheck`. Docker: `docker build -t delegatedesk . && docker run -p 8080:8080 -v dd:/data delegatedesk`.
 
 End-to-end test: `npm run e2e` drives a real browser through the whole product against a running demo (start it with `ALLOW_SANDBOX=1`; run `npx playwright install chromium` once). A new organiser signs up and creates *Test Model United Nations* with three committees, sets fees, a coupon and four payment methods, opens applications and publishes; delegates register (instant and reviewed), pay by proof and in person, upload a position paper; an advisor and a chair apply; the chair runs a live session; then check-in, badges, certificates, emails, a refund, an expense, the books, settings and backups; finally every demo account opens every screen in its menu. Screenshots land in `e2e/screenshots/`.
 
@@ -57,7 +62,34 @@ The event-update API only accepts rules; profile, application and payment fields
 
 Two-person approval (payments, refunds, expenses, manual journals) applies whenever someone else can approve. A solo organiser who is the only person holding the approving role can approve their own entries; each such approval is audited as self-approved.
 
-Look: navy and gold "summit" theme with Playfair Display headings across public pages, the delegate page and the staff app, in light and dark.
+Look: premium blue and white. A white top bar and a light sidebar with a blue active rail, Plus Jakarta Sans headings over Inter, blue gradients only where they carry meaning (banners, the delegate header, primary buttons), in light and dark. A guided **dashboard tour** runs on an organiser's first visit and can be replayed from the ? button in the sidebar.
+
+## EB marking (live sessions)
+
+Open a committee's console (Live sessions → Start / Open, or `/session`) and switch to **EB marking**. It follows the marksheets EBs keep by hand (marksheet, verbatim and recognition sheets):
+
+- The GSL and each moderated caucus become marksheet columns on their own (GSL, MOD-1, MOD-2 …) when the motion passes; every speaker who takes the floor, or is recognised in a caucus, is a speech to mark (out of 10 by default) with verbatim notes or "noted offline".
+- Verbal POIs (asked by → to, with a mark), substantive and POI chits, and marks by hand (lobbying, documentation).
+- Attendance per day (P / PV / A) is taken from the roll call and can be edited.
+- **Scheme:** start from *Verbatim 80% · Chits 20% · Lobbying · Documentation* or a 100-point scheme; change weights, maxima, which sources feed each criterion, how several speeches in one column combine (average, sum, best), and the award order (Best Delegate, High Commendation, Special Mention, Verbal Mentions).
+- **Marksheet** with live totals, ranks and awards; **Recognition** shows who has spoken least, every motion by proposer, and the speakers and POIs in each segment.
+- **Export Excel** produces the three sheets (MARKSHEET with working formulas, VERBATIM, RECOGNITION SHEET). **Send awards to certificates** gives each award to the delegate holding that portfolio.
+- Marks are only visible on the chair console; the delegate view never receives them. Amendments to drafts (friendly / unfriendly, passed / failed) are tracked on the floor and shown to delegates.
+
+## Prep (for delegates)
+
+`/prep` is a preparation workspace for delegates, advisors and chairs:
+
+- **Research:** questions answered with web search and citations to the sources (UN documents, governments, treaties). **Research projects** for a country, committee and topic, from templates (country brief, position paper, crisis, resolution). Background research tasks (background, past UN action, country policy, voting record, allies and blocs, solutions, likely amendments, actors, powers, scenarios) run in parallel and land in a persistent brief. Research memory (stance, red lines) is used in every answer. Shared projects: invite teammates (edit) or advisors (view); everyone sees who prepared what.
+- **Write:** position papers, speeches (opening, GSL, moderated caucus, right of reply, closing), memos, amendments and points of information, with an outline and word budgets at 130 words a minute, the chair's checklist, and a sourced draft.
+- **Coach:** live word count, pages, speaking time, limit and missing sections; chair-style rubric feedback that flags unsupported or overstated claims.
+- **Practice:** negotiate with an AI delegation, stress-test an argument, interview a historical figure, run a crisis, or get speech feedback; save transcripts to a project.
+- **Learn:** 14 courses (UN, Security Council, GA, rules of procedure, speeches, position papers, research, resolutions, lobbying, negotiation, international law, human rights, crisis, chairing and marking) with quizzes, a daily challenge and a streak.
+- **Discover:** a daily briefing with sources and the committees each story matters to, or a briefing on the topics you follow.
+- **Countries:** all 193 members with regional group, capital and blocs (P5, Security Council 2026, G7, G20, BRICS, EU, NATO, AU, ASEAN, Arab League, GCC, OPEC, SCO, SAARC, Quad, Mercosur, Commonwealth), a comparator (with sourced population, GDP and HDI on request) and a bloc builder.
+- **MUN tools (no account, nothing leaves the device):** speech timer with presets, cues and notes; speakers list; voting tally (simple, two-thirds, Security Council with veto); quorum calculator; motions reference (US and THIMUN); resolution formatter; resolution symbol decoder; acronym decoder (130+); placard generator; random delegation allocation; packing checklist; position paper counter.
+
+AI features use Claude (`ANTHROPIC_API_KEY`) and are metered per person (`AI_DAILY_LIMIT`, default 50 a day). Without a key every tool that doesn't need AI still works and AI features say so. AI answers can be wrong: open the source.
 
 Configuration lives in environment variables; see [`.env.example`](.env.example).
 

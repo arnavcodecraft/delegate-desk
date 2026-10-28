@@ -28,12 +28,12 @@ const load = (): Draft => { try { return { ...EMPTY, ...JSON.parse(localStorage.
 const STEPS = ['conference', 'format', 'level', 'where', 'size', 'committees', 'about', 'pay', 'uses', 'review'] as const;
 type Step = (typeof STEPS)[number];
 const USES = [
-  { key: 'applications', title: 'Applications & Allocations', text: 'Collect applications, score them, assign countries.', icon: Vote, color: '#6b7280' },
-  { key: 'payments', title: 'Payments', text: 'Take delegate fees straight into your own account.', icon: CreditCard, color: '#2563eb' },
-  { key: 'committees', title: 'Running Committees', text: 'Live rooms, speakers lists, voting, the scoreboard.', icon: Landmark, color: '#7c3aed' },
-  { key: 'emails', title: 'Emails', text: 'One send to everyone, or to a committee, or to the unpaid.', icon: Mail, color: '#db2777' },
-  { key: 'chairs', title: 'Recruiting Chairs', text: 'Post the roles and let chairs apply from anywhere.', icon: Globe2, color: '#0891b2' },
-  { key: 'marketing', title: 'Marketing', text: 'Listed on Explore with a page made to share.', icon: Megaphone, color: '#ea580c' },
+  { key: 'applications', title: 'Applications & Allocations', text: 'Collect applications, score them, assign countries.', icon: Vote, color: '#1f4fe0' },
+  { key: 'payments', title: 'Payments', text: 'Take delegate fees straight into your own account.', icon: CreditCard, color: '#2f6bff' },
+  { key: 'committees', title: 'Running Committees', text: 'Live rooms, speakers lists, voting, the scoreboard.', icon: Landmark, color: '#3b5bdb' },
+  { key: 'emails', title: 'Emails', text: 'One send to everyone, or to a committee, or to the unpaid.', icon: Mail, color: '#0b6bcb' },
+  { key: 'chairs', title: 'Recruiting Chairs', text: 'Post the roles and let chairs apply from anywhere.', icon: Globe2, color: '#1c7ed6' },
+  { key: 'marketing', title: 'Marketing', text: 'Listed on Explore with a page made to share.', icon: Megaphone, color: '#4263eb' },
 ];
 const SIZES = [{ n: 50, label: 'Up to 50', sub: 'Intimate', art: 1 }, { n: 100, label: '~100', sub: 'Mid-size', art: 2 }, { n: 250, label: '~250', sub: 'Large', art: 3 }, { n: 500, label: '500+', sub: 'Flagship', art: 4 }] as const;
 const FORMAT = { in_person: 'In person', online: 'Online', hybrid: 'Hybrid' } as const;
