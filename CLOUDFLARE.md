@@ -4,7 +4,7 @@ DelegateDesk has two halves:
 
 | Half | What it is | Where it runs |
 |---|---|---|
-| **Website** | The pages people see (`index.html`, `assets/`) plus a small `_worker.js` | **Cloudflare Pages**: `DelegateDesk-cloudflare-pages.zip` (157 files, under the 1,000-file limit) |
+| **Website** | The pages people see (`index.html`, `assets/`) plus a small `_worker.js` | **Cloudflare Pages**: the `delegatedesk-site` folder inside `DelegateDesk-cloudflare-pages.zip` (157 files, under the 1,000-file limit) |
 | **Server** | The database, payments, emails, uploads, PDFs, live sessions | A Node.js host: Render, a VPS, or your own PC through Cloudflare Tunnel (`DelegateDesk-server.zip`) |
 
 Cloudflare Pages only hosts files. It cannot run the database or the server, so the website forwards every `/api` request to the server. People only ever see your Cloudflare address, so sign-in cookies, uploads and downloads all work as normal. This exact setup passes the full 41-step end-to-end test.
@@ -44,11 +44,11 @@ Put HTTPS in front of it (Caddy, nginx, or Cloudflare Tunnel).
 
 ## Step 2: upload the website to Cloudflare Pages
 1. In the Cloudflare dashboard, go to **Workers & Pages → Create → Pages → Upload assets**.
-2. Name the project (e.g. `delegatedesk`) and drop in **`DelegateDesk-cloudflare-pages.zip`**. Don't unzip it; the files are already at the top level. Deploy.
+2. Unzip **`DelegateDesk-cloudflare-pages.zip`**. You get one folder, **`delegatedesk-site`**. Name the project (e.g. `delegatedesk`), choose **Upload folder** and pick `delegatedesk-site`, then Deploy.
 3. Open the project's **Settings → Variables and Secrets** and add two variables to **Production**:
    - `BACKEND_URL`: the server address from Step 1, e.g. `https://delegatedesk-api.onrender.com`. No trailing slash.
    - `PROXY_SECRET` (type: Secret): the same value as on the server.
-4. Variables only take effect on a new deployment. Go to **Deployments → Create deployment** and drop the same zip again.
+4. Variables only take effect on a new deployment. Go to **Deployments → Create deployment** and upload the `delegatedesk-site` folder again.
 
 ## Step 3: connect the two
 1. Make sure the server's `BASE_URL` is your Pages address (e.g. `https://delegatedesk.pages.dev`, or your custom domain), then restart the server. Emails, payment return links and secure cookies all use it.
