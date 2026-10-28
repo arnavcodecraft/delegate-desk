@@ -42,7 +42,14 @@ docker run -d -p 8080:8080 -v dd:/data \
 ```
 Put HTTPS in front of it (Caddy, nginx, or Cloudflare Tunnel).
 
-## Step 2: upload the website to Cloudflare Pages
+## Step 2: upload the website to Cloudflare
+
+> **Pages, not "Worker with static assets".** If Cloudflare says "Variables cannot be added to a Worker that only has static assets", you created a Worker from static files. That kind ignores `_worker.js` and can't hold `BACKEND_URL`. Use the Pages steps below (in **Create application**, click **Pages** / "Looking to deploy Pages? Get started", then **Upload assets**). Or deploy the Worker package with `deploy.bat` (Option W below).
+
+### Option W: as a Worker (`DelegateDesk-cloudflare-worker.zip`)
+Unzip it to get the `delegatedesk-worker` folder. Double-click `deploy.bat`, sign in to Cloudflare when the browser opens, and wait for "Deployed". Then go to **Workers & Pages → delegatedesk → Settings → Variables and Secrets**, add `BACKEND_URL` and `PROXY_SECRET`, and press **Deploy**. Variables now save, because this Worker has code.
+
+### Option P: as Pages
 1. In the Cloudflare dashboard, go to **Workers & Pages → Create → Pages → Upload assets**.
 2. Unzip **`DelegateDesk-cloudflare-pages.zip`**. You get one folder, **`delegatedesk-site`**. Name the project (e.g. `delegatedesk`), choose **Upload folder** and pick `delegatedesk-site`, then Deploy.
 3. Open the project's **Settings → Variables and Secrets** and add two variables to **Production**:
