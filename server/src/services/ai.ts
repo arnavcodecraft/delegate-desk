@@ -11,6 +11,7 @@ import { dashboard } from './dashboard.ts';
 import { runList, LISTS } from './lists.ts';
 import { trialBalance, profitAndLoss } from './ledger.ts';
 import { statement } from './commission.ts';
+import { filePart, geminiJson, geminiText, geminiTools, toContents, useGemini } from './gemini.ts';
 
 /*
  * AI assistance. Per the spec's guardrails, the model may read a bill, read a payment screenshot, draft a summary
@@ -24,7 +25,7 @@ export const FALLBACK = { betas: ['server-side-fallback-2026-07-01'], fallbacks:
 
 let client: Anthropic | null = null;
 export function anthropic() {
-  if (!config.ai.enabled) throw conflict('AI assistance is not configured. Set ANTHROPIC_API_KEY to turn it on.');
+  if (!config.ai.enabled) throw conflict('AI assistance is not configured. Set ANTHROPIC_API_KEY or GEMINI_API_KEY to turn it on.');
   client ??= new Anthropic(config.ai.baseUrl ? { baseURL: config.ai.baseUrl } : {});
   return client;
 }
@@ -68,12 +69,14 @@ async function extract(kind: 'bill' | 'proof', buf: Buffer, mime: string) {
   const prompt = kind === 'bill'
     ? 'Read this vendor bill from an Indian event organiser. Extract the fields. Use null for anything not clearly printed; do not guess.'
     : 'Read this UPI or bank transfer confirmation. Extract the UTR / transaction reference, amount, date, payee and whether it shows a successful payment. List anything that looks edited or inconsistent. Use null where not visible.';
-  const msg = await anthropic().beta.messages.create({
-    model: MODEL, max_tokens: 4000, ...FALLBACK,
-    output_config: { effort: 'low', format: { type: 'json_schema', schema: kind === 'bill' ? BILL_SCHEMA : PROOF_SCHEMA } },
-    messages: [{ role: 'user', content: [fileBlock(buf, mime), { type: 'text', text: prompt }] }],
-  });
-  const out = JSON.parse(textOf(msg) || '{}');
+  if (!config.ai.enabled) throw conflict('AI assistance is not configured. Set ANTHROPIC_API_KEY or GEMINI_API_KEY to turn it on.');
+  const schema = kind === 'bill' ? BILL_SCHEMA : PROOF_SCHEMA;
+  const out = useGemini()
+    ? await geminiJson({ contents: [{ role: 'user', parts: [filePart(buf, mime), { text: prompt }] }], schema })
+    : JSON.parse(textOf(await anthropic().beta.messages.create({
+      model: MODEL, max_tokens: 4000, ...FALLBACK, output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+      messages: [{ role: 'user', content: [fileBlock(buf, mime), { type: 'text', text: prompt }] }],
+    })) || '{}');
   audit(`ai.read_${kind}`, kind, null, undefined, { result: out });
   return out;
 }
@@ -105,12 +108,11 @@ export async function summarise(eventId: string) {
     forecast: d.forecast, alerts: d.alerts.map((a) => `${a.title}: ${a.detail}`),
     topCommittees: d.byCommittee.map((c: any) => ({ committee: c.short, paid: c.delegates, contribution: inr(c.contribution) })),
   };
-  const msg = await anthropic().beta.messages.create({
-    model: MODEL, max_tokens: 2000, ...FALLBACK, output_config: { effort: 'low' },
-    system: 'You write short status notes for the organising team of a student conference in India. Use only the numbers given. Plain sentences, no headings, under 150 words. Start with whether the event is ahead of or behind break-even, then the two or three things that most need attention.',
-    messages: [{ role: 'user', content: JSON.stringify(facts) }],
-  });
-  const text = textOf(msg);
+  const sumSystem = 'You write short status notes for the organising team of a student conference in India. Use only the numbers given. Plain sentences, no headings, under 150 words. Start with whether the event is ahead of or behind break-even, then the two or three things that most need attention.';
+  if (!config.ai.enabled) throw conflict('AI assistance is not configured. Set ANTHROPIC_API_KEY or GEMINI_API_KEY to turn it on.');
+  const text = useGemini()
+    ? (await geminiText({ system: sumSystem, contents: toContents([{ role: 'user', content: JSON.stringify(facts) }]), maxTokens: 2000 })).text
+    : textOf(await anthropic().beta.messages.create({ model: MODEL, max_tokens: 2000, ...FALLBACK, output_config: { effort: 'low' }, system: sumSystem, messages: [{ role: 'user', content: JSON.stringify(facts) }] }));
   audit('ai.summary', 'event', eventId);
   return { text, facts };
 }
@@ -173,15 +175,14 @@ export async function ask(question: string, roles: string[], eventId: string, hi
   const ev = getEvent(eventId);
   const used: string[] = [];
   const wrapped = tools.map((t) => ({ ...t, run: async (input: any, c?: any) => { used.push(t.name); return (t as any).run(input, c); } }));
-  const final = await anthropic().beta.messages.toolRunner({
-    model: MODEL, max_tokens: 8000, ...FALLBACK, output_config: { effort: 'medium' }, max_iterations: 8,
-    system: `You answer questions for staff of "${ev.name}", a student conference run by an Indian company. Today is ${new Date().toISOString().slice(0, 10)}. Look the facts up with the tools; never invent numbers. Tool money values are in paise: divide by 100 and write rupees in Indian format (₹1,23,456). You can only read data. If someone asks you to approve, refund, post, edit or move anything, say that a person has to do it in the app and tell them which screen. Keep answers short and concrete.`,
-    tools: wrapped,
-    messages: [...history.slice(-6).map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: question }],
-  });
-  const answer = textOf(final);
+  const askSystem = `You answer questions for staff of "${ev.name}", a student conference run by an Indian company. Today is ${new Date().toISOString().slice(0, 10)}. Look the facts up with the tools; never invent numbers. Tool money values are in paise: divide by 100 and write rupees in Indian format (₹1,23,456). You can only read data. If someone asks you to approve, refund, post, edit or move anything, say that a person has to do it in the app and tell them which screen. Keep answers short and concrete.`;
+  const msgs = [...history.slice(-6).map((m) => ({ role: m.role, content: m.content })), { role: 'user' as const, content: question }];
+  if (!config.ai.enabled) throw conflict('AI assistance is not configured. Set ANTHROPIC_API_KEY or GEMINI_API_KEY to turn it on.');
+  const answer = useGemini()
+    ? await geminiTools({ system: askSystem, contents: toContents(msgs), tools: wrapped.map((t: any) => ({ name: t.name, description: t.description, parameters: t.input_schema, run: (i: any) => t.run(i) })) })
+    : textOf(await anthropic().beta.messages.toolRunner({ model: MODEL, max_tokens: 8000, ...FALLBACK, output_config: { effort: 'medium' }, max_iterations: 8, system: askSystem, tools: wrapped, messages: msgs }));
   audit('ai.ask', 'event', eventId, undefined, { question, tools: used });
   return { answer, toolsUsed: [...new Set(used)] };
 }
 
-export const aiStatus = () => ({ enabled: config.ai.enabled, model: MODEL });
+export const aiStatus = () => ({ enabled: config.ai.enabled, provider: config.ai.enabled ? (useGemini() ? 'gemini' : 'anthropic') : null, model: useGemini() ? 'gemini' : MODEL });

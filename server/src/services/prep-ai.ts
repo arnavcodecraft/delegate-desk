@@ -1,10 +1,11 @@
 /**
- * AI for Prep: cited research (Claude with web search), background research tasks, drafting with word budgets,
+ * AI for Prep (Claude, or Gemini with an AI Studio key): cited research with web search, background research tasks, drafting with word budgets,
  * a chair-style writing coach, practice partners (negotiation, counterarguments, historical figures, crisis),
  * and daily briefings. Every call is metered per person (prep.ts) and never sees anyone else's data.
  */
 import type Anthropic from '@anthropic-ai/sdk';
 import { anthropic, MODEL, FALLBACK, textOf } from './ai.ts';
+import { geminiJson, geminiText, toContents, useGemini } from './gemini.ts';
 import { config } from '../config.ts';
 import { bad, conflict } from '../util.ts';
 import { access, addItem, setItem, useAi, TASKS, cachedBriefing, saveBriefing } from './prep.ts';
@@ -45,6 +46,10 @@ function harvest(msg: Anthropic.Beta.BetaMessage) {
 /** One model call with web search, resuming if the server-side search loop pauses. */
 async function searchCall(system: string, messages: Anthropic.Beta.BetaMessageParam[], o: { maxTokens?: number; effort?: 'low' | 'medium' | 'high'; search?: boolean } = {}) {
   if (!config.ai.enabled) throw conflict('AI research is not switched on for this site yet. Every tool that does not need AI still works.');
+  if (useGemini()) {
+    const out = await geminiText({ system, contents: toContents(messages as { role: 'user' | 'assistant'; content: string }[]), search: o.search !== false, maxTokens: o.maxTokens });
+    return { text: out.text, sources: out.sources };
+  }
   const msgs = [...messages];
   let msg: Anthropic.Beta.BetaMessage | null = null;
   for (let i = 0; i < 4; i++) {
@@ -148,12 +153,13 @@ export async function coach(p: Person, b: { text: string; kind?: string; project
   const project = b.projectId ? access(p, b.projectId).project : null;
   if (!config.ai.enabled) throw conflict('The writing coach needs AI, which is not switched on for this site yet. The word counter and checks still work.');
   useAi(p);
-  const msg = await anthropic().beta.messages.create({
-    model: MODEL, max_tokens: 6000, ...FALLBACK, output_config: { effort: 'medium', format: { type: 'json_schema', schema: COACH_SCHEMA } },
-    system: `You are an experienced Model UN chair marking a delegate's ${b.kind === 'speech' ? 'speech' : 'position paper'}. Mark against this rubric (0-10 each): research depth, accuracy to the country's real policy, quality and feasibility of solutions, structure, use of sources, diplomatic style. Quote any claim that is unsupported, overstated, outdated or likely false in "flagged", with a narrower, defensible rewrite. "missing" lists sections or evidence a chair would expect but cannot find. Be specific and kind; no generic advice.\n\n${context(project)}`,
-    messages: [{ role: 'user', content: text.slice(0, 60000) }],
-  });
-  const out = JSON.parse(textOf(msg) || '{}');
+  const coachSystem = `You are an experienced Model UN chair marking a delegate's ${b.kind === 'speech' ? 'speech' : 'position paper'}. Mark against this rubric (0-10 each): research depth, accuracy to the country's real policy, quality and feasibility of solutions, structure, use of sources, diplomatic style. Quote any claim that is unsupported, overstated, outdated or likely false in "flagged", with a narrower, defensible rewrite. "missing" lists sections or evidence a chair would expect but cannot find. Be specific and kind; no generic advice.\n\n${context(project)}`;
+  const out = useGemini()
+    ? await geminiJson({ system: coachSystem, contents: toContents([{ role: 'user', content: text.slice(0, 60000) }]), schema: COACH_SCHEMA })
+    : JSON.parse(textOf(await anthropic().beta.messages.create({
+      model: MODEL, max_tokens: 6000, ...FALLBACK, output_config: { effort: 'medium', format: { type: 'json_schema', schema: COACH_SCHEMA } },
+      system: coachSystem, messages: [{ role: 'user', content: text.slice(0, 60000) }],
+    })) || '{}');
   addItem(p, { projectId: b.projectId ?? null, kind: 'coach', title: `Feedback (${out.overall ?? '?'} / 100)`, body: text.slice(0, 20000), data: out });
   return out;
 }
@@ -177,11 +183,10 @@ export async function practice(p: Person, b: { mode: string; setup: any; message
   const project = b.projectId ? access(p, b.projectId).project : null;
   if (!config.ai.enabled) throw conflict('Practice needs AI, which is not switched on for this site yet.');
   useAi(p);
-  const msg = await anthropic().beta.messages.create({
-    model: MODEL, max_tokens: 3000, ...FALLBACK, output_config: { effort: 'low' },
-    system: `${m.system({ ...project, ...setup })}\n\nThis is an educational exercise for a student. ${context(project)}`, messages: msgs,
-  });
-  const reply = textOf(msg);
+  const practiceSystem = `${m.system({ ...project, ...setup })}\n\nThis is an educational exercise for a student. ${context(project)}`;
+  const reply = useGemini()
+    ? (await geminiText({ system: practiceSystem, contents: toContents(msgs), maxTokens: 3000 })).text
+    : textOf(await anthropic().beta.messages.create({ model: MODEL, max_tokens: 3000, ...FALLBACK, output_config: { effort: 'low' }, system: practiceSystem, messages: msgs }));
   if (b.save) addItem(p, { projectId: b.projectId ?? null, kind: 'practice', title: `${m.label}: ${setup.topic || setup.figure}`, body: [...msgs, { role: 'assistant', content: reply }].map((x) => `**${x.role === 'user' ? 'You' : 'Partner'}:** ${x.content}`).join('\n\n'), data: { mode: b.mode, setup } });
   return { reply };
 }
@@ -201,11 +206,11 @@ export async function briefing(p: Person | null, b: { topics?: string[]; refresh
   if (!config.ai.enabled) throw conflict('Daily briefings need AI, which is not switched on for this site yet.');
   if (p) useAi(p); else throw bad('Sign in to load a fresh briefing');
   const found = await searchCall(`${SYSTEM}\nYou write the daily diplomatic briefing for MUN delegates.`, [{ role: 'user', content: `Search today's news (${day}) and pick the 6 most important developments in international affairs${topics.length ? ` with a focus on: ${topics.join(', ')}` : ''}. For each: what happened, the primary documents or official statements behind it, and which UN committees it matters to.` }], { maxTokens: 8000 });
-  const msg = await anthropic().beta.messages.create({
-    model: MODEL, max_tokens: 4000, ...FALLBACK, output_config: { effort: 'low', format: { type: 'json_schema', schema: BRIEF_SCHEMA } },
-    messages: [{ role: 'user', content: `Turn these research notes into briefing stories (6 at most).\n\n${found.text}` }],
-  });
-  const out = { day, topics, stories: JSON.parse(textOf(msg) || '{"stories":[]}').stories, sources: found.sources };
+  const ask = `Turn these research notes into briefing stories (6 at most).\n\n${found.text}`;
+  const parsed = useGemini()
+    ? await geminiJson<{ stories: any[] }>({ contents: toContents([{ role: 'user', content: ask }]), schema: BRIEF_SCHEMA })
+    : JSON.parse(textOf(await anthropic().beta.messages.create({ model: MODEL, max_tokens: 4000, ...FALLBACK, output_config: { effort: 'low', format: { type: 'json_schema', schema: BRIEF_SCHEMA } }, messages: [{ role: 'user', content: ask }] })) || '{"stories":[]}');
+  const out = { day, topics, stories: parsed.stories ?? [], sources: found.sources };
   saveBriefing(key, out);
   return { ...out, created_at: new Date().toISOString() };
 }

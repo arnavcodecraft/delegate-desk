@@ -8,7 +8,11 @@ import { audit } from '../audit.ts';
 import { config } from '../config.ts';
 import { ROLE_LABELS, createUser, hashPassword, type Role } from '../auth.ts';
 import { bad, conflict, now, token, uid } from '../util.ts';
-import { enqueue } from './notify.ts';
+import { enqueue, deliverOne } from './notify.ts';
+import { mailConfigured } from './mail.ts';
+
+/** Links are sent straight away; a refusal is retried by the regular delivery run. */
+export const sendNow = (id: string | null) => { if (mailConfigured()) deliverOne(id).catch((e) => console.error('[mail] not sent yet:', e?.message ?? e)); };
 import { getOrg } from '../settings.ts';
 
 const hash = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
@@ -32,7 +36,7 @@ export function inviteStaff(o: { name: string; email: string; roles: { role: Rol
 function sendInvite(userId: string, link: string, eventName?: string) {
   const u = one('SELECT * FROM user WHERE id = ?', userId)!;
   const roles = all('SELECT role FROM user_role WHERE user_id = ?', userId).map((r) => ROLE_LABELS[r.role as Role] ?? r.role);
-  enqueue('staff_invite', { to: u.email, recipientKind: 'staff', vars: { name: u.name, event_name: eventName ?? getOrg().name, org_name: getOrg().name, role: roles.join(', '), invite_link: link } });
+  sendNow(enqueue('staff_invite', { to: u.email, recipientKind: 'staff', vars: { name: u.name, event_name: eventName ?? getOrg().name, org_name: getOrg().name, role: roles.join(', '), invite_link: link } }));
 }
 export function resendInvite(userId: string) {
   const u = one('SELECT * FROM user WHERE id = ?', userId);
@@ -66,6 +70,6 @@ export function forgotPassword(email: string) {
   const u = one('SELECT * FROM user WHERE email = ? AND active = 1', String(email ?? '').trim().toLowerCase());
   if (!u) return;
   const link = issueUserToken(u.id, 'reset');
-  enqueue('staff_password_reset', { to: u.email, recipientKind: 'staff', vars: { name: u.name, reset_link: link } });
+  sendNow(enqueue('staff_password_reset', { to: u.email, recipientKind: 'staff', vars: { name: u.name, reset_link: link } }));
   audit('user.password_reset_requested', 'user', u.id);
 }

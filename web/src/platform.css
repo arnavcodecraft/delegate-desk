@@ -693,3 +693,8 @@
 .pf-foot { padding: 28px max(20px, calc((100% - 1160px) / 2)); }
 .pf-nav .show-sm { display: none; }
 @media (max-width: 860px) { .pf-nav .show-sm { display: inline-flex; } }
+.setup-row { display: flex; gap: 12px; padding: 14px 18px; align-items: flex-start; }
+.setup-row + .setup-row { border-top: 1px solid var(--pf-line); }
+.setup-row > .icon { width: 22px; height: 22px; flex: none; margin-top: 1px; }
+.setup-row.ok > .icon { color: var(--pf-green); } .setup-row.warn > .icon { color: var(--pf-amber); } .setup-row.bad > .icon { color: var(--pf-red); } .setup-row.wait > .icon { color: var(--pf-brand); }
+.setup-row code { background: var(--pf-bg-2); padding: 1px 5px; border-radius: 4px; }

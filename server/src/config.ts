@@ -32,8 +32,8 @@ export const config = {
     enabled: process.env.BACKUPS !== 'off', key: process.env.BACKUP_KEY ?? '',
     dir: process.env.BACKUP_DIR ?? path.join(root, 'data', 'backups'), keep: Number(process.env.BACKUP_KEEP ?? 30),
   },
-  // Claude-powered assistance turns on when Anthropic credentials are present.
-  ai: { enabled: !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN), baseUrl: process.env.ANTHROPIC_BASE_URL ?? '' },
+  // AI turns on when Anthropic (Claude) or Google AI Studio (Gemini) credentials are present.
+  ai: { enabled: !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY), baseUrl: process.env.ANTHROPIC_BASE_URL ?? '' },
   google: {
     serviceAccountJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON ?? '', serviceAccountFile: process.env.GOOGLE_SERVICE_ACCOUNT_FILE ?? '',
     tokenUrl: process.env.GOOGLE_TOKEN_URL ?? '', sheetsBase: process.env.GOOGLE_SHEETS_BASE ?? 'https://sheets.googleapis.com',

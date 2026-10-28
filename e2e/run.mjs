@@ -391,7 +391,7 @@ await step('prep: research project, team invite, learning streak (AI off reports
   const s = globalThis.student;
   await s.goto(`${B}/prep/research`); await s.getByLabel('Delegation').fill('Pakistan'); await s.getByLabel('Committee').fill('UNSC'); await s.getByLabel('Topic').fill('Maritime security');
   await s.getByRole('button', { name: 'Create project' }).click(); await s.waitForURL(/\/prep\/projects\//);
-  await s.getByRole('button', { name: /Run \d+ tasks?/ }).click(); await s.waitForSelector('text=/not switched on/');
+  await s.getByRole('button', { name: /Run \d+ tasks?/ }).click(); await s.waitForSelector('text=/not switched on|Researching|Still researching|Research task/', { timeout: 20000 });
   await s.getByPlaceholder('Teammate or advisor email').fill('advisor@example.com'); await s.getByRole('button', { name: 'Invite' }).click(); await s.waitForSelector('text=advisor@example.com');
   await s.getByPlaceholder('Paste a quote, a link or your own notes').fill('Our red line: no new sanctions.'); await s.getByRole('button', { name: 'Add', exact: true }).click(); await s.waitForSelector('text=Our red line');
   await s.goto(`${B}/prep/learn/un-1`); for (const q of await s.locator('.pp-q').all()) await q.locator('.pp-opts button').first().click();

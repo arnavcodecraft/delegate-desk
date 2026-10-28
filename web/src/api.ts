@@ -12,6 +12,11 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   const text = await res.text();
   let data: any = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  // The DelegateDesk server always answers in JSON. A web page instead means the site isn't connected to it.
+  const notServer = url.startsWith('/api/') && typeof data === 'string' && /<!doctype html|<html/i.test(data);
+  if (notServer || (!res.ok && url.startsWith('/api/') && (data === null || typeof data === 'string') && [404, 405, 502, 503].includes(res.status))) {
+    throw new ApiError(res.status || 503, 'This site can’t reach the DelegateDesk server, so nothing can be saved. If you run the site, open /setup to see what to fix.');
+  }
   if (!res.ok) {
     if (res.status === 401 && url.startsWith('/api/') && !url.startsWith('/api/auth') && !url.startsWith('/api/public')) window.dispatchEvent(new CustomEvent('dd:unauthorised', { detail: data }));
     throw new ApiError(res.status, data?.error ?? `Request failed (${res.status})`, data?.details);

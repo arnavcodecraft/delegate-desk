@@ -22,6 +22,8 @@ import { KINDS, parseFile, suggestMapping, preview, commit, errorFile, rollback 
 import { submitEvidence, signedFileUrl } from '../services/evidence.ts';
 import { checkUpload } from '../services/scanner.ts';
 import { whatsapp, sms } from '../services/channels.ts';
+import { mailConfigured, mailProvider, sendMail } from '../services/mail.ts';
+import { useGemini } from '../services/gemini.ts';
 import { serviceAccount, createSync, deleteSync, syncSheet } from '../services/sheets.ts';
 import { ask, aiStatus } from '../services/ai.ts';
 import { badgesPdf, certificatesPdf, checkIn, sendCertificates } from '../services/badges.ts';
@@ -31,7 +33,7 @@ import { parseMoney } from '../util.ts';
 import { currentWorkspace } from '../platform.ts';
 import { syncListing } from '../services/conference.ts';
 
-import { forgotPassword, inviteStaff, issueUserToken, peekUserToken, resendInvite, useUserToken } from '../services/accounts.ts';
+import { sendNow, forgotPassword, inviteStaff, issueUserToken, peekUserToken, resendInvite, useUserToken } from '../services/accounts.ts';
 
 export const authRouter = express.Router();
 
@@ -385,7 +387,7 @@ adminRouter.delete('/executive-board/:id', requirePerm('alloc.config'), h((req) 
 // ---------- messaging ----------
 adminRouter.get('/templates', requirePerm('templates.manage', 'messages.read'), h(() => ({
   templates: all('SELECT * FROM template ORDER BY key, channel').map((t) => ({ ...t, params: json(t.params, []) })),
-  channels: { whatsapp: whatsapp.configured(), sms: sms.configured(), email: !!config.smtpUrl },
+  channels: { whatsapp: whatsapp.configured(), sms: sms.configured(), email: mailConfigured() },
   mergeFields: ['name', 'ref', 'committee', 'portfolio', 'amount', 'due_date', 'payment_link', 'portal_link', 'upload_link', 'referral_name', 'event_name', 'event_dates', 'venue', 'dress_code', 'reporting_time', 'guide_link', 'reason', 'waitlist_position', 'institution'],
 })));
 adminRouter.put('/templates/:key/:channel', requirePerm('templates.manage'), h((req) => {
@@ -481,7 +483,7 @@ adminRouter.post('/users/:id/reset-password', requirePerm('users.manage'), h((re
   const u = one('SELECT * FROM user WHERE id = ?', P(req).id);
   if (!u) throw notFound('User');
   const link = issueUserToken(u.id, 'reset');
-  enqueue('staff_password_reset', { to: u.email, recipientKind: 'staff', vars: { name: u.name, reset_link: link } });
+  sendNow(enqueue('staff_password_reset', { to: u.email, recipientKind: 'staff', vars: { name: u.name, reset_link: link } }));
   run('DELETE FROM session WHERE user_id = ?', u.id);
   audit('user.password_reset', 'user', u.id);
   return { resetLink: link };
@@ -656,10 +658,10 @@ function notifyStaffAlert(title: string, message: string) { notifyStaff(['admin'
 
 /** Which optional integrations are switched on, for the Settings > Integrations screen. */
 adminRouter.get('/integrations', requirePerm('settings.org', 'settings.finance', 'event.config'), h(() => ({
-  email: { on: !!config.smtpUrl, detail: config.smtpUrl ? config.mailFrom : 'Set SMTP_URL and MAIL_FROM' },
+  email: { on: mailConfigured(), detail: mailConfigured() ? `${mailProvider()} · ${config.mailFrom}` : 'Set RESEND_API_KEY, BREVO_API_KEY or SMTP_URL, and MAIL_FROM' },
   whatsapp: { on: whatsapp.configured(), detail: whatsapp.configured() ? `Phone number id ${config.whatsapp.phoneNumberId}` : 'Set WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID', webhook: `${config.baseUrl}/api/webhooks/whatsapp` },
   sms: { on: sms.configured(), detail: sms.configured() ? 'MSG91 Flow API' : 'Set MSG91_AUTH_KEY' },
-  ai: { on: config.ai.enabled, detail: config.ai.enabled ? 'Claude: bill and proof reading, summaries, questions' : 'Set ANTHROPIC_API_KEY' },
+  ai: { on: config.ai.enabled, detail: config.ai.enabled ? `${useGemini() ? 'Google Gemini' : 'Claude'}: bill and proof reading, summaries, questions, Prep` : 'Set ANTHROPIC_API_KEY or GEMINI_API_KEY' },
   ocr: { on: config.ocrEnabled, detail: 'On-device text reading of screenshots and bills' },
   clamav: { on: !!config.clamav.host, detail: config.clamav.host ? `${config.clamav.host}:${config.clamav.port}${config.clamav.required ? ' (required)' : ''}` : 'Set CLAMAV_HOST to scan uploads with ClamAV' },
   sheets: { on: !!serviceAccount(), detail: serviceAccount()?.client_email ?? 'Set GOOGLE_SERVICE_ACCOUNT_JSON' },
@@ -667,3 +669,15 @@ adminRouter.get('/integrations', requirePerm('settings.org', 'settings.finance',
   razorpay: { on: !!config.razorpay.keyId, detail: config.razorpay.keyId ? 'Keys set' : 'Set RAZORPAY_* keys' },
   cashfree: { on: !!config.cashfree.appId, detail: config.cashfree.appId ? `Keys set (${config.cashfree.env})` : 'Set CASHFREE_* keys' },
 })));
+
+/** Send a test email to check the email service (organisers only, so it can't be used to send mail to strangers). */
+adminRouter.post('/test-email', requirePerm('settings.org', 'event.config'), h(async (req) => {
+  if (!mailConfigured()) throw bad('No email service is set up. Add RESEND_API_KEY, BREVO_API_KEY or SMTP_URL on the server, and MAIL_FROM.');
+  rateLimit(`testmail:${req.auth!.user.id}`, 5, 15 * 60_000);
+  const to = String(req.body?.to || req.auth!.user.email).trim();
+  try {
+    const r = await sendMail({ to, subject: 'DelegateDesk test email', text: `This is a test from ${config.baseUrl}.\n\nIf you can read this, emails (sign-in codes, invitations, receipts) are working.` });
+    audit('mail.test', 'user', req.auth!.user.id, undefined, { to, provider: r.provider });
+    return { ok: true, provider: r.provider, to };
+  } catch (e: any) { throw bad(`The email service refused: ${e.message}`); }
+}));

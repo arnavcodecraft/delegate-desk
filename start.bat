@@ -18,5 +18,7 @@ echo Keep this window open. Close it to stop the app.
 echo.
 start "" cmd /c "timeout /t 6 >nul & start http://localhost:8080/"
 set ALLOW_SANDBOX=1
+rem Local use: with no email service set up, sign-in codes are shown on screen.
+set ALLOW_DEV_CODES=1
 call npm start
 pause

@@ -1,9 +1,9 @@
-import nodemailer from 'nodemailer';
 import { all, one, run, insert } from '../db.ts';
 import { config } from '../config.ts';
 import { orgSettings } from '../settings.ts';
 import { addHours, istHour, now, uid } from '../util.ts';
 import { whatsapp, sms } from './channels.ts';
+import { mailConfigured, sendMail } from './mail.ts';
 
 type Tpl = { subject: string; body: string };
 // Admins edit these from the Templates screen; these are only the first-run defaults.
@@ -223,14 +223,23 @@ export type AttachmentBuilder = (id: string) => Promise<{ filename: string; cont
 const attachmentBuilders: Record<string, AttachmentBuilder> = {};
 export function registerAttachment(kind: string, fn: AttachmentBuilder) { attachmentBuilders[kind] = fn; }
 
-let transport: ReturnType<typeof nodemailer.createTransport> | null = null;
-function mailer() {
-  if (!config.smtpUrl) return null;
-  transport ??= nodemailer.createTransport(config.smtpUrl);
-  return transport;
-}
-
 const BACKOFF_MIN = [1, 5, 30, 120, 360];
+
+/** Send one message now (sign-in codes, invitations, reset links), instead of waiting for the next delivery run. */
+export async function deliverOne(id: string | null | undefined) {
+  if (!id) return false;
+  const n = one("SELECT * FROM notification WHERE id = ? AND status = 'queued'", id);
+  if (!n) return false;
+  try {
+    const out = await send(n);
+    run("UPDATE notification SET status = 'sent', sent_at = ?, attempts = attempts + 1, last_error = ?, provider_message_id = ? WHERE id = ?", now(), out.note, out.providerMessageId, n.id);
+    return true;
+  } catch (e: any) {
+    // Left queued: the regular delivery run retries with back-off.
+    run('UPDATE notification SET attempts = attempts + 1, last_error = ?, scheduled_at = ? WHERE id = ?', String(e?.message ?? e).slice(0, 500), addHours(new Date(), 1 / 60), n.id);
+    throw e;
+  }
+}
 
 export async function deliverPending(limit?: number) {
   const s = orgSettings();
@@ -273,19 +282,18 @@ async function send(n: any): Promise<{ note: string | null; providerMessageId: s
     const r = n.channel === 'whatsapp' ? await whatsapp.send(msg) : await sms.send(msg, names);
     return { note: null, providerMessageId: r.providerMessageId };
   }
-  const m = mailer();
-  if (!m) return { note: 'No SMTP configured: message logged, not delivered', providerMessageId: null };
+  if (!mailConfigured()) return { note: 'No email service configured: message logged, not delivered', providerMessageId: null };
   const atts = [];
   for (const a of JSON.parse(n.attachments || '[]')) {
     const b = attachmentBuilders[a.kind];
     if (b) atts.push(await b(a.id));
   }
   const unsubscribe = n.registration_id ? `${config.baseUrl}/api/public/unsubscribe/${n.registration_id}` : undefined;
-  const info = await m.sendMail({
-    from: config.mailFrom, to: n.recipient, subject: n.subject, text: n.body, attachments: atts,
+  const info = await sendMail({
+    to: n.recipient, subject: n.subject, text: n.body, attachments: atts,
     headers: unsubscribe && n.respect_quiet_hours ? { 'List-Unsubscribe': `<${unsubscribe}>` } : undefined,
   });
-  return { note: null, providerMessageId: info?.messageId ?? null };
+  return { note: null, providerMessageId: info.id };
 }
 
 /** WhatsApp delivery receipts update the message (sent -> delivered -> read, or failed with the reason). */

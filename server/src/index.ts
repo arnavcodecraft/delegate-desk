@@ -16,6 +16,11 @@ import { authRouter, adminRouter } from './routes/admin.ts';
 import { financeRouter } from './routes/finance.ts';
 import { organiserRouter } from './routes/organiser.ts';
 import { meRouter } from './routes/me.ts';
+import { mailConfigured, mailProvider } from './services/mail.ts';
+import { showCodesOnScreen } from './services/people.ts';
+import { useGemini } from './services/gemini.ts';
+import { createRequire } from 'node:module';
+const VERSION: string = createRequire(import.meta.url)('../../package.json').version;
 import { prepRouter } from './routes/prep.ts';
 import { platformRouter, liveRouter } from './routes/platform.ts';
 import './services/documents.ts'; // registers email attachment builders
@@ -48,9 +53,16 @@ export function createApp() {
     if (req.method !== 'GET' && req.headers['x-dd'] !== '1') return next(new HttpError(403, 'Missing request header'));
     next();
   });
-  app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+  app.get('/api/health', (_req, res) => res.json({ ok: true, app: 'delegatedesk', version: VERSION, time: new Date().toISOString() }));
   // Behind Cloudflare Pages: with PROXY_SECRET set, only requests forwarded by the Pages worker are served.
   if (process.env.PROXY_SECRET) app.use('/api', (req, _res, next) => (req.headers['x-proxy-secret'] === process.env.PROXY_SECRET ? next() : next(new HttpError(403, 'Use the site address, not the server address'))));
+  // What the /setup page checks. Says whether things are configured, never what the secrets are.
+  app.get('/api/setup-status', (req, res) => res.json({
+    app: 'delegatedesk', version: VERSION, baseUrl: config.baseUrl,
+    seenAs: `${req.protocol}://${req.get('x-forwarded-host') ?? req.get('host')}`,
+    mail: { configured: mailConfigured(), provider: mailProvider(), from: config.mailFrom }, codesOnScreen: showCodesOnScreen(),
+    ai: config.ai.enabled, aiProvider: config.ai.enabled ? (useGemini() ? 'gemini' : 'anthropic') : null, proxySecret: !!process.env.PROXY_SECRET, production: process.env.NODE_ENV === 'production',
+  }));
   app.use('/api/public', publicRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/admin', adminRouter);

@@ -117,6 +117,7 @@ function AccountHome({ me }: { me: { person: any; conferences?: any[] } }) {
           <button className="pf-btn primary sm" onClick={() => go(async () => { await api.post('/api/me/verify', { code }); try { sessionStorage.removeItem('dd-devcode'); } catch { /* ignore */ } refreshMe(); }, 'Email confirmed.')}>Confirm</button>
           <button className="pf-btn link" onClick={() => go(async () => { const r = await api.post<any>('/api/me/verify/resend'); setDev(r.devCode ?? null); }, 'A new code is on its way.')}>Send again</button>
           {dev && <div className="pf-small" style={{ flexBasis: '100%' }}>Email isn’t set up on this server yet, so here is your code: <b>{dev}</b></div>}
+          {!dev && (me as any).mail === false && <div className="pf-small" style={{ flexBasis: '100%', color: 'var(--pf-red)' }}>This site can’t send emails yet, so the code can’t reach you. The site owner needs to set up email (see <a href="/setup">/setup</a>).</div>}
         </div>
       )}
       <section className="pf-section">

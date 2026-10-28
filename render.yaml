@@ -19,7 +19,17 @@ services:
         value: "2"
       - key: APP_SECRET
         generateValue: true
+      - key: MAIL_FROM
+        sync: false          # e.g. TMUN <hello@yourdomain.com> (must be a sender your email service allows)
+      - key: RESEND_API_KEY
+        sync: false          # email option 1 (resend.com)
+      - key: BREVO_API_KEY
+        sync: false          # email option 2 (brevo.com)
       - key: SMTP_URL
-        sync: false          # e.g. smtps://user:pass@smtp.gmail.com:465 (optional)
+        sync: false          # email option 3, e.g. smtps://you%40gmail.com:app-password@smtp.gmail.com:465
+      - key: GEMINI_API_KEY
+        sync: false          # AI with Google AI Studio (aistudio.google.com/apikey)
+      - key: AI_PROVIDER
+        value: gemini
       - key: ANTHROPIC_API_KEY
-        sync: false          # optional: turns on AI research and drafting
+        sync: false          # or AI with Claude (then set AI_PROVIDER=anthropic)

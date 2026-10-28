@@ -11,7 +11,8 @@ import { platformDb, inWorkspace, MAIN, workspaceById, listings } from '../platf
 import { hashPassword, verifyPassword } from '../auth.ts';
 import { config } from '../config.ts';
 import { bad, conflict, now, HttpError } from '../util.ts';
-import { enqueue } from './notify.ts';
+import { enqueue, deliverOne } from './notify.ts';
+import { mailConfigured } from './mail.ts';
 import { all } from '../db.ts';
 
 const COOKIE = 'dd_pid';
@@ -48,7 +49,11 @@ function sendCode(email: string, name: string, purpose: 'verify' | 'reset') {
     ON CONFLICT(email, purpose) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0`,
     email, purpose, hash(code), new Date(Date.now() + 15 * 60_000).toISOString());
   // Platform mail goes out through the main workspace's outbox and mail settings.
-  inWorkspace(MAIN, () => enqueue('account_code', { to: email, recipientKind: 'person', vars: { name, code, purpose: purpose === 'verify' ? 'Enter it to confirm your email and see your conferences.' : 'Enter it to choose a new password.' } }));
+  inWorkspace(MAIN, () => {
+    const id = enqueue('account_code', { to: email, recipientKind: 'person', vars: { name, code, purpose: purpose === 'verify' ? 'Enter it to confirm your email and see your conferences.' : 'Enter it to choose a new password.' } });
+    // Codes go out straight away; if the provider refuses, the regular delivery run retries.
+    if (mailConfigured()) deliverOne(id).catch((e) => console.error('[mail] code to', email, 'not sent yet:', e?.message ?? e));
+  });
   return code;
 }
 function checkCode(email: string, purpose: 'verify' | 'reset', code: string) {
@@ -114,8 +119,12 @@ export function forgot(email: string) {
   return p ? devCode(sendCode(p.email, p.name, 'reset')) : null;
 }
 /** With no mail server configured (a local install), the code is shown on screen instead, or nobody could ever confirm. */
-const devCode = (code: string) => (config.smtpUrl ? undefined : code);
-export const mailConfigured = () => !!config.smtpUrl;
+/**
+ * With no email service on a local install, the code is shown on screen so the app still works.
+ * A live site (production) never shows it: anyone could otherwise claim someone else's email.
+ */
+export const showCodesOnScreen = () => !mailConfigured() && (process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_CODES === '1');
+const devCode = (code: string) => (showCodesOnScreen() ? code : undefined);
 export function resetWithCode(email: string, code: string, password: string) {
   const e = String(email ?? '').trim().toLowerCase();
   const p = get('SELECT * FROM person WHERE email = ?', e);

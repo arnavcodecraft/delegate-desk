@@ -26,6 +26,7 @@ import ListConference from './platform/ListConference';
 import { Explore, ConferencePage, Jobs, ApplicationStatus } from './platform/Explore';
 import { StartSession, SessionView, ChairConsole } from './platform/Live';
 import { AccountPage, SetPasswordPage } from './platform/Account';
+import { SetupPage } from './platform/Setup';
 import { PrepHome, ResearchHome, ProjectPage, ItemPage } from './prep/Research';
 import { WritePage, CoachPage } from './prep/Write';
 import { PracticePage, LearnHome, LessonPage, DiscoverPage } from './prep/Learn';
@@ -60,6 +61,7 @@ function App() {
       <Route path="/share/:token" element={<SharedList />} />
       <Route path="/login" element={<Login />} />
       <Route path="/account" element={<AccountPage />} />
+      <Route path="/setup" element={<SetupPage />} />
       <Route path="/prep" element={<PrepHome />} />
       <Route path="/prep/research" element={<ResearchHome />} />
       <Route path="/prep/projects/:id" element={<ProjectPage />} />

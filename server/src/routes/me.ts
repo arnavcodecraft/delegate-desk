@@ -2,22 +2,23 @@
 import express from 'express';
 import { rateLimit } from '../auth.ts';
 import { h } from './public.ts';
+import { mailConfigured } from '../services/mail.ts';
 import {
   signUp, signIn, startPersonSession, endPersonSession, currentPerson, requirePerson, verifyEmail, resendVerification,
-  forgot, resetWithCode, changePassword, updateProfile, deleteAccount, participations, personView,
+  forgot, resetWithCode, showCodesOnScreen, changePassword, updateProfile, deleteAccount, participations, personView,
 } from '../services/people.ts';
 
 export const meRouter = express.Router();
 
 meRouter.get('/', h((req) => {
   const p = currentPerson(req);
-  return p ? { person: personView(p), conferences: participations(p) } : { person: null };
+  return p ? { person: personView(p), conferences: participations(p), mail: mailConfigured(), codesOnScreen: showCodesOnScreen() } : { person: null, mail: mailConfigured() };
 }));
 meRouter.post('/signup', h((req, res) => {
   rateLimit(`signup:${req.ip}`, 10, 60 * 60_000);
   const p = signUp(req.body ?? {});
   startPersonSession(res, p.id);
-  return { person: personView(p), devCode: (p as any).devCode };
+  return { person: personView(p), devCode: (p as any).devCode, mail: mailConfigured() };
 }));
 meRouter.post('/login', h((req, res) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase();

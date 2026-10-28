@@ -59,6 +59,31 @@ If the server address is opened directly, the server refuses with "Use the site 
 
 ---
 
+## Step 4: email (sign-up codes, invitations, receipts)
+A live site must send real emails, or nobody can confirm an account. On the server, set `MAIL_FROM` and **one** of these:
+
+| Service | Free tier | Set on the server |
+|---|---|---|
+| **Brevo** (easiest, no domain needed) | 300 emails a day | `BREVO_API_KEY=xkeysib-…` (brevo.com → SMTP & API → API keys). Verify your sender address under Senders. Then `MAIL_FROM=Your Conference <the-address-you-verified>` |
+| **Resend** | 3,000 a month | `RESEND_API_KEY=re_…` (resend.com → API keys) and a verified domain. `MAIL_FROM=Your Conference <hello@yourdomain.com>` |
+| **Gmail** | about 500 a day | Turn on 2-step verification, create an App password, then `SMTP_URL=smtps://you%40gmail.com:APP-PASSWORD@smtp.gmail.com:465` and `MAIL_FROM=Your Name <you@gmail.com>` |
+
+Restart the server, open `/setup`, sign in as an organiser and press **Send test**. Codes, invitations and reset links go out the moment they're requested.
+
+## Step 5: AI (Prep research, writing, coach, practice, briefings, staff assistant)
+On the server set `GEMINI_API_KEY` to your Google AI Studio key and `AI_PROVIDER=gemini`. Or use Claude with `ANTHROPIC_API_KEY`.
+- With a free AI Studio key, Google often refuses **Google Search grounding** ("quota exceeded"). DelegateDesk then answers from the model alone and labels the answer "No live sources". For answers with live web sources, turn on billing for the key's project in Google AI Studio.
+- If one Gemini model is busy or over quota, the next is tried automatically: `GEMINI_MODEL` first (default `gemini-flash-latest`), then the lighter models.
+- `AI_DAILY_LIMIT` (default 50) caps AI requests per person per day.
+
+## Checking everything: `/setup`
+Open `https://<your-site>/setup`. It checks:
+- the Cloudflare worker, `BACKEND_URL` and the server,
+- `BASE_URL`,
+- email, the proxy secret, AI and accounts.
+
+Each check is green, amber or red, with how to fix it. **"Request failed (404)" when creating an account means the website isn't connected to the server**: either `_worker.js` wasn't uploaded, or `BACKEND_URL` is missing or wrong. `/setup` shows which one.
+
 ## Good to know
 - **A custom domain**: Pages → Custom domains. Afterwards, change the server's `BASE_URL` to the custom domain and restart.
 - **Payment gateway webhooks** (Razorpay, Cashfree, WhatsApp) use `https://<your-site>/api/webhooks/...`. They reach the server through Pages.
