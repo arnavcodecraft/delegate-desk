@@ -82,3 +82,23 @@ test('participant accounts: sign up, confirm email with a code, see every regist
   assert.equal((await riya('GET', '/api/me')).body.person.email, 'riya@example.com');
   assert.ok(all('SELECT * FROM notification WHERE template_key = ?', 'account_code').length >= 2);
 });
+
+test('many people signing up at once: every account is created, the server stays responsive, and a same-email race has one winner', async () => {
+  const N = 40;
+  process.env.SIGNUP_PER_IP_HOUR = '1000';   // every test request comes from 127.0.0.1
+  const t0 = Date.now();
+  const results = await Promise.all([...Array(N)].map((_, i) => jar()('POST', '/api/me/signup', { name: `Load ${i}`, email: `load${i}@example.com`, password: `load-pass-${i}-xyz` })));
+  assert.deepEqual(results.map((r) => r.status), Array(N).fill(200), JSON.stringify(results.find((r) => r.status !== 200)?.body));
+  // While hashing runs on the thread pool, other requests keep being answered quickly.
+  const health = await Promise.all([fetch(`${base}/api/health`), ...[...Array(5)].map((_, i) => jar()('POST', '/api/me/signup', { name: 'Race', email: 'race@example.com', password: `race-pass-${i}-xyz` }))]);
+  assert.equal((health[0] as Response).status, 200);
+  const race = (health.slice(1) as { status: number }[]).map((r) => r.status).sort();
+  assert.deepEqual(race, [200, 409, 409, 409, 409], 'exactly one account for a duplicated email');
+  const { peopleDb } = await import('../src/services/people.ts');
+  assert.equal((peopleDb().prepare("SELECT COUNT(*) AS n FROM person WHERE email LIKE 'load%@example.com'").get() as any).n, N);
+  assert.ok(Date.now() - t0 < 30_000, `took ${Date.now() - t0} ms`);
+  const login = await jar()('POST', '/api/me/login', { email: 'load7@example.com', password: 'load-pass-7-xyz' });
+  assert.equal(login.status, 200);
+  assert.equal((await jar()('POST', '/api/me/login', { email: 'load7@example.com', password: 'wrong-password' })).status, 400);
+  assert.equal((await jar()('POST', '/api/me/login', { email: 'nobody-here@example.com', password: 'wrong-password' })).status, 400);
+});

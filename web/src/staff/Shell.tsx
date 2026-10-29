@@ -5,7 +5,7 @@ import { DASHBOARD_TOUR, Tour, tourSeen } from './Tour';
 import { Alert, Btn, Field, Loading, useAsync, applyTheme, savedTheme, type Theme } from '../ui';
 import {
   LayoutDashboard, Users, ListChecks, Landmark, ScanLine, Mail, Upload, ReceiptText, CreditCard, Handshake, Wallet, BookOpen, Settings,
-  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, type LucideIcon,
+  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, GraduationCap, type LucideIcon,
 } from 'lucide-react';
 
 export interface Me {
@@ -111,6 +111,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           return <React.Fragment key={g.group}><div className="group" data-tour={`nav-${g.group.toLowerCase()}`}>{g.group}</div>{items.map((i) => <NavLink key={i.to} to={i.to} end={i.to === '/app/payments'} className={({ isActive }) => `nav ${isActive ? 'active' : ''}`}><i.icon className="icon" aria-hidden />{i.label}</NavLink>)}</React.Fragment>;
         })}
         <span className="spacer" />
+        <div className="side-promo"><b>Prep Studio for delegates</b><p>Free research, writing, practice and the full MUN Masterclass for everyone at your conference.</p><a href="/prep/learn" target="_blank" rel="noreferrer"><GraduationCap className="icon" />Open Prep</a></div>
         <div className="user-box">
           <span className="avatar" aria-hidden>{initials(me.user!.name)}</span>
           <div className="who"><div style={{ fontWeight: 600 }}>{me.user!.name}</div><div className="small faint">{me.roles.map((r) => r.label).join(', ')}</div></div>

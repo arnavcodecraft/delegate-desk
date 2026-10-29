@@ -96,7 +96,7 @@ Restart the server, open `/setup`, sign in as an organiser and press **Send test
 ## Step 5: AI (Prep research, writing, coach, practice, briefings, staff assistant)
 On the server set `GEMINI_API_KEY` to your Google AI Studio key and `AI_PROVIDER=gemini`. Or use Claude with `ANTHROPIC_API_KEY`.
 - With a free AI Studio key, Google often refuses **Google Search grounding** ("quota exceeded"). DelegateDesk then answers from the model alone and labels the answer "No live sources". For answers with live web sources, turn on billing for the key's project in Google AI Studio.
-- If one Gemini model is busy or over quota, the next is tried automatically: `GEMINI_MODEL` first (default `gemini-flash-latest`), then the lighter models.
+- If one Gemini model is busy or over quota, the next is tried automatically: `GEMINI_MODEL` first (default `gemini-3.5-flash`), then the lighter models.
 - `AI_DAILY_LIMIT` (default 50) caps AI requests per person per day.
 
 ## Checking everything: `/setup`

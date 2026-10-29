@@ -10,7 +10,8 @@ import { Integrations, SheetsSync, Backups, DataProtection } from './SettingsExt
 export default function Settings() {
   const { can } = useStaff();
   type T = 'event' | 'org' | 'users' | 'integrations' | 'sheets' | 'backups' | 'privacy';
-  const [tab, setTab] = useState<T>(can('event.config') ? 'event' : can('users.manage') ? 'users' : 'org');
+  const asked = new URLSearchParams(window.location.search).get('tab') as T | null;
+  const [tab, setTab] = useState<T>(asked === 'users' && can('users.manage') ? 'users' : can('event.config') ? 'event' : can('users.manage') ? 'users' : 'org');
   return (
     <div className="stack">
       <PageHead title="Settings" subtitle="How this conference runs, your organisation, your team, connected services, backups and data protection. Public details live on Conference page; fees and payments on Financials.">{can('event.config') && <Link className="btn" to="/list"><Plus className="icon" />New conference</Link>}</PageHead>

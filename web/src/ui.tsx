@@ -246,7 +246,9 @@ export function BarChart({ data, height = 180, money, ariaLabel }: { data: { x: 
 }
 
 /** Multi-series line chart with a crosshair tooltip. All series share one money axis. */
-export function LineChart({ series, height = 220, ariaLabel }: { series: { name: string; color: string; dashed?: boolean; points: { x: string; y: number }[] }[]; height?: number; ariaLabel: string }) {
+export function LineChart({ series, height = 220, ariaLabel, count = false }: { series: { name: string; color: string; dashed?: boolean; points: { x: string; y: number }[] }[]; height?: number; ariaLabel: string; count?: boolean }) {
+  const fmtFull = (v: number) => (count ? Math.round(v).toLocaleString('en-IN') : inr(v));
+  const fmtAxis = (v: number) => (count ? (Number.isInteger(v) ? v.toLocaleString('en-IN') : '') : inrShort(v));
   const { setTip, node } = useTip();
   const [hover, setHover] = useState<number | null>(null);
   const W = 640, H = height, L = 52, B = 22, T = 10;
@@ -266,9 +268,9 @@ export function LineChart({ series, height = 220, ariaLabel }: { series: { name:
             const px = ((e.clientX - r.left) / r.width) * W;
             const i = Math.max(0, Math.min(xs.length - 1, Math.round(((px - L) / (W - L - 6)) * (xs.length - 1))));
             setHover(i);
-            setTip({ x: e.clientX - r.left, y: e.clientY - r.top, html: <><strong>{xs[i]}</strong>{series.map((s) => { const p = s.points.find((q) => q.x === xs[i]); return p ? <div key={s.name}><i style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: s.color, marginRight: 4 }} />{s.name}: {inr(p.y)}</div> : null; })}</> });
+            setTip({ x: e.clientX - r.left, y: e.clientY - r.top, html: <><strong>{xs[i]}</strong>{series.map((s) => { const p = s.points.find((q) => q.x === xs[i]); return p ? <div key={s.name}><i style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: s.color, marginRight: 4 }} />{s.name}: {fmtFull(p.y)}</div> : null; })}</> });
           }}>
-          {[0, 0.25, 0.5, 0.75, 1].map((f) => { const v = min + (max - min) * f; return <g key={f} className="axis"><line className="gridline" x1={L} x2={W} y1={sy(v)} y2={sy(v)} /><text x={L - 6} y={sy(v) + 4} textAnchor="end">{inrShort(v)}</text></g>; })}
+          {[0, 0.25, 0.5, 0.75, 1].map((f) => { const v = min + (max - min) * f; return <g key={f} className="axis"><line className="gridline" x1={L} x2={W} y1={sy(v)} y2={sy(v)} /><text x={L - 6} y={sy(v) + 4} textAnchor="end">{fmtAxis(v)}</text></g>; })}
           {series.map((s) => {
             const pts = s.points.map((p) => [sx(xs.indexOf(p.x)), sy(p.y)] as const);
             return <path key={s.name} d={pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]},${p[1]}`).join(' ')} fill="none" stroke={s.color} strokeWidth={2} strokeDasharray={s.dashed ? '6 4' : undefined} strokeLinejoin="round" />;

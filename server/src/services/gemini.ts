@@ -11,8 +11,10 @@ import { HttpError } from '../util.ts';
 
 const BASE = () => (process.env.GEMINI_BASE_URL ?? 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
 export const geminiKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '';
-export const geminiModels = () => [...new Set([process.env.GEMINI_MODEL, 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'].filter(Boolean) as string[])];
+export const geminiModels = () => [...new Set([process.env.GEMINI_MODEL, 'gemini-3.5-flash', 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-3.1-flash-lite'].filter(Boolean) as string[])];
 const TIMEOUT_MS = () => Number(process.env.GEMINI_TIMEOUT_MS ?? 35_000);
+// Newer Gemini models think before answering, and the thinking counts against maxOutputTokens: leave room so answers aren't cut short.
+const budget = (maxTokens?: number) => Math.min(65_536, (maxTokens ?? 8192) + 4096);
 
 export type Part = { text?: string; inline_data?: { mime_type: string; data: string }; functionCall?: any; functionResponse?: any; thoughtSignature?: string; thought?: boolean };
 export type Content = { role: 'user' | 'model'; parts: Part[] };
@@ -67,7 +69,7 @@ export const toContents = (messages: { role: 'user' | 'assistant'; content: stri
 
 /** Free text, optionally grounded with Google Search. */
 export async function geminiText(o: { system?: string; contents: Content[]; search?: boolean; maxTokens?: number }) {
-  const base = { contents: o.contents, ...(o.system ? { systemInstruction: { parts: [{ text: o.system }] } } : {}), generationConfig: { maxOutputTokens: o.maxTokens ?? 8192 } };
+  const base = { contents: o.contents, ...(o.system ? { systemInstruction: { parts: [{ text: o.system }] } } : {}), generationConfig: { maxOutputTokens: budget(o.maxTokens) } };
   if (o.search && Date.now() > searchBlockedUntil) {
     try {
       const { d } = await generate({ ...base, tools: [{ google_search: {} }] });
@@ -94,7 +96,7 @@ const dedupe = (xs: Source[]) => [...new Map(xs.map((x) => [x.url, x])).values()
 export async function geminiJson<T = any>(o: { system?: string; contents: Content[]; schema: any; maxTokens?: number }): Promise<T> {
   const { d } = await generate({
     contents: o.contents, ...(o.system ? { systemInstruction: { parts: [{ text: o.system }] } } : {}),
-    generationConfig: { maxOutputTokens: o.maxTokens ?? 8192, responseMimeType: 'application/json', responseSchema: toOpenApi(o.schema) },
+    generationConfig: { maxOutputTokens: budget(o.maxTokens), responseMimeType: 'application/json', responseSchema: toOpenApi(o.schema) },
   });
   const text = textOfParts(candidate(d).content?.parts);
   try { return JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { throw new HttpError(502, 'Google AI returned an unreadable answer; try again.'); }
@@ -118,7 +120,7 @@ export async function geminiTools(o: { system: string; contents: Content[]; tool
   const contents = [...o.contents];
   const decl = [{ functionDeclarations: o.tools.map((t) => ({ name: t.name, description: t.description, parameters: toOpenApi(t.parameters) })) }];
   for (let step = 0; step < (o.maxSteps ?? 8); step++) {
-    const { d } = await generate({ contents, systemInstruction: { parts: [{ text: o.system }] }, tools: decl, generationConfig: { maxOutputTokens: 4096 } });
+    const { d } = await generate({ contents, systemInstruction: { parts: [{ text: o.system }] }, tools: decl, generationConfig: { maxOutputTokens: budget(4096) } });
     const c = candidate(d);
     const parts: Part[] = c.content?.parts ?? [];
     const calls = parts.filter((p) => p.functionCall);

@@ -29,7 +29,7 @@ import { AccountPage, SetPasswordPage } from './platform/Account';
 import { SetupPage } from './platform/Setup';
 import { PrepHome, ResearchHome, ProjectPage, ItemPage } from './prep/Research';
 import { WritePage, CoachPage } from './prep/Write';
-import { PracticePage, LearnHome, LessonPage, DiscoverPage } from './prep/Learn';
+import { PracticePage, LearnHome, LessonPage, ExamPage, CertificatePage, DiscoverPage } from './prep/Learn';
 import { CountriesPage } from './prep/Countries';
 import { ToolsHome, ToolPage } from './prep/Tools';
 import { Overview, ConferenceSettings, Financials, Applications, JobBoard, Documents, Sessions } from './staff/Organiser';
@@ -70,6 +70,8 @@ function App() {
       <Route path="/prep/coach" element={<CoachPage />} />
       <Route path="/prep/practice" element={<PracticePage />} />
       <Route path="/prep/learn" element={<LearnHome />} />
+      <Route path="/prep/learn/exam" element={<ExamPage />} />
+      <Route path="/prep/learn/certificate" element={<CertificatePage />} />
       <Route path="/prep/learn/:id" element={<LessonPage />} />
       <Route path="/prep/discover" element={<DiscoverPage />} />
       <Route path="/prep/countries" element={<CountriesPage />} />

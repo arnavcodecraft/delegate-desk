@@ -61,7 +61,9 @@ function inline(s: string) {
 export function markdown(src: string) {
   const lines = String(src ?? '').replace(/\r/g, '').split('\n');
   const out: string[] = []; let list: 'ul' | 'ol' | null = null; let table: string[][] | null = null;
-  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  let quote: string[] | null = null;
+  const closeQuote = () => { if (quote) { out.push(`<blockquote>${quote.join('')}</blockquote>`); quote = null; } };
+  const closeList = () => { closeQuote(); if (list) { out.push(`</${list}>`); list = null; } };
   const closeTable = () => {
     if (!table) return;
     const rows = table.filter((r) => !r.every((c) => /^:?-{2,}:?$/.test(c.trim())));
@@ -73,6 +75,8 @@ export function markdown(src: string) {
     if (/^\s*\|.*\|\s*$/.test(l)) { closeList(); (table ??= []).push(l.trim().slice(1, -1).split('|')); continue; } else closeTable();
     let m: RegExpMatchArray | null;
     if (!l.trim()) { closeList(); continue; }
+    // "> text" quotes; extra spaces after ">" indent the line (used for resolution sub-clauses).
+    if ((m = l.match(/^\s*>( *)(.*)/))) { if (list) closeList(); (quote ??= []).push(`<div style="padding-left:${Math.max(0, m[1].length - 1) * 0.6}em">${inline(m[2])}</div>`); continue; } else closeQuote();
     if ((m = l.match(/^(#{1,4})\s+(.*)/))) { closeList(); const n = Math.min(4, m[1].length + 1); out.push(`<h${n}>${inline(m[2])}</h${n}>`); continue; }
     if ((m = l.match(/^\s*[-*•]\s+(.*)/))) { if (list !== 'ul') { closeList(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inline(m[1])}</li>`); continue; }
     if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))) { if (list !== 'ol') { closeList(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inline(m[1])}</li>`); continue; }

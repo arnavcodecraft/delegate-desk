@@ -8,7 +8,7 @@
 import crypto from 'node:crypto';
 import type { Request, Response } from 'express';
 import { platformDb, inWorkspace, MAIN, workspaceById, listings } from '../platform.ts';
-import { hashPassword, verifyPassword } from '../auth.ts';
+import { hashPassword, hashPasswordAsync, verifyPassword, verifyPasswordAsync } from '../auth.ts';
 import { config } from '../config.ts';
 import { bad, conflict, now, HttpError } from '../util.ts';
 import { enqueue, deliverOne } from './notify.ts';
@@ -65,21 +65,28 @@ function checkCode(email: string, purpose: 'verify' | 'reset', code: string) {
 }
 
 // ---------- sign-up, sign-in ----------
-export function signUp(o: { name: string; email: string; password: string; role?: string; school?: string; city?: string }) {
+export async function signUp(o: { name: string; email: string; password: string; role?: string; school?: string; city?: string }) {
   const email = String(o.email ?? '').trim().toLowerCase();
-  const name = String(o.name ?? '').trim();
+  const name = String(o.name ?? '').trim().slice(0, 120);
   if (!name) throw bad('Enter your name');
-  if (!EMAIL_RE.test(email)) throw bad('Enter a valid email');
+  if (!EMAIL_RE.test(email) || email.length > 254) throw bad('Enter a valid email');
   if (get('SELECT 1 FROM person WHERE email = ?', email)) throw conflict('An account with this email already exists. Sign in instead.');
   const role = ['delegate', 'advisor', 'chair', 'other'].includes(String(o.role)) ? String(o.role) : 'delegate';
   const id = 'p_' + crypto.randomUUID();
-  exec('INSERT INTO person (id, email, name, password_hash, school, city, role, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', id, email, name, hashPassword(o.password), o.school?.trim() || null, o.city?.trim() || null, role, now());
+  const passwordHash = await hashPasswordAsync(o.password);
+  try {
+    exec('INSERT INTO person (id, email, name, password_hash, school, city, role, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', id, email, name, passwordHash, o.school?.trim().slice(0, 160) || null, o.city?.trim().slice(0, 80) || null, role, now());
+  } catch (e: any) {
+    // Two sign-ups with the same email at the same moment: the database's unique index decides, the loser gets a clear message.
+    if (/UNIQUE/i.test(String(e?.message))) throw conflict('An account with this email already exists. Sign in instead.');
+    throw e;
+  }
   const code = sendCode(email, name, 'verify');
   return Object.assign(get('SELECT * FROM person WHERE id = ?', id) as Person, { devCode: devCode(code) });
 }
-export function signIn(email: string, password: string) {
+export async function signIn(email: string, password: string) {
   const p = get('SELECT * FROM person WHERE email = ?', String(email ?? '').trim().toLowerCase());
-  if (!p || !verifyPassword(password ?? '', p.password_hash)) throw bad('Email or password is incorrect');
+  if (!(await verifyPasswordAsync(password ?? '', p?.password_hash)) || !p) throw bad('Email or password is incorrect');
   exec('UPDATE person SET last_login_at = ? WHERE id = ?', now(), p.id);
   return p as Person;
 }
@@ -125,13 +132,14 @@ export function forgot(email: string) {
  */
 export const showCodesOnScreen = () => !mailConfigured() && (process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_CODES === '1');
 const devCode = (code: string) => (showCodesOnScreen() ? code : undefined);
-export function resetWithCode(email: string, code: string, password: string) {
+export async function resetWithCode(email: string, code: string, password: string) {
   const e = String(email ?? '').trim().toLowerCase();
   const p = get('SELECT * FROM person WHERE email = ?', e);
   if (!p) throw bad('That code is not right');
+  if ((password ?? '').length < 10) throw bad('Passwords must be at least 10 characters');
   checkCode(e, 'reset', code);
   // Proving you can read the inbox also confirms the email.
-  exec('UPDATE person SET password_hash = ?, email_verified_at = COALESCE(email_verified_at, ?) WHERE id = ?', hashPassword(password), now(), p.id);
+  exec('UPDATE person SET password_hash = ?, email_verified_at = COALESCE(email_verified_at, ?) WHERE id = ?', await hashPasswordAsync(password), now(), p.id);
   exec('DELETE FROM person_session WHERE person_id = ?', p.id);
   return p as Person;
 }

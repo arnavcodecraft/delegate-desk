@@ -1,6 +1,6 @@
 node_modules/
 web/dist/
-data/
+/data/
 .env
 *.log
 e2e/screenshots/

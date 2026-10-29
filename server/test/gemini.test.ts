@@ -27,19 +27,19 @@ test('AI_PROVIDER=gemini selects Gemini; the key goes in the x-goog-api-key head
   reply = () => ok([{ text: 'Hello' }]);
   const out = await geminiText({ contents: toContents([{ role: 'user', content: 'hi' }]) });
   assert.equal(out.text, 'Hello');
-  assert.match(reqs.at(-1)!.path, /^\/v1beta\/models\/gemini-flash-latest:generateContent$/);
+  assert.match(reqs.at(-1)!.path, /^\/v1beta\/models\/gemini-3.5-flash:generateContent$/);
 });
 
 test('a busy model falls through to the next; Google Search sources are kept', async () => {
   resetGeminiSearch(); resetGeminiModels(); reqs.length = 0;
-  reply = (p) => (p.includes('gemini-flash-latest') ? [429, { error: { message: 'quota' } }] : ok([{ text: 'Endorsed the JCPOA.' }], { groundingChunks: [{ web: { uri: 'https://press.un.org/x', title: 'press.un.org' } }] }));
+  reply = (p) => (p.includes('gemini-3.5-flash') ? [429, { error: { message: 'quota' } }] : ok([{ text: 'Endorsed the JCPOA.' }], { groundingChunks: [{ web: { uri: 'https://press.un.org/x', title: 'press.un.org' } }] }));
   const out = await geminiText({ contents: toContents([{ role: 'user', content: 'S/RES/2231?' }]), search: true });
   assert.equal(out.grounded, true);
   assert.deepEqual(out.sources, [{ url: 'https://press.un.org/x', title: 'press.un.org' }]);
   assert.ok(reqs.some((r) => r.path.includes('gemini-flash-lite-latest') && r.body.tools?.[0]?.google_search));
   reqs.length = 0;
   await geminiText({ contents: toContents([{ role: 'user', content: 'again' }]) });
-  assert.ok(!reqs[0].path.includes('gemini-flash-latest:'), 'the over-quota model is skipped for a while');
+  assert.ok(!reqs[0].path.includes('gemini-3.5-flash:'), 'the over-quota model is skipped for a while');
   resetGeminiModels();
 });
 

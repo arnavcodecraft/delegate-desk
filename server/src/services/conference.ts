@@ -363,7 +363,25 @@ export function overview(eventId: string) {
       staff: roleRows.filter((r) => !['advisor', 'observer', 'chair'].includes(r.role)).reduce((a, r) => ({ applied: a.applied + r.applied, accepted: a.accepted + (r.accepted ?? 0) }), { applied: 0, accepted: 0 }),
     },
     bySource, overTime, priorities, done: priorities.filter((x) => x.done).length,
+    ...dashboardExtras(eventId),
   };
+}
+
+/** The extra figures the dashboard cards use: this week by day, committees by fill, the team, and money collected. */
+function dashboardExtras(eventId: string) {
+  const days = [...Array(7)].map((_, i) => { const d = new Date(Date.now() - (6 - i) * 86400_000); return d.toISOString().slice(0, 10); });
+  const appsByDay = new Map(all(`SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS n FROM registration WHERE event_id = ? AND cancelled_at IS NULL AND created_at >= ? GROUP BY 1`, eventId, days[0]).map((r) => [r.day, r.n]));
+  const viewsByDay = new Map(all(`SELECT day, SUM(n) AS n FROM page_view WHERE event_id = ? AND day >= ? GROUP BY day`, eventId, days[0]).map((r) => [r.day, r.n]));
+  const week = days.map((day) => ({ day, applied: appsByDay.get(day) ?? 0, views: viewsByDay.get(day) ?? 0 }));
+  const committeeList = all(`SELECT c.id, c.name, c.short, COUNT(s.id) AS seats, SUM(s.state <> 'open') AS filled, SUM(s.state = 'confirmed') AS confirmed
+      FROM committee c LEFT JOIN portfolio p ON p.committee_id = c.id LEFT JOIN seat s ON s.portfolio_id = p.id
+    WHERE c.event_id = ? GROUP BY c.id ORDER BY c.sort, c.name`, eventId).map((c) => ({ ...c, filled: c.filled ?? 0, confirmed: c.confirmed ?? 0 }));
+  const team = all(`SELECT u.id, u.name, u.email, u.active, u.last_login_at, GROUP_CONCAT(DISTINCT r.role) AS roles FROM user u JOIN user_role r ON r.user_id = u.id
+    WHERE (r.event_id IS NULL OR r.event_id = ?) AND r.role NOT IN ('superadmin', 'referrer', 'head_delegate') GROUP BY u.id ORDER BY u.last_login_at IS NULL, u.last_login_at DESC LIMIT 6`, eventId)
+    .map((u) => ({ id: u.id, name: u.name, email: u.email, roles: String(u.roles ?? '').split(',').filter(Boolean), status: !u.active ? 'disabled' : u.last_login_at ? 'active' : 'invited', lastLogin: u.last_login_at }));
+  const money = one(`SELECT COALESCE(SUM(paid_paise - refunded_paise), 0) AS collected, COALESCE(SUM(CASE WHEN payment_status <> 'paid' AND allot_status IN ('held','confirmed') THEN total_paise - paid_paise ELSE 0 END), 0) AS due
+    FROM registration WHERE event_id = ? AND cancelled_at IS NULL AND erased_at IS NULL`, eventId)!;
+  return { week, committeeList, team, money: { collected: money.collected ?? 0, due: money.due ?? 0 } };
 }
 
 // ---------- onboarding: one call creates the whole conference ----------

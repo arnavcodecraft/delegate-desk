@@ -103,6 +103,22 @@ export function hashPassword(pw: string) {
   const hash = crypto.scryptSync(pw, salt, 64, { N: 16384, r: 8, p: 1 });
   return `scrypt$${salt.toString('base64')}$${hash.toString('base64')}`;
 }
+/** Async versions run on the libuv thread pool, so many sign-ups at once don't freeze the server for everyone else. */
+const scryptAsync = (pw: string, salt: Buffer) => new Promise<Buffer>((res, rej) => crypto.scrypt(pw, salt, 64, { N: 16384, r: 8, p: 1 }, (e, k) => (e ? rej(e) : res(k))));
+export async function hashPasswordAsync(pw: string) {
+  if ((pw ?? '').length < 10) throw bad('Passwords must be at least 10 characters');
+  if (pw.length > 256) throw bad('That password is too long');
+  const salt = crypto.randomBytes(16);
+  return `scrypt$${salt.toString('base64')}$${(await scryptAsync(pw, salt)).toString('base64')}`;
+}
+const DUMMY = `scrypt$${Buffer.alloc(16).toString('base64')}$${Buffer.alloc(64).toString('base64')}`;
+/** Checks a password; with no stored hash it still does the work, so response time doesn't reveal which emails have accounts. */
+export async function verifyPasswordAsync(pw: string, stored: string | null | undefined) {
+  const [, s, h] = (stored || DUMMY).split('$');
+  if (!s || !h) return false;
+  const hash = await scryptAsync(String(pw ?? '').slice(0, 256), Buffer.from(s, 'base64'));
+  return crypto.timingSafeEqual(hash, Buffer.from(h, 'base64')) && !!stored;
+}
 export function verifyPassword(pw: string, stored: string) {
   const [, s, h] = stored.split('$');
   if (!s || !h) return false;
@@ -222,6 +238,8 @@ export function committeeScope(req: Request): string[] | null {
 
 // Rate limiting for login and the public form.
 const buckets = new Map<string, { n: number; reset: number }>();
+// Expired buckets are swept every few minutes so the map can't grow without bound under heavy traffic.
+setInterval(() => { const t = Date.now(); for (const [k, b] of buckets) if (b.reset < t) buckets.delete(k); }, 5 * 60_000).unref();
 export function rateLimit(key: string, max: number, windowMs: number) {
   const b = buckets.get(key);
   const t = Date.now();

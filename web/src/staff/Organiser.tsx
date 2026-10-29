@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import {
   ExternalLink, Copy, Check, ChevronRight, Rocket, EyeOff, Landmark, Banknote, Vote, Mail, Briefcase, Image as ImageIcon, Share2, Upload, Plus, Trash2, Gavel, Radio,
-  BookOpen, FileText, Link2, QrCode, Building2, HandCoins, Gift, Wand2, Users,
+  BookOpen, FileText, Link2, QrCode, Building2, HandCoins, Gift, Wand2, Users, ArrowUpRight,
 } from 'lucide-react';
 import { api } from '../api';
 import { inr, dt, date, toPaise, label } from '../format';
@@ -35,7 +35,57 @@ function Donut({ value, total, label: l }: { value: number; total: number; label
   );
 }
 
-/** The organiser dashboard: set-up priorities, applicants against target, sources, growth, and publishing. */
+const TEAM_ROLE: Record<string, string> = { admin: 'Organiser', cfo: 'Finance lead', accountant: 'Accounts', registration_exec: 'Registration desk', chair: 'Chair / EB', auditor: 'Auditor', secretariat: 'Secretariat' };
+const initialsOf = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
+
+/** Seven pill bars, one per day: today solid, days with applications in blue, quiet days striped. */
+function WeekBars({ week }: { week: { day: string; applied: number; views: number }[] }) {
+  const max = Math.max(1, ...week.map((w) => w.applied));
+  const today = new Date().toISOString().slice(0, 10);
+  const peak = week.reduce((m, w) => (w.applied > m.applied ? w : m), week[0]);
+  return <div className="db-bars" role="img" aria-label={`Applications in the last 7 days: ${week.map((w) => w.applied).join(', ')}`}>
+    {week.map((w) => {
+      const h = w.applied ? 22 + (w.applied / max) * 78 : 30;
+      return <div key={w.day} className="db-bar-col" title={`${new Date(w.day).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}: ${w.applied} applied, ${w.views} visits`}>
+        {w === peak && w.applied > 0 && <span className="db-bar-tip">{w.applied}</span>}
+        <div className={`db-bar ${w.day === today ? 'today' : w.applied ? 'on' : 'quiet'}`} style={{ height: `${h}%` }} />
+        <span className="db-bar-day">{new Date(w.day).toLocaleDateString('en-IN', { weekday: 'narrow' })}</span>
+      </div>;
+    })}
+  </div>;
+}
+
+/** A half-ring gauge for set-up progress. */
+function Gauge({ done, total }: { done: number; total: number }) {
+  const pct = total ? done / total : 0;
+  const r = 80, c = Math.PI * r;
+  return <div className="db-gauge">
+    <svg viewBox="0 0 200 112" role="img" aria-label={`${Math.round(pct * 100)}% of set-up done`}>
+      <defs><pattern id="dbStripe" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" fill="var(--surface-2)" /><rect width="3" height="7" fill="var(--border-strong)" /></pattern></defs>
+      <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="url(#dbStripe)" strokeWidth="22" strokeLinecap="round" />
+      <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="var(--brand)" strokeWidth="22" strokeLinecap="round" strokeDasharray={`${pct * c} ${c}`} className="db-gauge-fg" />
+    </svg>
+    <div className="db-gauge-val"><b>{Math.round(pct * 100)}%</b><span>set-up done</span></div>
+  </div>;
+}
+
+/** Live countdown to the first day of the conference. */
+function Countdown({ start, name }: { start: string | null; name: string }) {
+  const [nowMs, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  if (!start) return <div className="db-count"><span className="db-count-k">Countdown</span><b className="db-count-big">--:--:--</b><span className="db-count-sub">Add your dates to start the countdown.</span><Link to="/app/conference" className="db-count-btn">Set dates</Link></div>;
+  const ms = new Date(`${start}T09:00:00+05:30`).getTime() - nowMs;
+  const pad = (n: number) => String(Math.max(0, n)).padStart(2, '0');
+  const d = Math.floor(ms / 86400_000), h = Math.floor((ms % 86400_000) / 3600_000), m = Math.floor((ms % 3600_000) / 60_000), s = Math.floor((ms % 60_000) / 1000);
+  return <div className="db-count">
+    <span className="db-count-k">Countdown to {name}</span>
+    {ms > 0 ? <><b className="db-count-big">{d > 0 && <><span>{d}</span><small>d</small>{' '}</>}{pad(h)}:{pad(m)}:{pad(s)}</b><span className="db-count-sub">Opening day {date(start)}</span></>
+      : <><b className="db-count-big">Live</b><span className="db-count-sub">The conference has started. Good luck!</span></>}
+    <Link to={ms > 0 ? '/app/sessions' : '/app/sessions'} className="db-count-btn"><Radio className="icon" />Committee sessions</Link>
+  </div>;
+}
+
+/** The organiser dashboard: headline numbers, this week, committees, team, set-up progress, sources and growth. */
 export function Overview() {
   const { eventId, can, reloadMe } = useStaff();
   const o = useAsync<any>(() => api.get(`/api/admin/events/${eventId}/overview`), [eventId]);
@@ -47,16 +97,76 @@ export function Overview() {
   const d = o.data;
   const live = d.event.status === 'open';
   const a = d.applicants;
+  const week = d.week ?? [];
+  const weekApplied = week.reduce((s: number, w: any) => s + w.applied, 0);
+  const weekViews = week.reduce((s: number, w: any) => s + w.views, 0);
+  const next = d.priorities.find((p: any) => !p.done && p.to);
   const publish = async (on: boolean) => { try { await api.post(`/api/admin/events/${eventId}/publish`, { on }); toast(on ? 'Published: your conference is live on Explore' : 'Back to draft: hidden from Explore', 'ok'); o.reload(); reloadMe(); } catch (e: any) { toast(e.message, 'bad'); } };
+  const tiles = [
+    { k: 'Applications', v: a.delegates.applied, sub: weekApplied ? `+${weekApplied} this week` : 'None this week yet', to: can('reg.read') ? '/app/applications' : null, icon: Vote },
+    { k: 'Seats filled', v: d.seats ? `${a.delegates.accepted}/${d.seats}` : a.delegates.accepted, sub: d.seats ? `${Math.round((a.delegates.accepted / d.seats) * 100)}% of ${d.committees} committee${d.committees === 1 ? '' : 's'}` : 'Add committees to create seats', to: '/app/allocation', icon: Landmark },
+    { k: 'Confirmed', v: a.delegates.paid, sub: d.free ? 'Free conference' : `${a.delegates.accepted - a.delegates.paid > 0 ? a.delegates.accepted - a.delegates.paid : 0} waiting to pay`, to: can('reg.read') ? '/app/applications' : null, icon: Check },
+    d.free || !can('payments.read') ? { k: 'To review', v: a.delegates.toReview, sub: d.allocationMode === 'review' ? 'Applications waiting for you' : 'Seats assign automatically', to: can('reg.read') ? '/app/applications' : null, icon: Users }
+      : { k: 'Collected', v: inr(d.money?.collected ?? 0), sub: d.money?.due ? `${inr(d.money.due)} still due` : 'Nothing outstanding', to: '/app/financials', icon: HandCoins },
+  ];
   return (
-    <div className="stack">
+    <div className="stack db">
       <PageHead title={<span className="row" style={{ gap: '.6rem' }}>{d.profile.logoUrl && <img src={d.profile.logoUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} />}{d.event.name}<span className={`badge ${live ? 'good' : 'warn'}`}>{live ? 'Live' : d.event.status === 'draft' ? 'Draft' : label(d.event.status)}</span></span>}
         subtitle={<>{d.event.start_date ? `${date(d.event.start_date)}${d.event.end_date && d.event.end_date !== d.event.start_date ? ` – ${date(d.event.end_date)}` : ''}` : 'Dates to be decided'}{d.event.city ? ` · ${d.event.city}` : ''} · <a href={`/c/${d.event.code.toLowerCase()}${live ? '' : '?preview=1'}`} target="_blank" rel="noreferrer">View page <ExternalLink className="icon" style={{ width: 13, height: 13, verticalAlign: -2 }} /></a></>}>
+        {can('event.config') && <Link className="btn" to="/app/allocation"><Plus className="icon" />Committee</Link>}
         {can('event.config') && <span data-tour="publish">{live ? <Btn icon={EyeOff} onClick={() => publish(false)}>Unpublish</Btn> : <Btn kind="primary" icon={Rocket} onClick={() => publish(true)}>Publish</Btn>}</span>}
       </PageHead>
       {!live && <Alert tone="warn">This conference is a draft: it isn't on Explore and the registration form is closed. Add committees and press <b>Publish</b> when you're ready.</Alert>}
       {!d.free && !d.priorities.find((p: any) => p.key === 'financial')?.done && <Alert tone="info">No way to pay is set up yet. <Link to="/app/financials">Set up Financials</Link> so accepted delegates can pay you.</Alert>}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem', alignItems: 'start' }}>
+
+      <div className="db-tiles">
+        {tiles.map((t, i) => {
+          const body = <><div className="db-tile-top"><span>{t.k}</span><span className="db-tile-go"><ArrowUpRight className="icon" /></span></div><b className="db-tile-v">{t.v}</b><span className="db-tile-sub"><t.icon className="icon" />{t.sub}</span></>;
+          return t.to ? <Link key={t.k} to={t.to} className={`db-tile ${i === 0 ? 'hero' : ''}`}>{body}</Link> : <div key={t.k} className={`db-tile ${i === 0 ? 'hero' : ''}`}>{body}</div>;
+        })}
+      </div>
+
+      <div className="db-grid">
+        <section className="card db-span2">
+          <div className="row between"><h3 style={{ margin: 0 }}>This week</h3><span className="small muted">{weekApplied} applied · {weekViews} page visits</span></div>
+          <WeekBars week={week} />
+        </section>
+        <section className="card db-remind">
+          <h3 style={{ margin: 0 }}>Next up</h3>
+          {next ? <><div className="db-remind-title">{next.title}</div><p className="small muted" style={{ margin: '.2rem 0 .8rem' }}>{next.detail}</p><Link className="btn primary" to={next.to}><ChevronRight className="icon" />Do it now</Link></>
+            : <><div className="db-remind-title">You're all set up</div><p className="small muted" style={{ margin: '.2rem 0 .8rem' }}>Every set-up step is done. Share your link to bring in applicants.</p><Link className="btn" to="/app/applications">Applications</Link></>}
+          {a.delegates.toReview > 0 && d.allocationMode === 'review' && <Link className="db-remind-chip" to="/app/applications">{a.delegates.toReview} application{a.delegates.toReview === 1 ? '' : 's'} waiting for review</Link>}
+        </section>
+        <section className="card db-rows2">
+          <div className="row between"><h3 style={{ margin: 0 }}>Committees</h3>{can('event.config') && <Link className="btn sm" to="/app/allocation"><Plus className="icon" />New</Link>}</div>
+          {!d.committeeList?.length ? <p className="small muted">No committees yet. Add your first one to open seats.</p> : <div className="db-list">
+            {d.committeeList.slice(0, 7).map((c: any, i: number) => <Link key={c.id} to="/app/allocation" className="db-list-row">
+              <span className={`db-list-ic c${i % 5}`}>{c.short.slice(0, 4)}</span>
+              <span className="db-list-text"><b title={c.name}>{c.name}</b><span className="small muted">{c.filled}/{c.seats} seats{c.confirmed ? ` · ${c.confirmed} confirmed` : ''}</span><span className="db-mini"><i style={{ width: `${c.seats ? (c.filled / c.seats) * 100 : 0}%` }} /></span></span>
+            </Link>)}
+          </div>}
+        </section>
+        <section className="card db-span2">
+          <div className="row between"><h3 style={{ margin: 0 }}>Team</h3>{can('users.manage') && <Link className="btn sm" to="/app/settings?tab=users"><Plus className="icon" />Invite</Link>}</div>
+          {!d.team?.length ? <p className="small muted">Invite your secretariat, chairs and finance team so everyone has their own sign-in.</p> : <div className="db-team">
+            {d.team.map((u: any) => <div key={u.id} className="db-team-row">
+              <span className="avatar">{initialsOf(u.name)}</span>
+              <div className="db-team-text"><b>{u.name}</b><span className="small muted">{u.roles.map((r: string) => TEAM_ROLE[r] ?? label(r)).join(', ')}{u.lastLogin ? ` · last seen ${dt(u.lastLogin)}` : ''}</span></div>
+              <span className={`db-pill ${u.status}`}>{u.status === 'active' ? 'Active' : u.status === 'invited' ? 'Invited' : 'Disabled'}</span>
+            </div>)}
+          </div>}
+        </section>
+        <div className="db-col">
+          <section className="card db-gauge-card">
+            <h3 style={{ margin: 0 }}>Set-up progress</h3>
+            <Gauge done={d.done} total={d.priorities.length} />
+            <div className="db-legend"><span><i className="b" />Done {d.done}</span><span><i className="s" />To do {d.priorities.length - d.done}</span></div>
+          </section>
+          <section className="db-dark"><Countdown start={d.event.start_date} name={d.event.code} /></section>
+        </div>
+      </div>
+
+      <div className="db-grid2">
         <div className="card" data-tour="priorities">
           <div className="row between"><h3 style={{ margin: 0 }}>Set-up priorities</h3><span className="badge info">{d.done}/{d.priorities.length}</span></div>
           <p className="small muted" style={{ margin: '.25rem 0 .75rem' }}>Ordered around what you told us you need.</p>
@@ -65,7 +175,7 @@ export function Overview() {
               const Icon = ICON[p.key] ?? Check;
               const body = <><span className="avatar" style={{ borderRadius: 10, background: p.done ? 'var(--good-soft)' : 'var(--surface-2)', color: p.done ? 'var(--good)' : 'var(--text-2)' }}>{p.done ? <Check className="icon" /> : <Icon className="icon" />}</span>
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600, textDecoration: p.done ? 'line-through' : 'none', opacity: p.done ? 0.7 : 1 }}>{p.title}</div><div className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.detail}</div></div>{p.to && <ChevronRight className="icon faint" />}</>;
-              return p.to ? <Link key={p.key} to={p.to} className="row" style={{ gap: '.7rem', padding: '.55rem .5rem', borderRadius: 10, color: 'inherit', textDecoration: 'none', flexWrap: 'nowrap', border: '1px solid var(--border)' }}>{body}</Link>
+              return p.to ? <Link key={p.key} to={p.to} className="row db-prio" style={{ gap: '.7rem', padding: '.55rem .5rem', borderRadius: 10, color: 'inherit', textDecoration: 'none', flexWrap: 'nowrap', border: '1px solid var(--border)' }}>{body}</Link>
                 : <div key={p.key} className="row" style={{ gap: '.7rem', padding: '.55rem .5rem', borderRadius: 10, flexWrap: 'nowrap', border: '1px solid var(--border)' }}>{body}</div>;
             })}
           </div>
@@ -103,7 +213,7 @@ export function Overview() {
       </div>
       <div className="card">
         <h3 style={{ margin: 0 }}>Participants over time</h3>
-        {d.overTime.length < 1 ? <p className="small muted">No applications yet. The chart appears once the first one arrives.</p> : <LineChart ariaLabel="Applications over time" series={[{ name: 'Applications', color: 'var(--series-1)', points: d.overTime }]} />}
+        {d.overTime.length < 1 ? <p className="small muted">No applications yet. The chart appears once the first one arrives.</p> : <LineChart count ariaLabel="Applications over time" series={[{ name: 'Applications', color: 'var(--series-1)', points: d.overTime }]} />}
       </div>
     </div>
   );

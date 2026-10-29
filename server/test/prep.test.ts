@@ -25,15 +25,15 @@ before(async () => {
 });
 after(() => server.close());
 
-const person = (email: string, name = 'Test') => {
-  const p = signUp({ name, email, password: 'a-long-password-1' });
+const person = async (email: string, name = 'Test') => {
+  const p = await signUp({ name, email, password: 'a-long-password-1' });
   const code = /\b(\d{6})\b/.exec(one('SELECT body FROM notification WHERE recipient = ? ORDER BY created_at DESC LIMIT 1', email).body)![1];
   verifyEmail(p, code);
   return peopleDb().prepare('SELECT * FROM person WHERE id = ?').get(p.id) as any;
 };
 
 test('research uses web search, keeps the cited sources and resumes a paused search', async () => {
-  const p = person('rhea@example.com', 'Rhea');
+  const p = await person('rhea@example.com', 'Rhea');
   const pr = createProject(p, { country: 'France', committee: 'UNSC', topic: 'Humanitarian access in Sudan' });
   let calls = 0;
   reply = () => (++calls === 1 ? msg([{ type: 'server_tool_use', id: 'srv_1', name: 'web_search', input: { query: 'France Sudan humanitarian access' } }], 'pause_turn')
@@ -55,7 +55,7 @@ test('research uses web search, keeps the cited sources and resumes a paused sea
 });
 
 test('background tasks run in parallel and land in the brief', async () => {
-  const p = person('tara@example.com', 'Tara');
+  const p = await person('tara@example.com', 'Tara');
   const pr = createProject(p, { country: 'India', topic: 'UNSC reform', template: 'country_brief' });
   reply = (b) => msg([{ type: 'text', text: `Findings for: ${b.messages[0].content.split('\n')[0].slice(0, 30)}` }]);
   const { started } = runTasks(p, pr.project.id, ['background', 'voting', 'allies']);
@@ -68,7 +68,7 @@ test('background tasks run in parallel and land in the brief', async () => {
 });
 
 test('drafts carry word budgets; the coach returns a rubric', async () => {
-  const p = person('sam@example.com', 'Sam');
+  const p = await person('sam@example.com', 'Sam');
   reply = () => msg([{ type: 'text', text: '[Hook] ...' }]);
   await draft(p, { kind: 'speech', type: 'gsl', seconds: 60, country: 'Japan', topic: 'Nuclear disarmament' });
   assert.match(requests.at(-1).messages[0].content, /about 130 words/);
@@ -79,29 +79,29 @@ test('drafts carry word budgets; the coach returns a rubric', async () => {
   await assert.rejects(coach(p, { text: 'too short' }), /at least a paragraph/);
 });
 
-test('the daily AI allowance is enforced per person', () => {
-  const p = person('lim@example.com');
+test('the daily AI allowance is enforced per person', async () => {
+  const p = await person('lim@example.com');
   process.env.AI_DAILY_LIMIT = '3';
   useAi(p, 3);
   assert.throws(() => useAi(p), /used today's 3 AI requests/);
   delete process.env.AI_DAILY_LIMIT;
 });
 
-test('sharing: invites wait for the invitee to confirm their email; viewers cannot edit', () => {
-  const owner = person('own@example.com', 'Owner');
+test('sharing: invites wait for the invitee to confirm their email; viewers cannot edit', async () => {
+  const owner = await person('own@example.com', 'Owner');
   const pr = createProject(owner, { country: 'Brazil', topic: 'Amazon' });
   assert.equal(invite(owner, pr.project.id, 'later@example.com', 'viewer').added, false);
-  const later = person('later@example.com', 'Later');
+  const later = await person('later@example.com', 'Later');
   assert.equal(projects(later).length, 1, 'joined after confirming the email');
   assert.throws(() => addItem(later, { projectId: pr.project.id, kind: 'note', title: 'x' }), /view this project but not change it/);
   const v = projectView(owner, pr.project.id);
   assert.equal(v.members.length, 2);
-  const stranger = person('stranger@example.com');
+  const stranger = await person('stranger@example.com');
   assert.throws(() => projectView(stranger, pr.project.id), /not found/i);
 });
 
-test('learning progress and the streak', () => {
-  const p = person('learn@example.com');
+test('learning progress and the streak', async () => {
+  const p = await person('learn@example.com');
   markLearned(p, 'un-1', 100);
   const pr = progress(p);
   assert.equal(pr.done['un-1'], 100);
@@ -113,7 +113,7 @@ test('learning progress and the streak', () => {
 });
 
 test('without an AI key, AI tools say so clearly', async () => {
-  const p = person('noai@example.com');
+  const p = await person('noai@example.com');
   config.ai.enabled = false;
   await assert.rejects(research(p, { question: 'What is the NPT?' }), /not switched on/);
   config.ai.enabled = true;
