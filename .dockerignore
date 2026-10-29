@@ -1,0 +1,10 @@
+.env
+node_modules
+data
+tools
+*.zip
+cloudflare-pages
+cloudflare-worker
+e2e/screenshots
+data-server.log
+.git

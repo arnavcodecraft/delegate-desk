@@ -1,0 +1,13 @@
+{
+  // GitHub Codespaces: Code → Codespaces → Create codespace. The app starts by itself with demo data.
+  "name": "DelegateDesk",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "forwardPorts": [8080],
+  "portsAttributes": { "8080": { "label": "DelegateDesk", "onAutoForward": "openBrowser" } },
+  "postCreateCommand": "npm ci && npm run build && npm run seed -- --demo",
+  "postAttachCommand": "ALLOW_SANDBOX=1 ALLOW_DEV_CODES=1 npm start",
+  "secrets": {
+    "GEMINI_API_KEY": { "description": "Google AI Studio key for the AI features (optional)" }
+  },
+  "containerEnv": { "AI_PROVIDER": "gemini" }
+}

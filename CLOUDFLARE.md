@@ -4,8 +4,8 @@ DelegateDesk has two halves:
 
 | Half | What it is | Where it runs |
 |---|---|---|
-| **Website** | The pages people see (`index.html`, `assets/`) plus a small `_worker.js` | **Cloudflare Pages**: the `delegatedesk-site` folder inside `DelegateDesk-cloudflare-pages.zip` (157 files, under the 1,000-file limit) |
-| **Server** | The database, payments, emails, uploads, PDFs, live sessions | A Node.js host: Render, a VPS, or your own PC through Cloudflare Tunnel (`DelegateDesk-server.zip`) |
+| **Website** | The pages people see (`index.html`, `assets/`) plus a small `_worker.js` | **Cloudflare Pages**: the `cloudflare-pages` folder that `npm run build:pages` makes (about 157 files, under the 1,000-file limit) |
+| **Server** | The database, payments, emails, uploads, PDFs, live sessions | A Node.js host: Render, a VPS, or your own PC through Cloudflare Tunnel (this repository) |
 
 Cloudflare Pages only hosts files. It cannot run the database or the server, so the website forwards every `/api` request to the server. People only ever see your Cloudflare address, so sign-in cookies, uploads and downloads all work as normal. This exact setup passes the full 41-step end-to-end test.
 
@@ -14,7 +14,7 @@ Cloudflare Pages only hosts files. It cannot run the database or the server, so 
 ## Step 1: run the server (pick one)
 
 ### A. Render (simplest, about $7 a month for the disk)
-1. Put the contents of `DelegateDesk-server.zip` in a GitHub repository.
+1. Put this project in a GitHub repository.
 2. On render.com, go to **New → Blueprint** and choose the repository. It reads `render.yaml`: Docker, a 1 GB disk for the database and uploads, and a health check.
 3. When it asks for variables, fill them in (you can come back for `BASE_URL`):
    - `PROXY_SECRET`: any long random text. You will paste the same value into Cloudflare.
@@ -23,7 +23,7 @@ Cloudflare Pages only hosts files. It cannot run the database or the server, so 
 4. Note the server address Render gives you, e.g. `https://delegatedesk-api.onrender.com`.
 
 ### B. Your own Windows PC with Cloudflare Tunnel: `start-live.bat` (free; the PC must stay on)
-1. Unzip `DelegateDesk-server.zip` and double-click **`start-live.bat`**. You need Node.js from nodejs.org.
+1. Download this repository (Code → Download ZIP), unzip it and double-click **`start-live.bat`**. You need Node.js from nodejs.org.
 2. The first time, it asks for:
    - your Cloudflare site address,
    - your Google AI Studio key (optional),
@@ -39,7 +39,7 @@ Cloudflare Pages only hosts files. It cannot run the database or the server, so 
 5. Keep the window open. Each time you start it, the tunnel address changes: paste the new `BACKEND_URL` and deploy again. A permanent address needs a named tunnel on your own domain (below).
 
 #### Doing it by hand instead
-1. Unzip `DelegateDesk-server.zip` and create a file called `.env` next to `start.bat`:
+1. Download and unzip this repository, and create a file called `.env` next to `start.bat`:
    ```
    BASE_URL=https://delegatedesk.pages.dev
    PROXY_SECRET=paste-a-long-random-text
@@ -62,16 +62,16 @@ Put HTTPS in front of it (Caddy, nginx, or Cloudflare Tunnel).
 
 > **Pages, not "Worker with static assets".** If Cloudflare says "Variables cannot be added to a Worker that only has static assets", you created a Worker from static files. That kind ignores `_worker.js` and can't hold `BACKEND_URL`. Use the Pages steps below (in **Create application**, click **Pages** / "Looking to deploy Pages? Get started", then **Upload assets**). Or deploy the Worker package with `deploy.bat` (Option W below).
 
-### Option W: as a Worker (`DelegateDesk-cloudflare-worker.zip`)
-Unzip it to get the `delegatedesk-worker` folder. Double-click `deploy.bat`, sign in to Cloudflare when the browser opens, and wait for "Deployed". Then go to **Workers & Pages → delegatedesk → Settings → Variables and Secrets**, add `BACKEND_URL` and `PROXY_SECRET`, and press **Deploy**. Variables now save, because this Worker has code.
+### Option W: as a Worker
+Run `npm run build:pages`; it makes a `cloudflare-worker` folder. Double-click `deploy.bat` in it, sign in to Cloudflare when the browser opens, and wait for "Deployed". Then go to **Workers & Pages → delegatedesk → Settings → Variables and Secrets**, add `BACKEND_URL` and `PROXY_SECRET`, and press **Deploy**. Variables now save, because this Worker has code.
 
 ### Option P: as Pages
 1. In the Cloudflare dashboard, go to **Workers & Pages → Create → Pages → Upload assets**.
-2. Unzip **`DelegateDesk-cloudflare-pages.zip`**. You get one folder, **`delegatedesk-site`**. Name the project (e.g. `delegatedesk`), choose **Upload folder** and pick `delegatedesk-site`, then Deploy.
+2. Run `npm run build:pages` on your PC. It makes one folder, **`cloudflare-pages`**. Name the project (e.g. `delegatedesk`), choose **Upload folder** and pick `cloudflare-pages`, then Deploy.
 3. Open the project's **Settings → Variables and Secrets** and add two variables to **Production**:
    - `BACKEND_URL`: the server address from Step 1, e.g. `https://delegatedesk-api.onrender.com`. No trailing slash.
    - `PROXY_SECRET` (type: Secret): the same value as on the server.
-4. Variables only take effect on a new deployment. Go to **Deployments → Create deployment** and upload the `delegatedesk-site` folder again.
+4. Variables only take effect on a new deployment. Go to **Deployments → Create deployment** and upload the `cloudflare-pages` folder again.
 
 ## Step 3: connect the two
 1. Make sure the server's `BASE_URL` is your Pages address (e.g. `https://delegatedesk.pages.dev`, or your custom domain), then restart the server. Emails, payment return links and secure cookies all use it.
@@ -113,4 +113,4 @@ Each check is green, amber or red, with how to fix it. **"Request failed (404)" 
 - **Workers request limits on the free plan (100,000 requests a day)**: everything under `/api` counts. A live committee session refreshes about every 1.5 seconds for each open screen, so a big conference day (say 150 delegates following sessions for 6 hours) can pass 100,000. For conference days, switch Workers to the paid plan ($5 a month, 10 million requests).
 - **Demo data**: a new server starts empty. Organisers sign up at `/list`. To load the demo conference and demo accounts instead, run `npm run seed -- --demo` once on the server (Render: Shell tab).
 - **Backups**: Settings → Backups inside the app. On Render the database lives on the attached disk.
-- **Updating**: rebuild with `npm run build`, then zip `web/dist` together with `cloudflare/_worker.js` and `cloudflare/_headers`, and upload it as a new Pages deployment. Redeploy the server from GitHub (Render) or restart `start.bat`.
+- **Updating**: run `npm run build:pages` and upload the `cloudflare-pages` folder as a new Pages deployment. Redeploy the server from GitHub (Render) or restart `start.bat`.

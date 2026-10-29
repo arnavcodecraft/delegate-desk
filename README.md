@@ -2,6 +2,21 @@
 
 A Model UN conference platform. Organisers list their conference in a 10-step wizard and get a public page, a registration link and a dashboard; delegates find conferences on Explore and apply; chairs and staff apply from the Job Board; committees run live with roll call, speakers lists, motions and voting. Underneath: instant or reviewed committee/portfolio allotment, payments (bank transfer, UPI QR, payment link, in person, Razorpay, Cashfree), referral commission and Companies Act-ready double-entry books. Built from *Delegate Registration & Event Finance Platform — Full Product Spec*.
 
+
+## Run it from GitHub
+
+GitHub stores the code; a Node.js host runs it. Pick one:
+
+| Option | What you get | How |
+|---|---|---|
+| **Render (recommended for a live site)** | A permanent public address that redeploys every time you push to GitHub | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/arnavcodecraft/delegate-desk) Fill in `BASE_URL` (the address Render gives you, or your Cloudflare address), `GEMINI_API_KEY`, and `BREVO_API_KEY` + `MAIL_FROM` for sign-up emails. Leave `PROXY_SECRET` empty unless you put Cloudflare Pages in front. |
+| **GitHub Codespaces** | The whole app running inside GitHub, for you and your team to try | On the repository page: **Code → Codespaces → Create codespace**. It installs, loads the demo data and opens the app. Add `GEMINI_API_KEY` under Settings → Secrets and variables → Codespaces for AI. |
+| **Your own PC** | Free, from a download of this repository | Download the ZIP (Code → Download ZIP), unzip, double-click `start.bat`. Add a `.env` with `GEMINI_API_KEY=…` for AI. |
+
+Every push runs the type checks, all tests and a production build (GitHub Actions, `.github/workflows/ci.yml`).
+
+Never commit `.env` or API keys: `.gitignore` keeps them out. Put keys in Render's environment settings or GitHub's Codespaces secrets instead.
+
 ## Quick start
 
 Needs Node.js 22.13 or newer (Windows, macOS or Linux). On Windows you can just double-click `start.bat`: it installs, loads the demo on first run, starts the app and opens the browser.

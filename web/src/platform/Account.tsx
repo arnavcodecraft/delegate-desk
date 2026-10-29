@@ -15,47 +15,96 @@ function Field({ label, children, hint }: { label: string; children: React.React
   return <div className="pf-field"><label style={{ display: 'block' }}><span className="pf-label">{label}</span>{children}</label>{hint && <div className="pf-hint">{hint}</div>}</div>;
 }
 
-/** Sign in, sign up or reset a password (participants). */
-function AuthCard({ start = 'signin' }: { start?: 'signin' | 'signup' }) {
-  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot' | 'reset'>(start);
+/** The one sign-in for everyone (delegates, advisors, chairs and organiser teams), sign-up, password reset and two-factor. */
+function AuthCard({ start = 'signin', next }: { start?: 'signin' | 'signup'; next?: string | null }) {
+  const nav = useNavigate();
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot' | 'reset' | 'verify' | 'enroll'>(start);
   const [f, setF] = useState({ name: '', email: '', password: '', role: 'delegate', school: '', code: '' });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dev, setDev] = useState<string | null>(null);
+  const [enroll, setEnroll] = useState<{ qr: string; secret: string } | null>(null);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   const go = async (fn: () => Promise<void>) => { setErr(null); setBusy(true); try { await fn(); } catch (e: any) { setErr(e.message); } finally { setBusy(false); } };
+  const toApp = () => nav(next && next.startsWith('/') && !next.startsWith('/account') ? next : '/app');
+  const toAccount = () => { refreshMe(); if (next && next.startsWith('/') && !next.startsWith('/app')) nav(next); else nav('/account'); };
+  // Someone who already signed in but still owes a two-factor code comes straight back to it.
+  useEffect(() => { api.get<any>('/api/auth/me').then((m) => { if (m.user && m.mfaPending) setMode(m.mfaEnrolled ? 'verify' : 'enroll'); else if (m.user && start === 'signin') toApp(); }).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (mode === 'enroll' && !enroll) api.post<any>('/api/auth/mfa/enroll').then(setEnroll).catch((e) => setErr(e.message)); }, [mode, enroll]);
+  const title = { verify: 'Two-factor verification', enroll: 'Set up two-factor sign-in', forgot: 'Reset your password', reset: 'Enter the code' } as Record<string, string>;
   return (
     <div className="pf-card pad pf-auth">
-      {mode !== 'forgot' && mode !== 'reset' && <div className="pf-tabs2" role="tablist">
-        <button role="tab" aria-selected={mode === 'signin'} className={mode === 'signin' ? 'on' : ''} onClick={() => setMode('signin')}>Sign in</button>
-        <button role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'on' : ''} onClick={() => setMode('signup')}>Create account</button>
+      {(mode === 'signin' || mode === 'signup') && <div className="pf-tabs2" role="tablist">
+        <button type="button" role="tab" aria-selected={mode === 'signin'} className={mode === 'signin' ? 'on' : ''} onClick={() => { setErr(null); setMode('signin'); }}>Sign in</button>
+        <button type="button" role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'on' : ''} onClick={() => { setErr(null); setMode('signup'); }}>Create account</button>
       </div>}
       <form onSubmit={(e) => {
         e.preventDefault();
-        if (mode === 'signin') go(async () => { await api.post('/api/me/login', { email: f.email, password: f.password }); refreshMe(); });
-        if (mode === 'signup') go(async () => { const r = await api.post<any>('/api/me/signup', { name: f.name, email: f.email, password: f.password, role: f.role, school: f.school }); if (r.devCode) { try { sessionStorage.setItem('dd-devcode', r.devCode); } catch { /* private mode */ } } refreshMe(); });
-        if (mode === 'forgot') go(async () => { const r = await api.post<any>('/api/me/forgot', { email: f.email }); setDev(r.devCode ?? null); setMode('reset'); });
-        if (mode === 'reset') go(async () => { await api.post('/api/me/reset', { email: f.email, code: f.code, password: f.password }); refreshMe(); });
+        if (mode === 'signin') go(async () => {
+          const r = await api.post<any>('/api/auth/login', { email: f.email, password: f.password });
+          if (r.kind === 'person') return toAccount();
+          if (r.mfa) { setF((x) => ({ ...x, code: '' })); setMode(r.mfa); } else toApp();
+        });
+        if (mode === 'signup') go(async () => { const r = await api.post<any>('/api/me/signup', { name: f.name, email: f.email, password: f.password, role: f.role, school: f.school }); if (r.devCode) { try { sessionStorage.setItem('dd-devcode', r.devCode); } catch { /* private mode */ } } toAccount(); });
+        if (mode === 'forgot') go(async () => {
+          // Team accounts get a reset link, participant accounts a 6-digit code: ask for both, only the matching one is sent.
+          const [, r] = await Promise.all([api.post('/api/auth/forgot', { email: f.email }).catch(() => null), api.post<any>('/api/me/forgot', { email: f.email })]);
+          setDev(r?.devCode ?? null); setMode('reset');
+        });
+        if (mode === 'reset') go(async () => { await api.post('/api/me/reset', { email: f.email, code: f.code, password: f.password }); toAccount(); });
+        if (mode === 'verify') go(async () => { await api.post('/api/auth/mfa/verify', { code: f.code }); toApp(); });
+        if (mode === 'enroll') go(async () => { await api.post('/api/auth/mfa/confirm', { code: f.code }); toApp(); });
       }}>
-        {mode === 'forgot' && <><h2 className="pf-h2">Reset your password</h2><p className="pf-muted pf-small">We will email you a 6-digit code.</p></>}
-        {mode === 'reset' && <><h2 className="pf-h2">Enter the code</h2><p className="pf-muted pf-small">We sent a code to {f.email}. It expires in 15 minutes.</p>{dev && <div className="pf-note" style={{ marginBottom: 12 }}><span>Email isn’t set up on this server yet, so here is the code: <b>{dev}</b></span></div>}</>}
+        {title[mode] && <h2 className="pf-h2">{title[mode]}</h2>}
+        {mode === 'forgot' && <p className="pf-muted pf-small">We will email you a 6-digit code (or, for organiser team accounts, a reset link).</p>}
+        {mode === 'reset' && <><p className="pf-muted pf-small">If {f.email} has an account, we sent a code. It expires in 15 minutes. Organiser team accounts get a link by email instead.</p>{dev && <div className="pf-note" style={{ marginBottom: 12 }}><span>Email isn’t set up on this server yet, so here is the code: <b>{dev}</b></span></div>}</>}
+        {mode === 'verify' && <p className="pf-muted pf-small">Enter the 6-digit code from your authenticator app.</p>}
+        {mode === 'enroll' && <><p className="pf-muted pf-small">Your role handles money and settings, so two-factor sign-in is required. Scan this with Google Authenticator, Microsoft Authenticator or similar, then enter the code it shows.</p>
+          {enroll ? <div style={{ textAlign: 'center', margin: '8px 0 14px' }}><img src={enroll.qr} width={190} height={190} alt="Authenticator QR code" style={{ background: '#fff', padding: 6, borderRadius: 10 }} /><div className="pf-small mono" style={{ wordBreak: 'break-all' }}>{enroll.secret}</div></div> : <p className="pf-muted">Loading…</p>}</>}
         {mode === 'signup' && <Field label="Your name"><input className="pf-input" value={f.name} onChange={set('name')} autoComplete="name" required /></Field>}
-        {mode !== 'reset' && <Field label="Email"><input className="pf-input" type="email" value={f.email} onChange={set('email')} autoComplete="email" required /></Field>}
-        {mode === 'reset' && <Field label="Code"><input className="pf-input" inputMode="numeric" maxLength={6} value={f.code} onChange={set('code')} autoComplete="one-time-code" required /></Field>}
-        {mode !== 'forgot' && <Field label={mode === 'reset' ? 'New password' : 'Password'} hint={mode === 'signin' ? undefined : 'At least 10 characters'}>
+        {(mode === 'signin' || mode === 'signup' || mode === 'forgot') && <Field label="Email"><input className="pf-input" type="email" value={f.email} onChange={set('email')} autoComplete="email" required autoFocus /></Field>}
+        {(mode === 'reset' || mode === 'verify' || mode === 'enroll') && <Field label={mode === 'reset' ? 'Code' : '6-digit code'}><input className="pf-input" inputMode="numeric" maxLength={6} value={f.code} onChange={set('code')} autoComplete="one-time-code" required autoFocus /></Field>}
+        {(mode === 'signin' || mode === 'signup' || mode === 'reset') && <Field label={mode === 'reset' ? 'New password' : 'Password'} hint={mode === 'signin' ? undefined : 'At least 10 characters'}>
           <input className="pf-input" type="password" value={f.password} onChange={set('password')} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} required /></Field>}
         {mode === 'signup' && <div className="pf-row2">
           <Field label="I am a"><select className="pf-input" value={f.role} onChange={set('role')}>{Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
           <Field label="School or college"><input className="pf-input" value={f.school} onChange={set('school')} /></Field>
         </div>}
         {err && <div className="pf-err" role="alert" style={{ marginBottom: 12 }}>{err}</div>}
-        <button className="pf-btn primary" style={{ width: '100%' }} disabled={busy}>{mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : mode === 'forgot' ? 'Email me a code' : 'Set password and sign in'}</button>
+        <button className="pf-btn primary" style={{ width: '100%' }} disabled={busy}>{busy ? 'Please wait…' : { signin: 'Sign in', signup: 'Create account', forgot: 'Send reset', reset: 'Set password and sign in', verify: 'Verify', enroll: 'Turn on and continue' }[mode]}</button>
         <div className="pf-auth-foot">
           {mode === 'signin' && <button type="button" className="pf-btn link" onClick={() => setMode('forgot')}>Forgot password?</button>}
           {(mode === 'forgot' || mode === 'reset') && <button type="button" className="pf-btn link" onClick={() => setMode('signin')}>Back to sign in</button>}
         </div>
+        {mode === 'signin' && <p className="pf-small pf-muted" style={{ textAlign: 'center', margin: '6px 0 0' }}>One sign-in for delegates, advisors, chairs and organiser teams. Running a conference? <Link to="/list">List it for free</Link></p>}
       </form>
     </div>
+  );
+}
+
+/** The single sign-in page, at /login and /account (when signed out). */
+export function SignInPage() {
+  const me = usePerson();
+  const [sp] = useSearchParams();
+  const nav = useNavigate();
+  const next = sp.get('next');
+  useEffect(() => { if (me?.person) nav(next && next.startsWith('/') && !next.startsWith('/app') && !next.startsWith('/login') ? next : '/account'); }, [me?.person]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <PlatformShell>
+      <div className="pf-auth-wrap">
+        <div className="pf-auth-copy">
+          <div className="pf-eyebrow">Your DelegateDesk account</div>
+          <h1 className="pf-h1 left" style={{ fontSize: 40, marginTop: 10 }}>Every conference and every brief, in one place.</h1>
+          <ul className="pf-ticks">
+            <li><CheckCircle2 className="icon" />Delegates, advisors and chairs: every registration, from every organiser</li>
+            <li><CheckCircle2 className="icon" />Research projects, position papers, speeches and the MUN Masterclass</li>
+            <li><CheckCircle2 className="icon" />Organisers and conference teams: your dashboard, with the same sign-in</li>
+            <li><CheckCircle2 className="icon" />Two-factor protection for anyone who handles money or settings</li>
+          </ul>
+        </div>
+        <AuthCard start={sp.get('mode') === 'signup' ? 'signup' : 'signin'} next={next} />
+      </div>
+    </PlatformShell>
   );
 }
 
@@ -66,24 +115,7 @@ export function AccountPage() {
   const next = sp.get('next');
   useEffect(() => { if (me?.person && next) nav(next); }, [me?.person, next]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!me) return <PlatformShell><div className="pf-empty">Loading…</div></PlatformShell>;
-  if (!me.person) return (
-    <PlatformShell>
-      <div className="pf-auth-wrap">
-        <div className="pf-auth-copy">
-          <div className="pf-eyebrow">Your DelegateDesk account</div>
-          <h1 className="pf-h1 left" style={{ fontSize: 40, marginTop: 10 }}>Every conference and every brief, in one place.</h1>
-          <ul className="pf-ticks">
-            <li><CheckCircle2 className="icon" />All your registrations and applications, from every organiser</li>
-            <li><CheckCircle2 className="icon" />Research projects, position papers and speeches you can come back to</li>
-            <li><CheckCircle2 className="icon" />Courses, daily challenges and your streak</li>
-            <li><CheckCircle2 className="icon" />Registration forms filled in for you</li>
-          </ul>
-          <div className="pf-note" style={{ marginTop: 20 }}><ShieldCheck className="icon" /><span>Organiser or conference team? <Link to="/login">Sign in to your dashboard</Link>.</span></div>
-        </div>
-        <AuthCard start={sp.get('mode') === 'signup' ? 'signup' : 'signin'} />
-      </div>
-    </PlatformShell>
-  );
+  if (!me.person) return <SignInPage />;
   return <AccountHome me={me} />;
 }
 

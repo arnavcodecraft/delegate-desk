@@ -48,14 +48,14 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
           <NavLink to="/session" className="hide-sm">Live session</NavLink>
           <span className="spacer" />
           {person?.person ? <NavLink to="/account" className="ghost-cta"><span className="pf-avatar">{person.person.name.slice(0, 1).toUpperCase()}</span><span className="hide-sm">My account</span></NavLink>
-            : !signedIn && <><NavLink to="/account" className="hide-sm">Sign in</NavLink><NavLink to="/account" className="show-sm" aria-label="Sign in"><UserRound className="icon" style={{ width: 18, height: 18 }} /></NavLink></>}
+            : !signedIn && <><NavLink to="/login" className="hide-sm">Sign in</NavLink><NavLink to="/login" className="show-sm" aria-label="Sign in"><UserRound className="icon" style={{ width: 18, height: 18 }} /></NavLink></>}
           {signedIn ? <Link to="/app" className="cta">Dashboard</Link> : <Link to="/list" className="cta">List your conference</Link>}
         </nav>
       </header>
       <main className="pf-wrap">{children}</main>
       <footer className="pf-foot">
         <div><b>DelegateDesk</b><span>Run your conference. Prepare for committee.</span></div>
-        <nav><Link to="/explore">Explore</Link><Link to="/jobs">Job Board</Link><Link to="/prep">Prep</Link><Link to="/prep/tools">MUN tools</Link><Link to="/list">List your conference</Link><Link to="/login">Organiser sign-in</Link><Link to="/privacy">Privacy</Link></nav>
+        <nav><Link to="/explore">Explore</Link><Link to="/jobs">Job Board</Link><Link to="/prep">Prep</Link><Link to="/prep/tools">MUN tools</Link><Link to="/list">List your conference</Link><Link to="/login">Sign in</Link><Link to="/privacy">Privacy</Link></nav>
       </footer>
     </div>
   );

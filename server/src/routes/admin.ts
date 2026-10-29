@@ -5,7 +5,7 @@ import { audit, diff } from '../audit.ts';
 import { config } from '../config.ts';
 import { eventSettings, getEvent, getOrg, orgSettings, saveEventSettings, saveOrgSettings, EXPENSE_CATEGORIES } from '../settings.ts';
 import {
-  requirePerm, requireUser, can, committeeScope, createUser, setRole, rolesOf, verifyPassword, hashPassword, startSession, endSession,
+  requirePerm, requireUser, can, committeeScope, createUser, setRole, rolesOf, verifyPassword, verifyPasswordAsync, hashPassword, startSession, endSession,
   verifyTotp, newTotpSecret, MFA_ROLES, ROLES, ROLE_LABELS, ROLE_HELP, permissionMatrix, rateLimit, type Role,
 } from '../auth.ts';
 import { bad, conflict, ctx, forbidden, json, notFound, now, token, uid, istDate, addHours, isEmail } from '../util.ts';
@@ -33,22 +33,29 @@ import { parseMoney } from '../util.ts';
 import { currentWorkspace } from '../platform.ts';
 import { syncListing } from '../services/conference.ts';
 
+import { signIn, startPersonSession } from '../services/people.ts';
 import { sendNow, forgotPassword, inviteStaff, issueUserToken, peekUserToken, resendInvite, useUserToken } from '../services/accounts.ts';
 
 export const authRouter = express.Router();
 
-authRouter.post('/login', h((req, res) => {
+/** The one sign-in for everyone: organiser and conference-team accounts first, then delegate/advisor/chair accounts. */
+authRouter.post('/login', h(async (req, res) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase();
   rateLimit(`login:${req.ip}:${email}`, 10, 15 * 60_000);
   const user = one('SELECT * FROM user WHERE email = ? AND active = 1', email);
-  const ok = !!user && verifyPassword(req.body?.password ?? '', user.password_hash);
+  const ok = !!user && await verifyPasswordAsync(req.body?.password ?? '', user.password_hash);
+  if (!ok) {
+    // Not a team account: try a participant account with the same email and password.
+    const person = await signIn(email, String(req.body?.password ?? '')).catch(() => null);
+    if (person) { startPersonSession(res, person.id); return { ok: true, kind: 'person', mfa: null }; }
+  }
   insert('login_log', { id: uid(), user_id: user?.id ?? null, email, ip: req.ip, ua: String(req.headers['user-agent'] ?? '').slice(0, 200), ok: ok ? 1 : 0, at: now() });
   if (!ok) throw bad('Email or password is incorrect');
   const roles = rolesOf(user.id).map((r) => r.role);
   const needsMfa = roles.some((r) => MFA_ROLES.includes(r as Role));
   startSession(res, req, user.id, !needsMfa);
   run('UPDATE user SET last_login_at = ? WHERE id = ?', now(), user.id);
-  return { ok: true, mfa: needsMfa ? (user.totp_enabled ? 'verify' : 'enroll') : null };
+  return { ok: true, kind: 'staff', mfa: needsMfa ? (user.totp_enabled ? 'verify' : 'enroll') : null };
 }));
 authRouter.post('/forgot', h((req) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase();

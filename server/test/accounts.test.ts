@@ -102,3 +102,17 @@ test('many people signing up at once: every account is created, the server stays
   assert.equal((await jar()('POST', '/api/me/login', { email: 'load7@example.com', password: 'wrong-password' })).status, 400);
   assert.equal((await jar()('POST', '/api/me/login', { email: 'nobody-here@example.com', password: 'wrong-password' })).status, 400);
 });
+
+test('one sign-in for everyone: the same form signs in team accounts and participant accounts', async () => {
+  const d = jar();
+  assert.equal((await d('POST', '/api/me/signup', { name: 'Uma', email: 'uma@example.com', password: 'uma-pass-12345' })).status, 200);
+  const p = jar();
+  const r = await p('POST', '/api/auth/login', { email: 'uma@example.com', password: 'uma-pass-12345' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.kind, 'person');
+  assert.equal((await p('GET', '/api/me')).body.person.email, 'uma@example.com');
+  const s = jar();
+  const staff = await s('POST', '/api/auth/login', { email: 'desk@example.org', password: 'brand-new-pass-1' });
+  assert.equal(staff.body.kind, 'staff');
+  assert.equal((await jar()('POST', '/api/auth/login', { email: 'uma@example.com', password: 'wrong-password' })).status, 400);
+});

@@ -149,7 +149,7 @@ async function main() {
     '',
     ...paste.split('\n'),
     '',
-    'Then deploy again (Pages: upload the delegatedesk-site folder once more).',
+    'Then deploy again (Pages: upload the cloudflare-pages folder once more).',
     `Check: ${env.BASE_URL}/setup`,
     '',
     'Keep this window open. Closing it takes the site offline.',

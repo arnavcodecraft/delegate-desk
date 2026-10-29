@@ -374,6 +374,11 @@ await step('delegate account: sign up, confirm the email, see the conference', o
   await s.waitForSelector('text=Test Model United Nations');
   await s.screenshot({ path: `${SHOTS}/09-account.png`, fullPage: true });
   globalThis.student = s;
+  // The same /login page signs delegates in (and organiser teams): no separate delegate sign-in.
+  const again = await newPage('student, second device');
+  await again.goto(`${B}/login`); await again.getByLabel('Email').fill('aisha@example.com'); await again.getByLabel('Password').fill('aisha-pass-123');
+  await again.locator('form').getByRole('button', { name: 'Sign in' }).click();
+  await again.waitForURL(/\/account/); await again.waitForSelector('text=Test Model United Nations');
 });
 await step('prep: tools work without AI or an account', org, async () => {
   const s = await newPage('tools visitor');

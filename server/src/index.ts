@@ -101,7 +101,14 @@ export function boot(dbFile?: string) {
 }
 
 if (/[\\/]index\.ts$/.test(process.argv[1] ?? '')) {
+  // A stray error in a background job or a dropped connection is logged; it never takes the whole site down.
+  process.on('uncaughtException', (e) => console.error('[uncaught]', e));
+  process.on('unhandledRejection', (e) => console.error('[unhandled]', e));
   boot();
   if (config.jobsEnabled) startJobs();
-  createApp().listen(config.port, () => console.log(`DelegateDesk running at ${config.baseUrl}`));
+  createApp().listen(config.port, () => console.log(`DelegateDesk running at ${config.baseUrl}`))
+    .on('error', (e: any) => {
+      console.error(e?.code === 'EADDRINUSE' ? `\nPort ${config.port} is already in use: DelegateDesk (or another program) is already running. Close the other window, or set PORT to a different number in .env.\n` : e);
+      process.exit(1);
+    });
 }

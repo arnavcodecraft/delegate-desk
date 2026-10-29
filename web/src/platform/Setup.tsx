@@ -24,7 +24,7 @@ export function SetupPage() {
     const onPages = !!pc?.json?.worker;
     if (onPages) out.push({ name: 'Cloudflare Pages worker', state: pc!.json.backendSet ? 'ok' : 'bad', detail: pc!.json.backendSet ? 'Running, with BACKEND_URL set.' : <>Running, but <b>BACKEND_URL</b> is not set. Cloudflare → your Pages project → Settings → Variables and Secrets → add BACKEND_URL (your server address, e.g. https://delegatedesk-api.onrender.com), then upload the site folder again.</> });
     else if (health?.json?.app === 'delegatedesk') out.push({ name: 'Hosting', state: 'ok', detail: 'The server is serving this site directly (not through Cloudflare Pages).' });
-    else out.push({ name: 'Cloudflare Pages worker', state: 'bad', detail: <>The site is up but <b>_worker.js</b> is not running, so nothing reaches the server (this is what “Request failed (404)” means). Upload the whole <b>delegatedesk-site</b> folder, including <code>_worker.js</code>, as a new deployment.</> });
+    else out.push({ name: 'Cloudflare Pages worker', state: 'bad', detail: <>The site is up but <b>_worker.js</b> is not running, so nothing reaches the server (this is what “Request failed (404)” means). Upload the whole <b>cloudflare-pages</b> folder (from npm run build:pages), including <code>_worker.js</code>, as a new deployment.</> });
     if (health?.json?.app === 'delegatedesk') out.push({ name: 'DelegateDesk server', state: 'ok', detail: `Reachable, version ${health.json.version ?? 'unknown'}.` });
     else if (onPages && pc!.json.backendSet) out.push({ name: 'DelegateDesk server', state: 'bad', detail: health?.json?.error ?? 'Not reachable. Check that the server is running and that BACKEND_URL is its exact address (open it in a browser: /api/health should say ok).' });
     const st = health?.json?.app ? await getJson('/api/setup-status').catch(() => null) : null;
@@ -39,7 +39,7 @@ export function SetupPage() {
       if (onPages) out.push({ name: 'Proxy secret', state: s.proxySecret && pc!.json.secretSet ? 'ok' : 'warn', detail: s.proxySecret && pc!.json.secretSet ? 'Set on both sides.' : 'Optional but recommended: set the same PROXY_SECRET in Cloudflare Pages and on the server, so the server only accepts traffic from your site.' });
       out.push({ name: 'AI (Prep research and drafting)', state: s.ai ? 'ok' : 'warn', detail: s.ai ? `On, using ${s.aiProvider === 'gemini' ? 'Google Gemini' : 'Claude'}.` : 'Off. Optional: add GEMINI_API_KEY (Google AI Studio) or ANTHROPIC_API_KEY on the server.' });
       const me = await getJson('/api/me').catch(() => null);
-      out.push({ name: 'Accounts', state: me?.json && 'person' in me.json ? 'ok' : 'bad', detail: me?.json && 'person' in me.json ? 'Sign-up and sign-in are answering.' : 'The accounts service did not answer. The server may be an old version: deploy the latest DelegateDesk-server.zip.' });
+      out.push({ name: 'Accounts', state: me?.json && 'person' in me.json ? 'ok' : 'bad', detail: me?.json && 'person' in me.json ? 'Sign-up and sign-in are answering.' : 'The accounts service did not answer. The server may be an old version: deploy the latest version from GitHub.' });
     }
     setChecks(out);
   };

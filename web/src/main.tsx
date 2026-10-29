@@ -11,7 +11,7 @@ import { ToastHost } from './ui';
 import Register from './pages/Register';
 import Portal, { SandboxPay, Consent, Privacy } from './pages/Portal';
 import { DelegationRegister, DelegationPortal, ReferrerStatement, SharedList } from './pages/Other';
-import { StaffGate, Login, Account, Home } from './staff/Shell';
+import { StaffGate, Account, Home } from './staff/Shell';
 import Dashboard from './staff/Dashboard';
 import { Registrations, RegistrationDetail, Lists } from './staff/Registrations';
 import Allocation from './staff/Allocation';
@@ -25,7 +25,7 @@ import CheckIn from './staff/CheckIn';
 import ListConference from './platform/ListConference';
 import { Explore, ConferencePage, Jobs, ApplicationStatus } from './platform/Explore';
 import { StartSession, SessionView, ChairConsole } from './platform/Live';
-import { AccountPage, SetPasswordPage } from './platform/Account';
+import { AccountPage, SetPasswordPage, SignInPage } from './platform/Account';
 import { SetupPage } from './platform/Setup';
 import { PrepHome, ResearchHome, ProjectPage, ItemPage } from './prep/Research';
 import { WritePage, CoachPage } from './prep/Write';
@@ -59,7 +59,9 @@ function App() {
       <Route path="/delegation/:token" element={<DelegationPortal />} />
       <Route path="/referrer/:token" element={<ReferrerStatement />} />
       <Route path="/share/:token" element={<SharedList />} />
-      <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<SignInPage />} />
+      <Route path="/signin" element={<SignInPage />} />
+      <Route path="/signup" element={<Navigate to="/login?mode=signup" replace />} />
       <Route path="/account" element={<AccountPage />} />
       <Route path="/setup" element={<SetupPage />} />
       <Route path="/prep" element={<PrepHome />} />

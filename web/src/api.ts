@@ -4,11 +4,20 @@ export class ApiError extends Error {
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const isForm = body instanceof FormData;
-  const res = await fetch(url, {
-    method, credentials: 'same-origin',
-    headers: { ...(isForm || body === undefined ? {} : { 'content-type': 'application/json' }), 'x-dd': '1' },
-    body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method, credentials: 'same-origin',
+      headers: { ...(isForm || body === undefined ? {} : { 'content-type': 'application/json' }), 'x-dd': '1' },
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
+    });
+  } catch {
+    // The browser got no answer at all ("Failed to fetch"): the server is stopped or this device is offline.
+    const local = /^(localhost|127\.|192\.168\.|10\.)/.test(window.location.hostname);
+    throw new ApiError(0, navigator.onLine === false ? 'You are offline. Check your internet connection and try again.'
+      : local ? 'The DelegateDesk server is not running. Open the DelegateDesk folder, double-click start.bat, keep that black window open, then try again.'
+        : 'Could not reach the DelegateDesk server. Check your connection and try again in a moment. If you run this site, open /setup.');
+  }
   const text = await res.text();
   let data: any = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }

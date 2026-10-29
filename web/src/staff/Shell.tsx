@@ -174,53 +174,6 @@ export function PageHead({ title, subtitle, children }: { title: React.ReactNode
   return <div className="topbar"><div style={{ minWidth: 0 }}><h1>{title}</h1>{subtitle && <p className="subtitle">{subtitle}</p>}</div>{children && <div className="actions">{children}</div>}</div>;
 }
 
-export function Login() {
-  const nav = useNavigate();
-  const next = new URLSearchParams(window.location.search).get('next') || '/app';
-  const [step, setStep] = useState<'password' | 'verify' | 'enroll' | 'forgot' | 'sent'>('password');
-  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [code, setCode] = useState('');
-  const [enroll, setEnroll] = useState<{ qr: string; secret: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => { api.get<Me>('/api/auth/me').then((m) => { if (m.user && m.mfaPending) setStep(m.mfaEnrolled ? 'verify' : 'enroll'); else if (m.user) nav(next); }).catch(() => {}); }, []); // eslint-disable-line
-  useEffect(() => { if (step === 'enroll' && !enroll) api.post<any>('/api/auth/mfa/enroll').then(setEnroll).catch((e) => setError(e.message)); }, [step, enroll]);
-  async function go(fn: () => Promise<void>) { setError(null); try { await fn(); } catch (e: any) { setError(e.message); } }
-  return (
-    <div className="public"><div className="public-head"><div className="inner"><div className="eyebrow">Organisers &amp; conference teams</div><h1>Sign in to DelegateDesk</h1><p>Manage applications, payments, committees and sessions.</p></div></div>
-      <div className="public-body" style={{ maxWidth: 440 }}>
-        <div className="card stack">
-          {error && <Alert tone="bad">{error}</Alert>}
-          {step === 'password' && <form className="stack" onSubmit={(e) => { e.preventDefault(); go(async () => { const r = await api.post<any>('/api/auth/login', { email, password }); if (r.mfa) setStep(r.mfa); else nav(next); }); }}>
-            <Field label="Email"><input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></Field>
-            <Field label="Password"><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
-            <button className="btn primary lg">Sign in</button>
-            <div className="row between small"><button type="button" className="btn ghost sm" onClick={() => { setError(null); setStep('forgot'); }}>Forgot password?</button><a href="/account">Delegate, advisor or chair? Sign in here</a></div>
-          </form>}
-          {step === 'forgot' && <form className="stack" onSubmit={(e) => { e.preventDefault(); go(async () => { await api.post('/api/auth/forgot', { email }); setStep('sent'); }); }}>
-            <h3>Reset your password</h3><p className="muted small">Enter your work email. If it has an account, we email a link to choose a new password.</p>
-            <Field label="Email"><input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></Field>
-            <button className="btn primary lg">Email me a link</button>
-            <button type="button" className="btn ghost" onClick={() => setStep('password')}>Back to sign in</button>
-          </form>}
-          {step === 'sent' && <div className="stack"><h3>Check your email</h3><p className="muted small">If {email} has an account, a reset link is on its way. It works once and expires in an hour.</p><button className="btn" onClick={() => setStep('password')}>Back to sign in</button></div>}
-          {step === 'password' && <div className="row between small" style={{ borderTop: '1px solid var(--border)', paddingTop: '.75rem' }}><span>Running a conference? <a href="/list">List it for free</a></span><a href="/">Explore conferences</a></div>}
-          {step === 'verify' && <form className="stack" onSubmit={(e) => { e.preventDefault(); go(async () => { await api.post('/api/auth/mfa/verify', { code }); nav(next); }); }}>
-            <h3>Two-factor verification</h3><p className="muted small">Enter the 6-digit code from your authenticator app.</p>
-            <Field label="Code"><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} autoFocus /></Field>
-            <button className="btn primary lg">Verify</button>
-          </form>}
-          {step === 'enroll' && <form className="stack" onSubmit={(e) => { e.preventDefault(); go(async () => { await api.post('/api/auth/mfa/confirm', { code }); nav(next); }); }}>
-            <h3>Set up two-factor sign-in</h3>
-            <p className="muted small">Your role moves money, so two-factor sign-in is mandatory. Scan this with Google Authenticator, Microsoft Authenticator or similar, then enter the code.</p>
-            {enroll ? <div style={{ textAlign: 'center' }}><img src={enroll.qr} width={200} height={200} alt="Authenticator QR code" style={{ background: '#fff', padding: 6, borderRadius: 8 }} /><div className="small mono" style={{ wordBreak: 'break-all' }}>{enroll.secret}</div></div> : <Loading />}
-            <Field label="6-digit code"><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} /></Field>
-            <button className="btn primary lg">Turn on and continue</button>
-          </form>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function Account() {
   const { me } = useStaff();
   const [cur, setCur] = useState(''); const [nxt, setNxt] = useState(''); const [msg, setMsg] = useState<string | null>(null);

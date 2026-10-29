@@ -11,4 +11,4 @@ tools/
 data-server.log
 
 # Contains the local .env with API keys: never commit
-DelegateDesk-app.zip
+*.zip
