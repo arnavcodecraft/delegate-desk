@@ -22,19 +22,6 @@ function CopyBox({ value }: { value: string }) {
     <button className="btn sm" onClick={async () => { try { await navigator.clipboard.writeText(value); setOk(true); setTimeout(() => setOk(false), 1400); } catch { /* blocked */ } }}>{ok ? <Check className="icon" /> : <Copy className="icon" />}{ok ? 'Copied' : 'Copy'}</button></div>;
 }
 
-function Donut({ value, total, label: l }: { value: number; total: number; label: string }) {
-  const pct = total ? Math.min(1, value / total) : 0;
-  const r = 52, c = 2 * Math.PI * r;
-  return (
-    <svg viewBox="0 0 130 130" width="150" height="150" role="img" aria-label={`${value} of ${total} ${l}`}>
-      <circle cx="65" cy="65" r={r} fill="none" stroke="var(--surface-2)" strokeWidth="14" />
-      <circle cx="65" cy="65" r={r} fill="none" stroke="var(--brand)" strokeWidth="14" strokeDasharray={`${pct * c} ${c}`} strokeLinecap="round" transform="rotate(-90 65 65)" />
-      <text x="65" y="62" textAnchor="middle" fontSize="28" fontWeight="800" fill="var(--text)">{value}</text>
-      <text x="65" y="82" textAnchor="middle" fontSize="12" fill="var(--text-3)">{total ? `of ${total}` : l}</text>
-    </svg>
-  );
-}
-
 const TEAM_ROLE: Record<string, string> = { admin: 'Organiser', cfo: 'Finance lead', accountant: 'Accounts', registration_exec: 'Registration desk', chair: 'Chair / EB', auditor: 'Auditor', secretariat: 'Secretariat' };
 const initialsOf = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
 
@@ -55,20 +42,6 @@ function WeekBars({ week }: { week: { day: string; applied: number; views: numbe
   </div>;
 }
 
-/** A half-ring gauge for set-up progress. */
-function Gauge({ done, total }: { done: number; total: number }) {
-  const pct = total ? done / total : 0;
-  const r = 80, c = Math.PI * r;
-  return <div className="db-gauge">
-    <svg viewBox="0 0 200 112" role="img" aria-label={`${Math.round(pct * 100)}% of set-up done`}>
-      <defs><pattern id="dbStripe" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" fill="var(--surface-2)" /><rect width="3" height="7" fill="var(--border-strong)" /></pattern></defs>
-      <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="url(#dbStripe)" strokeWidth="22" strokeLinecap="round" />
-      <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="var(--brand)" strokeWidth="22" strokeLinecap="round" strokeDasharray={`${pct * c} ${c}`} className="db-gauge-fg" />
-    </svg>
-    <div className="db-gauge-val"><b>{Math.round(pct * 100)}%</b><span>set-up done</span></div>
-  </div>;
-}
-
 /** Live countdown to the first day of the conference. */
 function Countdown({ start, name }: { start: string | null; name: string }) {
   const [nowMs, setNow] = useState(Date.now());
@@ -85,7 +58,7 @@ function Countdown({ start, name }: { start: string | null; name: string }) {
   </div>;
 }
 
-/** The organiser dashboard: headline numbers, this week, committees, team, set-up progress, sources and growth. */
+/** The organiser dashboard, kept calm: one next step, four numbers, this week, committees, the share link and the countdown. Everything else folds away. */
 export function Overview() {
   const { eventId, can, reloadMe } = useStaff();
   const o = useAsync<any>(() => api.get(`/api/admin/events/${eventId}/overview`), [eventId]);
@@ -99,122 +72,97 @@ export function Overview() {
   const a = d.applicants;
   const week = d.week ?? [];
   const weekApplied = week.reduce((s: number, w: any) => s + w.applied, 0);
-  const weekViews = week.reduce((s: number, w: any) => s + w.views, 0);
-  const next = d.priorities.find((p: any) => !p.done && p.to);
+  const steps = d.priorities.filter((p: any) => p.key !== 'share');
+  const next = steps.find((p: any) => !p.done && p.to);
+  const doneSteps = steps.filter((p: any) => p.done).length;
   const publish = async (on: boolean) => { try { await api.post(`/api/admin/events/${eventId}/publish`, { on }); toast(on ? 'Published: your conference is live on Explore' : 'Back to draft: hidden from Explore', 'ok'); o.reload(); reloadMe(); } catch (e: any) { toast(e.message, 'bad'); } };
   const tiles = [
-    { k: 'Applications', v: a.delegates.applied, sub: weekApplied ? `+${weekApplied} this week` : 'None this week yet', to: can('reg.read') ? '/app/applications' : null, icon: Vote },
-    { k: 'Seats filled', v: d.seats ? `${a.delegates.accepted}/${d.seats}` : a.delegates.accepted, sub: d.seats ? `${Math.round((a.delegates.accepted / d.seats) * 100)}% of ${d.committees} committee${d.committees === 1 ? '' : 's'}` : 'Add committees to create seats', to: '/app/allocation', icon: Landmark },
-    { k: 'Confirmed', v: a.delegates.paid, sub: d.free ? 'Free conference' : `${a.delegates.accepted - a.delegates.paid > 0 ? a.delegates.accepted - a.delegates.paid : 0} waiting to pay`, to: can('reg.read') ? '/app/applications' : null, icon: Check },
-    d.free || !can('payments.read') ? { k: 'To review', v: a.delegates.toReview, sub: d.allocationMode === 'review' ? 'Applications waiting for you' : 'Seats assign automatically', to: can('reg.read') ? '/app/applications' : null, icon: Users }
-      : { k: 'Collected', v: inr(d.money?.collected ?? 0), sub: d.money?.due ? `${inr(d.money.due)} still due` : 'Nothing outstanding', to: '/app/financials', icon: HandCoins },
+    { k: 'Applications', v: a.delegates.applied, sub: weekApplied ? `+${weekApplied} this week` : 'none this week yet', to: can('reg.read') ? '/app/applications' : null },
+    { k: 'Seats filled', v: d.seats ? `${a.delegates.accepted}/${d.seats}` : a.delegates.accepted, sub: d.seats ? `${Math.round((a.delegates.accepted / d.seats) * 100)}% full` : 'add committees first', to: '/app/allocation' },
+    { k: 'Paid', v: a.delegates.paid, sub: d.free ? 'free conference' : `${Math.max(0, a.delegates.accepted - a.delegates.paid)} still to pay`, to: can('reg.read') ? '/app/registrations' : null },
+    d.free || !can('payments.read') ? { k: 'To review', v: a.delegates.toReview, sub: d.allocationMode === 'review' ? 'waiting for you' : 'seats assign automatically', to: can('reg.read') ? '/app/applications' : null }
+      : { k: 'Collected', v: inr(d.money?.collected ?? 0), sub: d.money?.due ? `${inr(d.money.due)} still due` : 'nothing outstanding', to: '/app/financials' },
   ];
   return (
     <div className="stack db">
       <PageHead title={<span className="row" style={{ gap: '.6rem' }}>{d.profile.logoUrl && <img src={d.profile.logoUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} />}{d.event.name}<span className={`badge ${live ? 'good' : 'warn'}`}>{live ? 'Live' : d.event.status === 'draft' ? 'Draft' : label(d.event.status)}</span></span>}
         subtitle={<>{d.event.start_date ? `${date(d.event.start_date)}${d.event.end_date && d.event.end_date !== d.event.start_date ? ` – ${date(d.event.end_date)}` : ''}` : 'Dates to be decided'}{d.event.city ? ` · ${d.event.city}` : ''} · <a href={`/c/${d.event.code.toLowerCase()}${live ? '' : '?preview=1'}`} target="_blank" rel="noreferrer">View page <ExternalLink className="icon" style={{ width: 13, height: 13, verticalAlign: -2 }} /></a></>}>
-        {can('event.config') && <Link className="btn" to="/app/allocation"><Plus className="icon" />Committee</Link>}
-        {can('event.config') && <span data-tour="publish">{live ? <Btn icon={EyeOff} onClick={() => publish(false)}>Unpublish</Btn> : <Btn kind="primary" icon={Rocket} onClick={() => publish(true)}>Publish</Btn>}</span>}
+        {can('event.config') && !live && <span data-tour="publish"><Btn kind="primary" icon={Rocket} onClick={() => publish(true)}>Publish</Btn></span>}
       </PageHead>
-      {!live && <Alert tone="warn">This conference is a draft: it isn't on Explore and the registration form is closed. Add committees and press <b>Publish</b> when you're ready.</Alert>}
-      {!d.free && !d.priorities.find((p: any) => p.key === 'financial')?.done && <Alert tone="info">No way to pay is set up yet. <Link to="/app/financials">Set up Financials</Link> so accepted delegates can pay you.</Alert>}
 
-      <div className="db-tiles">
+      <section className="db-next" data-tour="priorities">
+        <div className="db-next-main">
+          <span className="db-next-k">{next ? `Next step · ${doneSteps} of ${steps.length} done` : 'Set-up complete'}</span>
+          <b className="db-next-title">{next ? next.title : live ? 'Your conference is live' : 'Ready to publish'}</b>
+          <span className="db-next-sub">{next ? next.detail : live ? 'Share your link to bring in delegates.' : 'Press Publish to open registrations.'}</span>
+          <div className="db-next-bar" role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={doneSteps}><i style={{ width: `${(doneSteps / Math.max(1, steps.length)) * 100}%` }} /></div>
+        </div>
+        {next && <Link className="btn primary lg" to={next.to}>Do it now<ChevronRight className="icon" /></Link>}
+      </section>
+      {!d.free && !d.priorities.find((p: any) => p.key === 'financial')?.done && next?.key !== 'financial' && <Alert tone="info">No way to pay is set up yet. <Link to="/app/financials">Set up Financials</Link> so delegates can pay you.</Alert>}
+
+      <div className="db-tiles" data-tour="target">
         {tiles.map((t, i) => {
-          const body = <><div className="db-tile-top"><span>{t.k}</span><span className="db-tile-go"><ArrowUpRight className="icon" /></span></div><b className="db-tile-v">{t.v}</b><span className="db-tile-sub"><t.icon className="icon" />{t.sub}</span></>;
+          const body = <><span className="db-tile-k">{t.k}</span><b className="db-tile-v">{t.v}</b><span className="db-tile-sub">{t.sub}</span></>;
           return t.to ? <Link key={t.k} to={t.to} className={`db-tile ${i === 0 ? 'hero' : ''}`}>{body}</Link> : <div key={t.k} className={`db-tile ${i === 0 ? 'hero' : ''}`}>{body}</div>;
         })}
       </div>
 
       <div className="db-grid">
-        <section className="card db-span2">
-          <div className="row between"><h3 style={{ margin: 0 }}>This week</h3><span className="small muted">{weekApplied} applied · {weekViews} page visits</span></div>
+        <section className="card db-span2 db-week">
+          <div className="row between"><h3 style={{ margin: 0 }}>This week</h3><span className="small muted">{weekApplied} new application{weekApplied === 1 ? '' : 's'}</span></div>
           <WeekBars week={week} />
         </section>
-        <section className="card db-remind">
-          <h3 style={{ margin: 0 }}>Next up</h3>
-          {next ? <><div className="db-remind-title">{next.title}</div><p className="small muted" style={{ margin: '.2rem 0 .8rem' }}>{next.detail}</p><Link className="btn primary" to={next.to}><ChevronRight className="icon" />Do it now</Link></>
-            : <><div className="db-remind-title">You're all set up</div><p className="small muted" style={{ margin: '.2rem 0 .8rem' }}>Every set-up step is done. Share your link to bring in applicants.</p><Link className="btn" to="/app/applications">Applications</Link></>}
-          {a.delegates.toReview > 0 && d.allocationMode === 'review' && <Link className="db-remind-chip" to="/app/applications">{a.delegates.toReview} application{a.delegates.toReview === 1 ? '' : 's'} waiting for review</Link>}
-        </section>
-        <section className="card db-rows2">
-          <div className="row between"><h3 style={{ margin: 0 }}>Committees</h3>{can('event.config') && <Link className="btn sm" to="/app/allocation"><Plus className="icon" />New</Link>}</div>
-          {!d.committeeList?.length ? <p className="small muted">No committees yet. Add your first one to open seats.</p> : <div className="db-list">
-            {d.committeeList.slice(0, 7).map((c: any, i: number) => <Link key={c.id} to="/app/allocation" className="db-list-row">
+        <section className="card db-span2">
+          <h3 style={{ margin: 0 }}>Committees</h3>
+          {!d.committeeList?.length ? <p className="small muted">No committees yet. <Link to="/app/allocation">Add your first one</Link> to open seats.</p> : <div className="db-list">
+            {d.committeeList.slice(0, 6).map((c: any, i: number) => <Link key={c.id} to="/app/allocation" className="db-list-row">
               <span className={`db-list-ic c${i % 5}`}>{c.short.slice(0, 4)}</span>
-              <span className="db-list-text"><b title={c.name}>{c.name}</b><span className="small muted">{c.filled}/{c.seats} seats{c.confirmed ? ` · ${c.confirmed} confirmed` : ''}</span><span className="db-mini"><i style={{ width: `${c.seats ? (c.filled / c.seats) * 100 : 0}%` }} /></span></span>
+              <span className="db-list-text"><b title={c.name}>{c.name}</b><span className="small muted">{c.filled} of {c.seats} seats filled</span><span className="db-mini"><i style={{ width: `${c.seats ? (c.filled / c.seats) * 100 : 0}%` }} /></span></span>
             </Link>)}
           </div>}
         </section>
-        <section className="card db-span2">
-          <div className="row between"><h3 style={{ margin: 0 }}>Team</h3>{can('users.manage') && <Link className="btn sm" to="/app/settings?tab=users"><Plus className="icon" />Invite</Link>}</div>
-          {!d.team?.length ? <p className="small muted">Invite your secretariat, chairs and finance team so everyone has their own sign-in.</p> : <div className="db-team">
-            {d.team.map((u: any) => <div key={u.id} className="db-team-row">
-              <span className="avatar">{initialsOf(u.name)}</span>
-              <div className="db-team-text"><b>{u.name}</b><span className="small muted">{u.roles.map((r: string) => TEAM_ROLE[r] ?? label(r)).join(', ')}{u.lastLogin ? ` · last seen ${dt(u.lastLogin)}` : ''}</span></div>
-              <span className={`db-pill ${u.status}`}>{u.status === 'active' ? 'Active' : u.status === 'invited' ? 'Invited' : 'Disabled'}</span>
-            </div>)}
-          </div>}
+        <section className="card db-span2" data-tour="share">
+          <h3 style={{ margin: 0 }}>Share your conference</h3>
+          <p className="small muted" style={{ margin: '.3rem 0 .6rem' }}>Send this link to schools and post it on social media. Delegates register from your page.</p>
+          <CopyBox value={d.links.page} />
+          {qr && <details className="db-qr"><summary className="small">Show QR code for posters</summary><div className="row" style={{ marginTop: '.5rem' }}><img src={qr} alt="QR code for the conference page" style={{ width: 92, height: 92, borderRadius: 8, background: '#fff', padding: 4 }} /><a className="small" href={qr} download={`${d.event.code}-qr.png`}>Download QR</a></div></details>}
         </section>
-        <div className="db-col">
-          <section className="card db-gauge-card">
-            <h3 style={{ margin: 0 }}>Set-up progress</h3>
-            <Gauge done={d.done} total={d.priorities.length} />
-            <div className="db-legend"><span><i className="b" />Done {d.done}</span><span><i className="s" />To do {d.priorities.length - d.done}</span></div>
-          </section>
-          <section className="db-dark"><Countdown start={d.event.start_date} name={d.event.code} /></section>
-        </div>
+        <section className="db-dark db-span2"><Countdown start={d.event.start_date} name={d.event.code} /></section>
       </div>
 
-      <div className="db-grid2">
-        <div className="card" data-tour="priorities">
-          <div className="row between"><h3 style={{ margin: 0 }}>Set-up priorities</h3><span className="badge info">{d.done}/{d.priorities.length}</span></div>
-          <p className="small muted" style={{ margin: '.25rem 0 .75rem' }}>Ordered around what you told us you need.</p>
-          <div className="stack tight">
-            {d.priorities.filter((p: any) => p.key !== 'share').map((p: any) => {
+      <details className="card db-more">
+        <summary><b>More details</b><span className="small muted">All set-up steps, applicants by role, team, sources and growth</span></summary>
+        <div className="db-grid2" style={{ marginTop: '1rem' }}>
+          <div>
+            <h4 style={{ margin: '0 0 .5rem' }}>Set-up steps</h4>
+            <div className="stack tight">{steps.map((p: any) => {
               const Icon = ICON[p.key] ?? Check;
-              const body = <><span className="avatar" style={{ borderRadius: 10, background: p.done ? 'var(--good-soft)' : 'var(--surface-2)', color: p.done ? 'var(--good)' : 'var(--text-2)' }}>{p.done ? <Check className="icon" /> : <Icon className="icon" />}</span>
-                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600, textDecoration: p.done ? 'line-through' : 'none', opacity: p.done ? 0.7 : 1 }}>{p.title}</div><div className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.detail}</div></div>{p.to && <ChevronRight className="icon faint" />}</>;
-              return p.to ? <Link key={p.key} to={p.to} className="row db-prio" style={{ gap: '.7rem', padding: '.55rem .5rem', borderRadius: 10, color: 'inherit', textDecoration: 'none', flexWrap: 'nowrap', border: '1px solid var(--border)' }}>{body}</Link>
-                : <div key={p.key} className="row" style={{ gap: '.7rem', padding: '.55rem .5rem', borderRadius: 10, flexWrap: 'nowrap', border: '1px solid var(--border)' }}>{body}</div>;
-            })}
+              const body = <><span className="avatar" style={{ borderRadius: 10, background: p.done ? 'var(--good-soft)' : 'var(--surface-2)', color: p.done ? 'var(--good)' : 'var(--text-2)' }}>{p.done ? <Check className="icon" /> : <Icon className="icon" />}</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600, opacity: p.done ? 0.65 : 1 }}>{p.title}</div><div className="small muted">{p.detail}</div></div></>;
+              return p.to ? <Link key={p.key} to={p.to} className="row db-prio" style={{ gap: '.7rem', padding: '.5rem', borderRadius: 10, color: 'inherit', textDecoration: 'none', flexWrap: 'nowrap', border: '1px solid var(--border)' }}>{body}</Link>
+                : <div key={p.key} className="row" style={{ gap: '.7rem', padding: '.5rem', borderRadius: 10, flexWrap: 'nowrap', border: '1px solid var(--border)' }}>{body}</div>;
+            })}</div>
+            <div className="small" style={{ fontWeight: 600, margin: '.9rem 0 .35rem' }}>Registration form link</div><CopyBox value={d.links.register} />
           </div>
-          <div style={{ marginTop: '.9rem' }} data-tour="share"><div className="small row" style={{ fontWeight: 600, marginBottom: '.35rem', gap: '.35rem' }}>{d.priorities.find((p: any) => p.key === 'share')?.done && <Check className="icon" style={{ color: 'var(--good)' }} />}Share your conference link</div><CopyBox value={d.links.page} />
-            <div className="small" style={{ fontWeight: 600, margin: '.6rem 0 .35rem' }}>Delegate registration form</div><CopyBox value={d.links.register} />
-            {qr && <div className="row" style={{ marginTop: '.6rem' }}><img src={qr} alt="QR code for the conference page" style={{ width: 92, height: 92, borderRadius: 8, background: '#fff', padding: 4 }} /><div className="small muted">Print this on posters. Add <span className="mono">?src=instagram</span> (or whatsapp, school…) to links to see where applicants come from.<br /><a href={qr} download={`${d.event.code}-qr.png`}>Download QR</a></div></div>}
-          </div>
-        </div>
-        <div className="stack">
-          <div className="card" data-tour="target">
-            <div className="row between"><h3 style={{ margin: 0 }}>Applicants against target</h3>{can('reg.read') && <Link className="small" to="/app/applications">Review applications →</Link>}</div>
-            <div className="row" style={{ gap: '1.25rem', marginTop: '.5rem', flexWrap: 'wrap' }}>
-              <Donut value={a.delegates.applied} total={d.target} label="applied" />
-              <div className="stack tight" style={{ flex: 1, minWidth: 200 }}>
-                {[['Delegates', a.delegates.applied, `${a.delegates.accepted} with a seat · ${a.delegates.paid} confirmed`], ['Faculty advisors', a.advisors.applied, `${a.advisors.accepted ?? 0} accepted`], ['Observers', a.observers.applied, `${a.observers.accepted ?? 0} accepted`], ['Chairs', a.chairs.applied, `${a.chairs.accepted ?? 0} accepted`], ['Secretariat & staff', a.staff.applied, `${a.staff.accepted ?? 0} accepted`]].map(([k, v, s]) => (
-                  <div key={k as string} className="row between" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '.3rem' }}><span>{k}</span><span><b>{v as number}</b> <span className="small muted">· {s}</span></span></div>
-                ))}
-                {d.allocationMode === 'review' && a.delegates.toReview > 0 && <Link className="btn sm primary" to="/app/applications" style={{ alignSelf: 'flex-start' }}>{a.delegates.toReview} waiting for review</Link>}
-              </div>
+          <div className="stack">
+            <div><h4 style={{ margin: '0 0 .5rem' }}>Applicants by role</h4>
+              {[['Delegates', a.delegates.applied, `${a.delegates.accepted} with a seat`], ['Faculty advisors', a.advisors.applied, `${a.advisors.accepted ?? 0} accepted`], ['Observers', a.observers.applied, `${a.observers.accepted ?? 0} accepted`], ['Chairs', a.chairs.applied, `${a.chairs.accepted ?? 0} accepted`], ['Secretariat & staff', a.staff.applied, `${a.staff.accepted ?? 0} accepted`]].map(([k, v, s]) => (
+                <div key={k as string} className="row between" style={{ borderBottom: '1px solid var(--border)', padding: '.3rem 0' }}><span>{k}</span><span><b>{v as number}</b> <span className="small muted">· {s}</span></span></div>))}
+              {d.target ? <div className="small muted" style={{ marginTop: '.4rem' }}>Target: {d.target} delegates</div> : null}
             </div>
-            <div className="small muted" style={{ marginTop: '.5rem' }}>{d.committees} committee{d.committees === 1 ? '' : 's'} · {d.seats} seats{d.target ? ` · target ${d.target}` : ''}</div>
-          </div>
-          <div className="card">
-            <h3 style={{ margin: 0 }}>Where applicants come from</h3>
-            {!d.bySource.length ? <p className="small muted">Visits to your conference page and applications will show here by source once you share the link.</p> : (
-              <div className="stack tight" style={{ marginTop: '.6rem' }}>
-                {d.bySource.map((s: any) => { const max = Math.max(...d.bySource.map((x: any) => x.views || x.applied), 1); return (
-                  <div key={s.channel}><div className="row between small"><span>{CHANNEL[s.channel] ?? s.channel}</span><span className="muted">{s.views} visits · <b style={{ color: 'var(--text)' }}>{s.applied} applied</b></span></div>
-                    <div className="bar-track" style={{ marginTop: 3 }}><div className="bar-fill" style={{ width: `${((s.views || s.applied) / max) * 100}%`, background: 'var(--series-1)' }} /></div></div>
-                ); })}
-              </div>
-            )}
+            {d.team?.length > 0 && <div><h4 style={{ margin: '0 0 .5rem' }}>Team</h4>
+              {d.team.map((u: any) => <div key={u.id} className="db-team-row"><span className="avatar">{initialsOf(u.name)}</span><div className="db-team-text"><b>{u.name}</b><span className="small muted">{u.roles.map((r: string) => TEAM_ROLE[r] ?? label(r)).join(', ')}</span></div><span className={`db-pill ${u.status}`}>{u.status === 'active' ? 'Active' : u.status === 'invited' ? 'Invited' : 'Disabled'}</span></div>)}
+            </div>}
+            {d.bySource.length > 0 && <div><h4 style={{ margin: '0 0 .5rem' }}>Where applicants come from</h4>
+              {d.bySource.map((s: any) => { const max = Math.max(...d.bySource.map((x: any) => x.views || x.applied), 1); return (
+                <div key={s.channel} style={{ marginBottom: '.4rem' }}><div className="row between small"><span>{CHANNEL[s.channel] ?? s.channel}</span><span className="muted">{s.views} visits · <b style={{ color: 'var(--text)' }}>{s.applied} applied</b></span></div>
+                  <div className="bar-track" style={{ marginTop: 3 }}><div className="bar-fill" style={{ width: `${((s.views || s.applied) / max) * 100}%`, background: 'var(--series-1)' }} /></div></div>); })}
+            </div>}
           </div>
         </div>
-      </div>
-      <div className="card">
-        <h3 style={{ margin: 0 }}>Participants over time</h3>
-        {d.overTime.length < 1 ? <p className="small muted">No applications yet. The chart appears once the first one arrives.</p> : <LineChart count ariaLabel="Applications over time" series={[{ name: 'Applications', color: 'var(--series-1)', points: d.overTime }]} />}
-      </div>
+        {d.overTime.length > 0 && <div style={{ marginTop: '1rem' }}><h4 style={{ margin: '0 0 .5rem' }}>Applications over time</h4><LineChart count ariaLabel="Applications over time" series={[{ name: 'Applications', color: 'var(--series-1)', points: d.overTime }]} /></div>}
+        {can('event.config') && live && <div className="row" style={{ marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '.8rem' }}><span className="small muted" style={{ flex: 1 }}>Need to close registrations and hide the conference from Explore?</span><Btn icon={EyeOff} onClick={() => publish(false)}>Unpublish</Btn></div>}
+      </details>
     </div>
   );
 }
@@ -508,12 +456,12 @@ function DelegateReview({ mode }: { mode?: string }) {
       {mode !== 'review' && <Alert tone="info">Seats are allotted automatically the moment delegates register (instant mode). Switch to review mode under <b>Open roles &amp; settings</b> to score applications and assign committees yourself.</Alert>}
       <div className="row between">
         <Segmented value={status} onChange={setStatus} options={[{ value: 'applied', label: 'Waiting' }, { value: 'assigned', label: 'Assigned' }, { value: 'declined', label: 'Declined' }, { value: 'all', label: 'All' }]} />
-        {status === 'applied' && can('alloc.move') && (list.data?.length ?? 0) > 0 && <Btn kind="primary" icon={Wand2} onClick={async () => { if (await ask({ title: 'Auto-assign by score', message: 'Highest score first, each applicant gets the first open seat in their preferred committees. They are emailed their committee and how to pay.', confirm: 'Assign' })) { try { const r = await api.post<any>(`/api/admin/events/${eventId}/auto-assign`); toast(`${r.assigned} assigned${r.full ? `, ${r.full} could not be placed (committees full)` : ''}`, 'ok'); list.reload(); inv.reload(); } catch (e: any) { toast(e.message, 'bad'); } } }}>Auto-assign by score</Btn>}
+        {status === 'applied' && can('alloc.move') && (list.data?.length ?? 0) > 0 && <Btn kind="primary" icon={Wand2} onClick={async () => { if (await ask({ title: 'Auto-assign everyone waiting', message: 'Oldest application first (any scores you gave go first). Each applicant gets their chosen portfolio if their experience qualifies, otherwise the best qualifying one in their committees, then any committee. They are emailed their seat and must pay within the payment window set in Settings.', confirm: 'Assign' })) { try { const r = await api.post<any>(`/api/admin/events/${eventId}/auto-assign`); toast(`${r.assigned} assigned${r.full ? `, ${r.full} could not be placed (committees full)` : ''}`, 'ok'); list.reload(); inv.reload(); } catch (e: any) { toast(e.message, 'bad'); } } }}>Auto-assign all</Btn>}
       </div>
       <div className="card flush"><DataTable rows={list.data ?? []} empty={status === 'applied' ? 'No applications waiting' : 'Nothing here'} columns={[
         { key: 'full_name', label: 'Applicant', render: (r: any) => <><b>{r.full_name}</b><div className="small faint">{r.ref} · {r.institution}, {r.class_year}</div></> },
-        { key: 'experience', label: 'Experience', render: (r: any) => label(r.experience) },
-        { key: 'preferences', label: 'Prefers', sort: false, render: (r: any) => r.preferences.length ? r.preferences.map(cname).join(' › ') : <span className="faint">Any</span> },
+        { key: 'points', label: 'Experience', render: (r: any) => <><b>{r.points} pts</b><div className="small faint">{r.mun_count ?? 0} MUNs{r.awards_count ? ` · ${r.awards_count} awards` : ''}{r.other_events ? ` · ${r.other_events} other` : ''}</div></> },
+        { key: 'preferences', label: 'Prefers', sort: false, render: (r: any) => r.preferences.length ? r.preferences.map((c: string) => `${cname(c)}${r.portfolio_prefs?.[c] ? ` (${r.portfolio_prefs[c]})` : ''}`).join(' › ') : <span className="faint">Any</span> },
         { key: 'motivation', label: 'Why', sort: false, render: (r: any) => r.motivation ? <span className="small" title={r.motivation}>{r.motivation.slice(0, 80)}{r.motivation.length > 80 ? '…' : ''}</span> : <span className="faint">—</span> },
         { key: 'review_score', label: 'Score', render: (r: any) => can('reg.edit') ? <select value={r.review_score ?? ''} onChange={async (e) => { await api.post(`/api/admin/registrations/${r.id}/score`, { score: e.target.value || null }); list.reload(); }} aria-label="Score" style={{ width: 70 }}><option value="">—</option>{Array.from({ length: 10 }, (_, i) => <option key={i + 1}>{i + 1}</option>)}</select> : r.review_score ?? '—' },
         { key: 'committee', label: 'Seat', render: (r: any) => r.portfolio ? <>{r.portfolio}<div className="small faint">{r.committee}</div></> : <span className="faint">—</span> },

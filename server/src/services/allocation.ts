@@ -6,11 +6,17 @@ import { addHours, bad, conflict, ctx, json, now, uid, notFound } from '../util.
 export interface SeatPick { seatId: string; committeeId: string; committee: string; committeeShort: string; portfolio: string; tier: string; premiumPaise: number; fallback: boolean }
 export type AllocResult = { kind: 'seat'; pick: SeatPick } | { kind: 'waitlist'; position: number };
 
-const TIER_ORDER: Record<string, string[]> = {
-  experienced: ['high', 'standard', 'low'],
-  some: ['standard', 'high', 'low'],
-  first: ['standard', 'low', 'high'],
-};
+/**
+ * Experience points: MUNs attended + awards won + half the other events (debates, youth parliaments, Model G20 …).
+ * Older records only have the first / some / experienced bucket, which still counts.
+ */
+const BUCKET_POINTS: Record<string, number> = { first: 0, some: 1, experienced: 3 };
+export function experiencePoints(r: { mun_count?: number | null; awards_count?: number | null; other_events?: number | null; experience?: string | null }) {
+  const counted = (r.mun_count ?? 0) + (r.awards_count ?? 0) + Math.floor((r.other_events ?? 0) / 2);
+  return Math.max(counted, BUCKET_POINTS[r.experience ?? 'first'] ?? 0);
+}
+export const experienceBucket = (points: number) => (points >= 3 ? 'experienced' : points >= 1 ? 'some' : 'first');
+const TIER_RANK: Record<string, number> = { high: 0, standard: 1, low: 2 };
 
 function committeesInOrder(eventId: string, prefs: string[], withFallback: boolean) {
   const open = all(`SELECT c.id, c.name, c.short, c.kind,
@@ -24,8 +30,12 @@ function committeesInOrder(eventId: string, prefs: string[], withFallback: boole
   return [...preferred.map((c) => ({ ...c, fallback: false })), ...rest.map((c) => ({ ...c, fallback: true }))];
 }
 
-/** Candidate seats inside one committee, best first, honouring tier and delegation-spreading rules. */
-function candidateSeats(reg: Record<string, any>, committee: Record<string, any>, maxPerInstitution: number) {
+/**
+ * Candidate seats inside one committee, best first: the delegate's chosen portfolio, then the strongest portfolio
+ * their experience qualifies for. Portfolios above their experience are never offered; delegation-spreading and
+ * double-delegation pairing rules apply as before.
+ */
+function candidateSeats(reg: Record<string, any>, committee: Record<string, any>, maxPerInstitution: number, o: { points: number; minimum: Record<string, number>; preferredPortfolio?: string | null }) {
   const inst = (reg.institution ?? '').trim().toLowerCase();
   const sameInst = one(`SELECT COUNT(*) AS n FROM seat s JOIN portfolio p ON p.id = s.portfolio_id JOIN registration r ON r.id = s.registration_id
       WHERE p.committee_id = ? AND s.state <> 'open' AND lower(trim(r.institution)) = ? AND r.id <> ?`, committee.id, inst, reg.id)?.n ?? 0;
@@ -37,23 +47,35 @@ function candidateSeats(reg: Record<string, any>, committee: Record<string, any>
       (SELECT COUNT(*) FROM seat s3 WHERE s3.portfolio_id = p.id AND s3.state <> 'open') AS taken
     FROM seat s JOIN portfolio p ON p.id = s.portfolio_id
     WHERE p.committee_id = ? AND s.state = 'open'`, committee.id);
-  const order = TIER_ORDER[reg.experience] ?? TIER_ORDER.first;
-  const rankTier = (t: string) => { const i = order.indexOf(t); return i < 0 ? 9 : i; };
   return seats
+    .filter((s) => o.points >= (o.minimum[s.tier] ?? 0))
     .filter((s) => {
       if (committee.kind !== 'double' || !s.taken) return true;
       // Double delegation: pair two members of the same delegation, or two independents.
       const [partnerDelegation] = String(s.partner ?? '|').split('|');
       return reg.delegation_id ? partnerDelegation === reg.delegation_id : !partnerDelegation;
     })
-    .map((s) => ({ ...s, pairBonus: committee.kind === 'double' && s.taken ? 0 : 1 }))
-    .sort((a, b) => a.pairBonus - b.pairBonus || rankTier(a.tier) - rankTier(b.tier) || a.sort - b.sort || a.portfolio.localeCompare(b.portfolio) || a.seat_no - b.seat_no);
+    .map((s) => ({ ...s, chosen: s.portfolio_id === o.preferredPortfolio ? 0 : 1, pairBonus: committee.kind === 'double' && s.taken ? 0 : 1 }))
+    .sort((a, b) => a.chosen - b.chosen || a.pairBonus - b.pairBonus || (TIER_RANK[a.tier] ?? 9) - (TIER_RANK[b.tier] ?? 9) || a.sort - b.sort || a.portfolio.localeCompare(b.portfolio) || a.seat_no - b.seat_no);
+}
+
+/** Why the delegate didn't get the portfolio they asked for (shown to the team and in the allotment history). */
+function whyNotChosen(portfolioId: string, points: number, minimum: Record<string, number>) {
+  const p = one(`SELECT p.name, p.tier, (SELECT COUNT(*) FROM seat s WHERE s.portfolio_id = p.id AND s.state = 'open') AS open FROM portfolio p WHERE p.id = ?`, portfolioId);
+  if (!p) return null;
+  const need = minimum[p.tier] ?? 0;
+  if (points < need) return `${p.name} needs ${need}+ experience points (has ${points})`;
+  if (!p.open) return `${p.name} was already taken`;
+  return null;
 }
 
 /**
  * Allot a provisional seat. Runs inside one transaction with the registration insert; the seat is only taken
  * if it is still open (UPDATE ... WHERE state = 'open'), and seat.registration_id is UNIQUE, so two delegates can
  * never hold the same portfolio. If the seat was taken in between, the next candidate is tried in the same request.
+ *
+ * Order: each preferred committee in turn (the chosen portfolio first, then any portfolio the delegate's experience
+ * qualifies for), then any other committee with a qualifying portfolio, then the waitlist.
  */
 export function allocate(regId: string, o: { withFallback?: boolean; reason?: string; byUser?: string | null } = {}): AllocResult {
   return tx(() => {
@@ -62,8 +84,11 @@ export function allocate(regId: string, o: { withFallback?: boolean; reason?: st
     if (one("SELECT 1 FROM seat WHERE registration_id = ?", regId)) throw conflict('Registration already holds a seat');
     const s = eventSettings(reg.event_id);
     const prefs = json<string[]>(reg.preferences, []);
+    const chosen = json<Record<string, string>>(reg.portfolio_prefs, {});
+    const points = experiencePoints(reg);
+    const minimum = s.tierMinExperience;
     for (const c of committeesInOrder(reg.event_id, prefs, o.withFallback ?? true)) {
-      for (const cand of candidateSeats(reg, c, s.maxPerInstitutionPerCommittee)) {
+      for (const cand of candidateSeats(reg, c, s.maxPerInstitutionPerCommittee, { points, minimum, preferredPortfolio: chosen[c.id] ?? null })) {
         const res = run("UPDATE seat SET state = 'held', registration_id = ?, held_at = ? WHERE id = ? AND state = 'open'", regId, now(), cand.seat_id);
         if (Number(res.changes) !== 1) continue;
         const confirmed = reg.payment_status === 'paid';
@@ -72,13 +97,18 @@ export function allocate(regId: string, o: { withFallback?: boolean; reason?: st
           allot_status: confirmed ? 'confirmed' : 'held', waitlist_position: null,
           hold_expires_at: confirmed ? null : addHours(now(), s.holdHours), updated_at: now(),
         });
-        history(regId, cand.seat_id, reg.allot_status === 'waitlisted' ? 'promoted' : 'held', o.byUser ?? null, o.reason ?? (c.fallback ? 'Preferences full; next open committee' : null));
+        const firstChoice = prefs[0] ? chosen[prefs[0]] : null;
+        const notes = [
+          firstChoice && firstChoice !== cand.portfolio_id ? whyNotChosen(firstChoice, points, minimum) : null,
+          c.fallback ? `Preferred committees full for this experience level; placed in ${c.short}` : null,
+        ].filter(Boolean);
+        history(regId, cand.seat_id, reg.allot_status === 'waitlisted' ? 'promoted' : 'held', o.byUser ?? null, o.reason ?? (notes.join('. ') || null));
         return { kind: 'seat', pick: { seatId: cand.seat_id, committeeId: c.id, committee: c.name, committeeShort: c.short, portfolio: cand.portfolio, tier: cand.tier, premiumPaise: cand.premium_paise, fallback: c.fallback } };
       }
     }
     const position = (one("SELECT MAX(waitlist_position) AS m FROM registration WHERE event_id = ? AND allot_status = 'waitlisted'", reg.event_id)?.m ?? 0) + 1;
     update('registration', regId, { allot_status: 'waitlisted', waitlist_position: position, hold_expires_at: null, updated_at: now() });
-    if (reg.allot_status !== 'waitlisted') history(regId, null, 'waitlisted', o.byUser ?? null, `Waitlist position ${position}`);
+    if (reg.allot_status !== 'waitlisted') history(regId, null, 'waitlisted', o.byUser ?? null, `Waitlist position ${position}: no open portfolio for ${points} experience points`);
     return { kind: 'waitlist', position };
   });
 }
@@ -171,7 +201,7 @@ export function promoteWaitlist(eventId: string): string[] {
 class DryRun extends Error { constructor(public results: any[]) { super('dry run'); } }
 
 /** Allocation simulator: run the real engine against a test list inside a transaction that is always rolled back. */
-export function simulate(eventId: string, people: { name?: string; institution?: string; experience?: string; preferences?: string[] }[]) {
+export function simulate(eventId: string, people: { name?: string; institution?: string; experience?: string; mun_count?: number; preferences?: string[] }[]) {
   try {
     tx(() => {
       const results: any[] = [];
@@ -180,7 +210,7 @@ export function simulate(eventId: string, people: { name?: string; institution?:
         insert('registration', {
           id, ref: `SIM-${i}-${id.slice(0, 6)}`, event_id: eventId, token: uid(), full_name: p.name ?? `Test delegate ${i + 1}`, email: `sim${i}@example.test`, mobile: '9000000000',
           institution: p.institution ?? `Test School ${i % 7}`, class_year: '12', city: 'Test', preferences: JSON.stringify(p.preferences ?? []),
-          experience: p.experience ?? 'first', consent_at: now(), created_at: now(), updated_at: now(),
+          experience: p.experience ?? 'first', mun_count: Math.max(0, Math.floor(Number(p.mun_count ?? 0)) || 0), consent_at: now(), created_at: now(), updated_at: now(),
         });
         const r = allocate(id);
         results.push({ name: p.name ?? `Test delegate ${i + 1}`, institution: p.institution, experience: p.experience ?? 'first', ...(r.kind === 'seat' ? { committee: r.pick.committeeShort, portfolio: r.pick.portfolio, tier: r.pick.tier, fallback: r.pick.fallback } : { waitlist: r.position }) });

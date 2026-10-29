@@ -8,7 +8,7 @@ openDb(file);
 let ok = 0, fail = 0; const errors: string[] = [];
 for (let i = 0; i < Number(n); i++) {
   try {
-    asSystem(() => register(eventId, { full_name: `Load ${tag}-${i}`, email: `load-${tag}-${i}@example.com`, mobile: `7${String(tag).padStart(2, '0')}${String(i).padStart(7, '0')}`, institution: `Inst ${tag}`, class_year: '12', city: 'X', dob: '2005-01-01', preferences: [committeeId], consent: true }));
+    asSystem(() => register(eventId, { full_name: `Load ${tag}-${i}`, email: `load-${tag}-${i}@example.com`, mobile: `7${String(tag).padStart(2, '0')}${String(i).padStart(7, '0')}`, institution: `Inst ${tag}`, class_year: '12', city: 'X', dob: '2005-01-01', preferences: [committeeId], consent: true, mun_count: 5 }));
     ok++;
   } catch (e: any) { fail++; errors.push(e.message); }
 }

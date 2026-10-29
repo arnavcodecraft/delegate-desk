@@ -90,7 +90,7 @@ await step('dashboard tour runs on first visit and can be replayed', org, async 
   await org.getByRole('button', { name: 'Skip' }).click();
 });
 await step('dashboard shows draft and priorities', org, async () => {
-  await org.goto(`${B}/app/overview`); await org.waitForSelector('text=Set-up priorities');
+  await org.goto(`${B}/app/overview`); await org.waitForSelector('.db-next'); await org.waitForSelector('text=Next step');
   if (!(await org.locator('.badge', { hasText: 'Draft' }).count())) throw new Error('no Draft badge');
   await org.screenshot({ path: `${SHOTS}/02-overview.png`, fullPage: true });
 });
@@ -173,12 +173,20 @@ async function registerDelegate(name, email, opts = {}) {
   await d.getByLabel(/Mobile/).first().fill(opts.mobile ?? '98' + String(Math.floor(10000000 + Math.random() * 89999999)));
   await d.getByLabel('School or college').fill('Delhi Public School'); await d.getByLabel('Class or year').selectOption({ index: 3 });
   await d.getByLabel('City').fill('New Delhi'); await d.getByLabel('Date of birth').fill('2005-06-06');
+  await d.getByLabel('MUNs attended').fill(String(opts.muns ?? 3));
   await d.locator('button.chip').first().click();
+  // Ask for the first portfolio that is open and that this experience qualifies for.
+  const sel = d.getByLabel(/Preferred portfolio in/).first();
+  const pick = await sel.locator('option:not([disabled]):not([value=""])').first();
+  const portfolio = (await pick.count()) ? (await pick.innerText()).trim() : null;
+  if (portfolio) await sel.selectOption({ label: portfolio });
+  d.portfolio = portfolio;
   if (opts.coupon) { await d.getByText('Have a coupon code?').click(); await d.getByPlaceholder('e.g. EARLY10').fill(opts.coupon); }
   await d.getByLabel(/I agree/).check();
   await d.waitForTimeout(1700);
   await d.getByRole('button', { name: /Register|Send my application/ }).click();
   await d.waitForURL(/\/r\//, { timeout: 15000 }); await d.waitForTimeout(700);
+  if (portfolio && !opts.review && !(await d.locator(`text=${portfolio}`).count())) throw new Error(`asked for ${portfolio} but did not get it`);
   return d;
 }
 let delA, delB, delC;
@@ -219,7 +227,7 @@ await step('delegate B registers with coupon, pays in person, organiser records 
 await step('review mode: delegate C applies, organiser scores and assigns', org, async () => {
   await org.goto(`${B}/app/applications?tab=settings`); await org.getByText('After we review applications').click();
   await org.getByRole('button', { name: 'Save', exact: true }).click(); await org.waitForTimeout(600);
-  delC = await registerDelegate('Chen Delegate', 'chen@example.com');
+  delC = await registerDelegate('Chen Delegate', 'chen@example.com', { review: true });
   await delC.waitForSelector('text=Application under review');
   await org.goto(`${B}/app/applications`); await org.waitForSelector('text=Chen Delegate');
   await org.getByLabel('Score').first().selectOption('7'); await org.waitForTimeout(400);

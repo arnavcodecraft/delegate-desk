@@ -4,7 +4,7 @@ import { config } from '../config.ts';
 import { eventSettings, getEvent } from '../settings.ts';
 import { addHours, ageOn, bad, bp, conflict, ctx, inr, isEmail, isIndianMobile, isIntlMobile, istDate, json, normMobile, now, token, uid, notFound } from '../util.ts';
 import { quote } from './fees.ts';
-import { allocate, seatOf, moveToSeat } from './allocation.ts';
+import { allocate, seatOf, moveToSeat, experiencePoints, experienceBucket } from './allocation.ts';
 import { matchReferral, isSelfReferral, ensureReferralEditable } from './referrals.ts';
 import { enqueue, notifyStaff } from './notify.ts';
 import { portalLink, regVars, requestRefund } from './payments.ts';
@@ -25,7 +25,12 @@ export interface RegInput {
   otp_token?: string;
   channel?: string | null;      // where they heard about it (instagram, whatsapp ...)
   motivation?: string | null;   // review mode: why they want to attend
+  mun_count?: number | string;  // MUNs attended
+  other_events?: number | string; // debates, youth parliaments, Model G20 …
+  awards_count?: number | string; // awards won at MUNs
+  portfolio_prefs?: Record<string, string>; // committee id → preferred portfolio id (optional per committee)
 }
+const count = (v: unknown) => { const n = Math.floor(Number(v ?? 0)); return Number.isFinite(n) && n >= 0 ? Math.min(n, 300) : -1; };
 
 export function validate(eventId: string, i: RegInput) {
   const errors: Record<string, string> = {};
@@ -43,6 +48,17 @@ export function validate(eventId: string, i: RegInput) {
   const valid = new Set(all('SELECT id FROM committee WHERE event_id = ?', eventId).map((c) => c.id));
   if (prefs.some((p) => !valid.has(p))) errors.preferences = 'Pick committees from the list';
   if (new Set(prefs).size !== prefs.length) errors.preferences = 'Pick each committee only once';
+  const exp = { mun_count: count(i.mun_count), other_events: count(i.other_events), awards_count: count(i.awards_count) };
+  if (exp.mun_count < 0) errors.mun_count = 'Enter how many MUNs you have attended (0 if this is your first)';
+  if (exp.other_events < 0) errors.other_events = 'Enter a number (0 if none)';
+  if (exp.awards_count < 0) errors.awards_count = 'Enter a number (0 if none)';
+  // A preferred portfolio is optional per committee, and must belong to a committee the delegate picked.
+  const portfolioPrefs: Record<string, string> = {};
+  for (const [committeeId, portfolioId] of Object.entries(i.portfolio_prefs && typeof i.portfolio_prefs === 'object' ? i.portfolio_prefs : {})) {
+    if (!portfolioId) continue;
+    if (!prefs.includes(committeeId) || !one('SELECT 1 FROM portfolio WHERE id = ? AND committee_id = ?', String(portfolioId), committeeId)) { errors.preferences = 'Pick portfolios from the committees you chose'; continue; }
+    portfolioPrefs[committeeId] = String(portfolioId);
+  }
   let minor = false;
   if (i.dob) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(i.dob) || i.dob > istDate()) errors.dob = 'Enter a valid date of birth';
@@ -56,7 +72,7 @@ export function validate(eventId: string, i: RegInput) {
     }
   } else errors.dob = 'Enter your date of birth';
   if (Object.keys(errors).length) throw bad('Please fix the highlighted fields', { fields: errors });
-  return { name, prefs, minor };
+  return { name, prefs, minor, exp, portfolioPrefs };
 }
 
 function nextRef(eventId: string) {
@@ -81,7 +97,7 @@ export function register(eventId: string, i: RegInput, o: { source?: string; del
     if (!s0.roles.delegate) throw conflict('Delegate applications are not open yet');
     if (s0.applicationDeadline && s0.applicationDeadline < now()) throw conflict('The application deadline has passed');
   }
-  const { name, prefs, minor } = validate(eventId, i);
+  const { name, prefs, minor, exp, portfolioPrefs } = validate(eventId, i);
   const dup = findDuplicate(eventId, i.email, i.mobile);
   if (dup) {
     enqueue('portal_link', { to: dup.email, registrationId: dup.id, vars: regVars(dup) });
@@ -100,7 +116,8 @@ export function register(eventId: string, i: RegInput, o: { source?: string; del
       full_name: name, email: i.email.trim().toLowerCase(), mobile: normMobile(i.mobile), institution: i.institution.trim(), class_year: i.class_year.trim(), city: i.city.trim(),
       dob: i.dob ?? null, is_minor: minor ? 1 : 0, guardian_name: minor ? i.guardian_name?.trim() : null, guardian_email: minor ? i.guardian_email?.trim().toLowerCase() : null,
       guardian_consent: minor ? 'pending' : 'not_required', guardian_token: minor ? token(18) : null,
-      preferences: JSON.stringify(prefs), experience: ['first', 'some', 'experienced'].includes(i.experience ?? '') ? i.experience : 'first', category,
+      preferences: JSON.stringify(prefs), portfolio_prefs: JSON.stringify(portfolioPrefs), ...exp,
+      experience: experienceBucket(experiencePoints({ ...exp, experience: ['first', 'some', 'experienced'].includes(i.experience ?? '') ? i.experience : 'first' })), category,
       referral_name: i.referral_name?.trim() || null, referrer_id: match.referrerId, referral_state: match.state,
       referral_suggestions: match.suggestions.length ? JSON.stringify(match.suggestions) : null,
       self_referral: isSelfReferral(match.referrerId, i.email, i.mobile) ? 1 : 0,

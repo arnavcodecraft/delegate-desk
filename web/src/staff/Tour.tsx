@@ -6,9 +6,9 @@ export interface TourStep { target: string; title: string; body: string; path?: 
 export const DASHBOARD_TOUR: TourStep[] = [
   { target: '[data-tour="switch"]', title: 'Your conferences', body: 'Switch between conferences here, or start a new one. Everything on every screen is for the conference picked here.', path: '/app/overview' },
   { target: '[data-tour="publish"]', title: 'Publish when ready', body: 'Drafts are private. Publishing lists the conference on Explore and opens the registration form.', path: '/app/overview' },
-  { target: '[data-tour="priorities"]', title: 'Your set-up checklist', body: 'Work down this list: committees, payments, applications, your page and roles. Each row takes you to the right screen, and ticks itself off when done.', path: '/app/overview' },
-  { target: '[data-tour="share"]', title: 'Share your links', body: 'Your public page and registration form. Add ?src=instagram (or whatsapp, school…) to see where applicants come from.', path: '/app/overview' },
-  { target: '[data-tour="target"]', title: 'Applicants against target', body: 'Delegates, advisors, observers, chairs and staff at a glance. Click through to review applications.', path: '/app/overview' },
+  { target: '[data-tour="priorities"]', title: 'Your next step', body: 'The dashboard always shows the one thing to do next. Press Do it now; the step ticks itself off and the next one appears. All steps are under More details.', path: '/app/overview' },
+  { target: '[data-tour="target"]', title: 'Your four numbers', body: 'Applications, seats filled, paid delegates and money collected. Click any of them to see the people behind the number.', path: '/app/overview' },
+  { target: '[data-tour="share"]', title: 'Share your link', body: 'Send this to schools and post it. Add ?src=instagram (or whatsapp, school…) to see where applicants come from.', path: '/app/overview' },
   { target: '[data-tour="nav-manage"]', title: 'Manage the conference', body: 'Applications, delegates, committees and portfolios, study guides and position papers, live sessions with EB marking, lists and check-in.' },
   { target: '[data-tour="nav-money"]', title: 'Money', body: 'Fees and payment methods (Financials), payment proofs to approve, refunds, expenses and the books. Two-person approval applies whenever someone else can approve.' },
   { target: '[data-tour="nav-settings"]', title: 'Settings and your team', body: 'Your public page, the Job Board, rules, and Settings → Users & roles to invite your team. Each person gets a link to set their own password.' },

@@ -51,7 +51,7 @@ function EventRules() {
   const s = f.s; const setS = (k: string, v: any) => setF({ ...f, s: { ...s, [k]: v } });
   const save = async () => {
     try {
-      const keys = ['holdHours', 'holdGraceHours', 'holdWarningHours', 'maxPerInstitutionPerCommittee', 'allocationLockAt', 'detailsLockAt', 'requireMobileOtp', 'reminderHours', 'escalationHours', 'processingAlertMinutes', 'unverifiedAlertHours', 'commissionHoldDays', 'variableCostPerDelegatePaise', 'dressCode', 'reportingTime'];
+      const keys = ['holdHours', 'holdGraceHours', 'holdWarningHours', 'maxPerInstitutionPerCommittee', 'allocationLockAt', 'detailsLockAt', 'requireMobileOtp', 'reminderHours', 'escalationHours', 'processingAlertMinutes', 'unverifiedAlertHours', 'commissionHoldDays', 'variableCostPerDelegatePaise', 'dressCode', 'reportingTime', 'tierMinExperience'];
       await api.patch(`/api/admin/events/${eventId}`, { state_code: f.state_code, settings: Object.fromEntries(keys.map((k) => [k, s[k]])) });
       toast('Saved', 'ok'); ev.reload(); reloadMe();
     } catch (x: any) { toast(x.message, 'bad'); }
@@ -62,8 +62,13 @@ function EventRules() {
     <div className="stack">
       <Alert tone="info">Name, dates, venue and the public page are under <Link to="/app/conference">Conference page</Link>; publishing is on the <Link to="/app/overview">Dashboard</Link>; who can apply is under <Link to="/app/applications?tab=settings">Applications</Link>; fees and payments are under <Link to="/app/financials">Financials</Link>.</Alert>
       <div className="card stack"><h3>Seats & allotment</h3>
+        <p className="small muted" style={{ margin: 0 }}>Seats are allotted automatically, first come first served: the delegate's chosen portfolio if their experience qualifies, otherwise the best qualifying portfolio in the same committee, then their next committee, then any committee. Experience points = MUNs attended + awards + half of other events.</p>
         <div className="grid g3">
-          {num('holdHours', 'Unpaid hold (hours)')}{num('holdGraceHours', 'Extra hold while a proof is reviewed (hours)')}{num('holdWarningHours', '“Last chance” email before expiry (hours)')}
+          {(['high', 'standard', 'low'] as const).map((t) => <Field key={t} label={`Experience needed: ${t} tier`} hint={t === 'high' ? 'e.g. P5 and major powers' : t === 'low' ? 'smaller delegations' : undefined}>
+            <input type="number" min={0} max={100} value={s.tierMinExperience?.[t] ?? 0} onChange={(x) => setS('tierMinExperience', { ...s.tierMinExperience, [t]: Math.max(0, Math.floor(Number(x.target.value) || 0)) })} /></Field>)}
+        </div>
+        <div className="grid g3">
+          {num('holdHours', 'Time to pay after allotment (hours)', 'unpaid seats are released after this; default 24')}{num('holdGraceHours', 'Extra hold while a proof is reviewed (hours)')}{num('holdWarningHours', '“Last chance” email before expiry (hours)')}
           {num('maxPerInstitutionPerCommittee', 'Max delegates per institution per committee', '0 = no limit')}
           <Field label="Lock allocations from"><input type="datetime-local" value={ISO(s.allocationLockAt)} onChange={(x) => setS('allocationLockAt', fromLocal(x.target.value))} /></Field>
           <Field label="Lock delegate details from" hint="for badge printing"><input type="datetime-local" value={ISO(s.detailsLockAt)} onChange={(x) => setS('detailsLockAt', fromLocal(x.target.value))} /></Field>

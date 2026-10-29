@@ -9,16 +9,18 @@ import { bannerStyle } from '../platform/art';
 interface EventInfo {
   event: { code: string; name: string; venue: string; city: string; start_date: string; end_date: string; status: string };
   org: { name: string; legal_name: string; grievance: string };
-  committees: { id: string; name: string; short: string; kind: string; open_seats: number; seats: number; full: boolean }[];
+  committees: { id: string; name: string; short: string; kind: string; open_seats: number; seats: number; full: boolean; portfolios?: { id: string; name: string; tier: string; open: boolean; minExperience: number }[] }[];
   classOptions: string[]; categories: string[]; gstRateBp: number; holdHours: number; feeModel: string; refundWindowDays: number; requireMobileOtp: boolean;
   profile?: { acronym: string; logo: string | null; banner: string | null; country: string; slug: string };
   open?: { delegate: boolean; deadline: string | null; status: string };
   allocationMode?: 'instant' | 'review'; free?: boolean;
 }
-const EMPTY = { full_name: '', email: '', mobile: '', institution: '', class_year: '', city: '', dob: '', referral_name: '', coupon: '', guardian_name: '', guardian_email: '', whatsapp_consent: false, consent: false, preferences: [] as string[], surprise: false, motivation: '', channel: '' };
+const EMPTY = { full_name: '', email: '', mobile: '', institution: '', class_year: '', city: '', dob: '', referral_name: '', coupon: '', guardian_name: '', guardian_email: '', whatsapp_consent: false, consent: false, preferences: [] as string[], surprise: false, motivation: '', channel: '', mun_count: '', other_events: '', awards_count: '', portfolio_prefs: {} as Record<string, string> };
+/** The same experience points the allotment uses: MUNs + awards + half the other events. */
+const points = (f: { mun_count: string; other_events: string; awards_count: string }) => (Number(f.mun_count) || 0) + (Number(f.awards_count) || 0) + Math.floor((Number(f.other_events) || 0) / 2);
 // Delegates who registered for another conference on this platform can reuse their details (kept on this device only).
 const PROFILE_KEY = 'dd-delegate-profile';
-const PROFILE_FIELDS = ['full_name', 'email', 'mobile', 'institution', 'class_year', 'city', 'dob'] as const;
+const PROFILE_FIELDS = ['full_name', 'email', 'mobile', 'institution', 'class_year', 'city', 'dob', 'mun_count', 'other_events', 'awards_count'] as const;
 const CHANNELS: [string, string][] = [['instagram', 'Instagram'], ['whatsapp', 'WhatsApp'], ['school', 'My school or teacher'], ['friend', 'A friend'], ['explore', 'DelegateDesk Explore'], ['google', 'Google'], ['email', 'Email'], ['facebook', 'Facebook'], ['linkedin', 'LinkedIn'], ['other', 'Somewhere else']];
 type Form = typeof EMPTY;
 
@@ -77,6 +79,7 @@ export default function Register() {
   const minor = useMemo(() => { const a = age(f.dob); return a != null && a < 18; }, [f.dob]);
   const togglePref = (id: string) => {
     set('surprise', false);
+    if (f.preferences.includes(id)) { const { [id]: _drop, ...rest } = f.portfolio_prefs; set('portfolio_prefs', rest); }
     set('preferences', f.preferences.includes(id) ? f.preferences.filter((p) => p !== id) : f.preferences.length >= 3 ? f.preferences : [...f.preferences, id]);
   };
 
@@ -86,12 +89,13 @@ export default function Register() {
     const ev = info.data!;
     const local: Record<string, string> = {};
     if (!f.surprise && !f.preferences.length) local.preferences = 'Pick up to three committees, or choose “Surprise me”';
+    if (f.mun_count === '') local.mun_count = 'Enter how many MUNs you have attended (0 if this is your first)';
     if (!f.consent) local.consent = 'Please accept to continue';
     if (ev.requireMobileOtp && otp.step !== 'verified') local.mobile = 'Verify your mobile number with the code we send';
     if (Object.keys(local).length) { setErrors(local); return; }
     setBusy(true);
     try {
-      const out = await api.post<any>(`/api/public/events/${code}/register`, { ...f, preferences: f.surprise ? [] : f.preferences, website: honey, startedAt: started.current, otp_token: otp.step === 'verified' ? otp.token : undefined });
+      const out = await api.post<any>(`/api/public/events/${code}/register`, { ...f, preferences: f.surprise ? [] : f.preferences, portfolio_prefs: f.surprise ? {} : f.portfolio_prefs, mun_count: Number(f.mun_count) || 0, other_events: Number(f.other_events) || 0, awards_count: Number(f.awards_count) || 0, website: honey, startedAt: started.current, otp_token: otp.step === 'verified' ? otp.token : undefined });
       try { localStorage.removeItem(draftKey); localStorage.setItem(PROFILE_KEY, JSON.stringify(Object.fromEntries(PROFILE_FIELDS.map((k) => [k, f[k]])))); } catch { /* ignore */ }
       nav(`/r/${out.token}?welcome=1`);
     } catch (err) {
@@ -153,6 +157,15 @@ export default function Register() {
               </div>
             </div>
           )}
+          <fieldset className="exp-box">
+            <legend>Your experience</legend>
+            <div className="grid g3">
+              <Field label="MUNs attended" error={err('mun_count')}><input type="number" inputMode="numeric" min={0} max={300} placeholder="0 if first" value={f.mun_count} onChange={(e) => set('mun_count', e.target.value)} className={err('mun_count') ? 'invalid' : ''} required /></Field>
+              <Field label="MUN awards won" error={err('awards_count')}><input type="number" inputMode="numeric" min={0} max={300} placeholder="0" value={f.awards_count} onChange={(e) => set('awards_count', e.target.value)} /></Field>
+              <Field label="Other events" error={err('other_events')}><input type="number" inputMode="numeric" min={0} max={300} placeholder="0" value={f.other_events} onChange={(e) => set('other_events', e.target.value)} /></Field>
+            </div>
+            <span className="hint">Experience points: <b>{points(f)}</b> = MUNs + awards + half your other events (debates, youth parliaments, Model G20…). Some portfolios need more experience; you get the best one you qualify for.</span>
+          </fieldset>
           <Field label="Committee preference" hint="pick up to three, in order" error={err('preferences')}>
             <div className="chips" role="group" aria-label="Committees">
               {ev.committees.map((c) => {
@@ -163,8 +176,22 @@ export default function Register() {
               })}
               <button type="button" className={`chip ${f.surprise ? 'on' : ''}`} aria-pressed={f.surprise} onClick={() => { set('preferences', []); set('surprise', !f.surprise); }}>✨ Surprise me</button>
             </div>
-            {f.preferences.length > 0 && <span className="hint">{f.preferences.map((p, i) => `${i + 1}. ${ev.committees.find((c) => c.id === p)?.name}`).join('   ')}</span>}
           </Field>
+          {f.preferences.length > 0 && <div className="pref-list" aria-label="Portfolio preference for each committee">
+            {f.preferences.map((cid, i) => {
+              const c = ev.committees.find((x) => x.id === cid); if (!c) return null;
+              const mine = points(f);
+              return <label key={cid} className="pref-row">
+                <span className="pref-n">{i + 1}</span>
+                <span className="pref-c"><b>{c.short}</b><span className="small muted">{c.name}</span></span>
+                <select aria-label={`Preferred portfolio in ${c.short}`} value={f.portfolio_prefs[cid] ?? ''} onChange={(e) => set('portfolio_prefs', { ...f.portfolio_prefs, [cid]: e.target.value })}>
+                  <option value="">Any portfolio</option>
+                  {(c.portfolios ?? []).map((p) => <option key={p.id} value={p.id} disabled={!p.open || mine < p.minExperience}>{p.name}{!p.open ? ' (taken)' : mine < p.minExperience ? ` (needs ${p.minExperience}+ experience)` : ''}</option>)}
+                </select>
+              </label>;
+            })}
+            <span className="hint">If your portfolio is taken, you get another one in the same committee, then your next committee.</span>
+          </div>}
           <Field label="Referred by" hint="optional" error={err('referral_name')}>
             <input value={f.referral_name} onChange={(e) => set('referral_name', e.target.value)} placeholder="Name of the ambassador, teacher or school" />
             {refHint.length > 0 && !refHint.includes(f.referral_name) && (

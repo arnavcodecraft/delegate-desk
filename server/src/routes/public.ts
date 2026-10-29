@@ -58,6 +58,10 @@ publicRouter.get('/events/:code', h((req) => {
     FROM committee c WHERE c.event_id = ? ORDER BY c.sort, c.name`, e.id);
   const categories = [...new Set(all('SELECT category FROM fee_tier WHERE event_id = ? AND active = 1', e.id).map((t) => t.category))];
   const extra = all('SELECT id, type, topics, difficulty, emblem FROM committee WHERE event_id = ?', e.id);
+  // Portfolios delegates can ask for: open or not, and the experience each tier needs.
+  const portfolios = all(`SELECT p.id, p.committee_id, p.name, p.tier, p.code,
+      (SELECT COUNT(*) FROM seat s WHERE s.portfolio_id = p.id AND s.state = 'open') AS open
+    FROM portfolio p JOIN committee c ON c.id = p.committee_id WHERE c.event_id = ? ORDER BY p.sort, p.name`, e.id);
   const p = s.profile;
   return {
     profile: { acronym: p.acronym, logo: p.logo ? `/api/public/media/${p.logo}` : null, banner: p.banner && /^p[1-6]$/.test(p.banner) ? p.banner : p.banner ? `/api/public/media/${p.banner}` : null,
@@ -66,7 +70,9 @@ publicRouter.get('/events/:code', h((req) => {
     allocationMode: s.allocationMode, free: s.free,
     event: { code: e.code, name: e.name, venue: e.venue, city: e.city, start_date: e.start_date, end_date: e.end_date, status: e.status, kind: e.kind },
     org: { name: org.name, legal_name: org.legal_name, grievance: org.grievance_contact },
-    committees: committees.map((c) => { const x = extra.find((y) => y.id === c.id) ?? {}; return { ...c, type: x.type, topics: JSON.parse(x.topics || '[]'), difficulty: x.difficulty, emblem: x.emblem, full: c.open_seats === 0 }; }),
+    committees: committees.map((c) => { const x = extra.find((y) => y.id === c.id) ?? {}; return { ...c, type: x.type, topics: JSON.parse(x.topics || '[]'), difficulty: x.difficulty, emblem: x.emblem, full: c.open_seats === 0,
+      portfolios: portfolios.filter((p) => p.committee_id === c.id).map((p) => ({ id: p.id, name: p.name, code: p.code, tier: p.tier, open: p.open > 0, minExperience: s.tierMinExperience[p.tier as 'high'] ?? 0 })) }; }),
+    tierMinExperience: s.tierMinExperience,
     classOptions: CLASS_OPTIONS, categories, gstRateBp: s.gstEnabled ? s.gstRateBp : 0, holdHours: s.holdHours, feeModel: s.feeModel,
     refundWindowDays: s.refundWindowDays, requireMobileOtp: s.requireMobileOtp,
   };

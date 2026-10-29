@@ -65,20 +65,22 @@ export interface EventSettings {
   applicationDeadline: string | null;
   /** instant: a seat is allotted the moment a delegate registers. review: the team reviews and assigns. */
   allocationMode: 'instant' | 'review';
+  /** Experience points a delegate needs for each portfolio tier (MUNs + awards + half of other events). */
+  tierMinExperience: { high: number; standard: number; low: number };
   free: boolean;
   paymentMethods: PaymentMethods;
   positionPapers: { enabled: boolean; deadline: string | null };
 }
 
 export const defaultEventSettings: EventSettings = {
-  holdHours: 48, holdGraceHours: 72, holdWarningHours: 6,
+  holdHours: 24, holdGraceHours: 72, holdWarningHours: 6,
   gstEnabled: true, gstRateBp: 1800, sacCode: '998596',
   feeModel: 'full', applicationFeePaise: 0,
   groupPayment: 'members_pay', groupDiscount: { minSize: 8, rateBp: 1000 },
   gateways: { razorpay: { enabled: true, down: false }, cashfree: { enabled: true, down: false }, mock: { enabled: true, down: false } },
   defaultGateway: 'razorpay', routing: [],
   screenshotEnabled: true,
-  reminderHours: [24, 72, 168],
+  reminderHours: [8],
   escalationHours: 24, processingAlertMinutes: 15,
   refundWindowDays: 7,
   allocationLockAt: null, detailsLockAt: null,
@@ -98,6 +100,7 @@ export const defaultEventSettings: EventSettings = {
   roles: { delegate: true, advisor: false, observer: false, chair: false },
   applicationDeadline: null,
   allocationMode: 'instant',
+  tierMinExperience: { high: 3, standard: 0, low: 0 },
   free: false,
   paymentMethods: {
     link: { enabled: false, url: '', instructions: '' },

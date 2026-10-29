@@ -4,6 +4,7 @@
  */
 import express from 'express';
 import { all, one, insert, update, tx } from '../db.ts';
+import { experiencePoints } from '../services/allocation.ts';
 import { audit } from '../audit.ts';
 import { requirePerm, requireUser, committeeScope, can } from '../auth.ts';
 import { bad, forbidden, notFound, now, uid } from '../util.ts';
@@ -103,11 +104,15 @@ organiserRouter.post('/committees/:id/guide', requirePerm('alloc.config'), uploa
 organiserRouter.get('/events/:id/applicants', requirePerm('reg.read'), h((req) => {
   const status = String(req.query.status ?? 'applied');
   const where = status === 'applied' ? "r.allot_status = 'applied'" : status === 'assigned' ? "r.allot_status IN ('held','confirmed')" : status === 'declined' ? 'r.cancelled_at IS NOT NULL' : '1=1';
-  return all(`SELECT r.id, r.ref, r.full_name, r.email, r.mobile, r.institution, r.class_year, r.city, r.experience, r.preferences, r.motivation, r.review_score, r.review_note,
+  return all(`SELECT r.id, r.ref, r.full_name, r.email, r.mobile, r.institution, r.class_year, r.city, r.experience, r.mun_count, r.other_events, r.awards_count, r.preferences, r.portfolio_prefs, r.motivation, r.review_score, r.review_note,
       r.allot_status, r.payment_status, r.channel, r.created_at, r.cancelled_at, c.name AS committee, p.name AS portfolio
     FROM registration r LEFT JOIN seat s ON s.registration_id = r.id LEFT JOIN portfolio p ON p.id = s.portfolio_id LEFT JOIN committee c ON c.id = p.committee_id
     WHERE r.event_id = ? AND r.erased_at IS NULL AND ${status === 'declined' ? '1=1' : 'r.cancelled_at IS NULL'} AND ${where}
-    ORDER BY COALESCE(r.review_score, 0) DESC, r.created_at`, P(req).id).map((r) => ({ ...r, preferences: JSON.parse(r.preferences || '[]') }));
+    ORDER BY COALESCE(r.review_score, 0) DESC, r.created_at`, P(req).id).map((r) => {
+      const chosen = JSON.parse(r.portfolio_prefs || '{}') as Record<string, string>;
+      const names = Object.fromEntries(Object.entries(chosen).map(([c, pid]) => [c, one('SELECT name FROM portfolio WHERE id = ?', pid)?.name ?? null]));
+      return { ...r, preferences: JSON.parse(r.preferences || '[]'), portfolio_prefs: names, points: experiencePoints(r) };
+    });
 }));
 organiserRouter.post('/registrations/:id/score', requirePerm('reg.edit'), h((req) => { scoreApplicant(P(req).id, req.body?.score == null || req.body.score === '' ? null : Number(req.body.score), req.body?.note); return { ok: true }; }));
 organiserRouter.post('/registrations/:id/assign', requirePerm('alloc.move'), h((req) => assignApplicant(P(req).id, String(req.body?.seat_id ?? ''), req.auth!.roleNames)));

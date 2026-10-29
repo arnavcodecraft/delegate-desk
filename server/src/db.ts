@@ -45,6 +45,10 @@ const COLUMNS: [table: string, column: string, ddl: string][] = [
   ['registration', 'review_score', 'INTEGER'],
   ['registration', 'review_note', 'TEXT'],
   ['registration', 'motivation', 'TEXT'],
+  ['registration', 'mun_count', 'INTEGER NOT NULL DEFAULT 0'],          // MUNs attended
+  ['registration', 'other_events', 'INTEGER NOT NULL DEFAULT 0'],       // debates, youth parliaments, Model G20 …
+  ['registration', 'awards_count', 'INTEGER NOT NULL DEFAULT 0'],       // awards won at MUNs
+  ['registration', 'portfolio_prefs', "TEXT NOT NULL DEFAULT '{}'"],    // committee id → preferred portfolio id
 ];
 function migrate(db: DatabaseSync) {
   for (const [table, column, ddl] of COLUMNS) {

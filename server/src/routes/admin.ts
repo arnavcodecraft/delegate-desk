@@ -10,7 +10,7 @@ import {
 } from '../auth.ts';
 import { bad, conflict, ctx, forbidden, json, notFound, now, token, uid, istDate, addHours, isEmail } from '../util.ts';
 import { h, upload, P } from './public.ts';
-import { inventory, addPortfolio, simulate, seatOf } from '../services/allocation.ts';
+import { inventory, addPortfolio, simulate, seatOf, experiencePoints } from '../services/allocation.ts';
 import { staffUpdate, resendEmail, eraseRegistration, register, duplicates, decideSwap, changeAllocation, acceptApplication, sendEventReminders, portalView } from '../services/registrations.ts';
 import { cancelRegistration, regVars, cancelEvent, markEventHeld, portalLink } from '../services/payments.ts';
 import { linkReferral } from '../services/referrals.ts';
@@ -157,6 +157,13 @@ adminRouter.patch('/events/:id', requirePerm('event.config'), h((req) => {
     const owned = ['profile', 'roles', 'applicationDeadline', 'allocationMode', 'free', 'paymentMethods', 'positionPapers', 'gstEnabled', 'gstRateBp'];
     const clash = Object.keys(b.settings).filter((k) => owned.includes(k));
     if (clash.length) throw bad(`These are changed elsewhere: ${clash.join(', ')}`);
+    if (b.settings.holdHours !== undefined && !(Number(b.settings.holdHours) >= 1)) throw bad('The payment window must be at least 1 hour');
+    if (b.settings.tierMinExperience) {
+      const t = b.settings.tierMinExperience;
+      const ok = (v: unknown) => Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 100;
+      if (!['high', 'standard', 'low'].every((k) => ok(t[k]))) throw bad('Experience needed must be a whole number from 0 to 100 for each tier');
+      b.settings.tierMinExperience = { high: Number(t.high), standard: Number(t.standard), low: Number(t.low) };
+    }
     saveEventSettings(e.id, b.settings);
   }
   syncListing(e.id);
@@ -237,7 +244,7 @@ adminRouter.get('/registrations/:id', requirePerm('reg.read', 'lists.read'), h((
   if (scope && (!seat || !scope.includes(seat.committee_id))) throw forbidden();
   const finance = can(req.auth!.roleNames, 'payments.read');
   return {
-    registration: { ...r, preferences: json(r.preferences, []), referral_suggestions: json(r.referral_suggestions, []), balance_paise: balanceOf(r), portal: finance || can(req.auth!.roleNames, 'reg.edit') ? portalLink(r) : null, token: undefined, guardian_token: undefined },
+    registration: { ...r, preferences: json(r.preferences, []), portfolio_prefs: Object.fromEntries(Object.entries(json<Record<string, string>>(r.portfolio_prefs, {})).map(([c, pid]) => [c, one('SELECT name FROM portfolio WHERE id = ?', pid)?.name ?? null])), points: experiencePoints(r), referral_suggestions: json(r.referral_suggestions, []), balance_paise: balanceOf(r), portal: finance || can(req.auth!.roleNames, 'reg.edit') ? portalLink(r) : null, token: undefined, guardian_token: undefined },
     seat, view: portalView(r),
     history: all('SELECT h.*, u.name AS by_name FROM allotment_history h LEFT JOIN user u ON u.id = h.by_user WHERE h.registration_id = ? ORDER BY h.at DESC', r.id),
     referrer: r.referrer_id ? one('SELECT id, name, kind FROM referrer WHERE id = ?', r.referrer_id) : null,
