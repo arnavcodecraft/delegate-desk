@@ -686,3 +686,11 @@ CREATE TABLE IF NOT EXISTS chat_report (
   id TEXT PRIMARY KEY, event_id TEXT NOT NULL, message_id TEXT NOT NULL, reporter_id TEXT NOT NULL,
   reason TEXT, created_at TEXT NOT NULL, resolved_at TEXT, resolved_by TEXT
 );
+
+-- Social media planner: posts the team plans or has published, per platform.
+CREATE TABLE IF NOT EXISTS social_post (
+  id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES event(id), platform TEXT NOT NULL, caption TEXT NOT NULL,
+  scheduled_for TEXT, status TEXT NOT NULL DEFAULT 'draft',   -- draft | scheduled | posted
+  link TEXT, campaign TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_social_post ON social_post(event_id, scheduled_for);

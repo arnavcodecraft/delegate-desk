@@ -5,7 +5,7 @@ import { DASHBOARD_TOUR, Tour, tourSeen } from './Tour';
 import { Alert, Btn, Field, Loading, useAsync, applyTheme, savedTheme, type Theme } from '../ui';
 import {
   LayoutDashboard, Users, ListChecks, Landmark, ScanLine, Mail, Upload, ReceiptText, CreditCard, Handshake, Wallet, BookOpen, Settings,
-  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, GraduationCap, MessagesSquare, ChevronDown, Mailbox as InboxIcon, type LucideIcon,
+  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, GraduationCap, MessagesSquare, ChevronDown, Mailbox as InboxIcon, Megaphone, type LucideIcon,
 } from 'lucide-react';
 
 export interface Me {
@@ -58,6 +58,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { to: '/app/documents', label: 'Documents', perms: ['alloc.config', 'lists.read'], icon: FileText, more: true },
     { to: '/app/lists', label: 'Lists', perms: ['lists.read'], icon: ListChecks, more: true },
     { to: '/app/messages', label: 'Emails & messages', perms: ['messages.read', 'templates.manage'], icon: Mail, more: true },
+    { to: '/app/social', label: 'Social media', perms: ['event.config', 'messages.read'], icon: Megaphone, more: true },
   ] },
   { group: 'Money', items: [
     { to: '/app/financials', label: 'Financials', perms: ['event.config', 'settings.finance', 'payments.read'], icon: Banknote },

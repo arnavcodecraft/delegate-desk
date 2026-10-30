@@ -576,3 +576,12 @@ a.db-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
 .timing-opt span { font-size: 13px; color: var(--text-2); line-height: 1.45; }
 .timing-opt.on { border-color: var(--brand); background: var(--brand-soft); box-shadow: 0 0 0 3px rgb(31 79 224 / .12); }
 .timing-opt:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Social media dashboard */
+.sm-bars { display: grid; grid-template-columns: repeat(14, 1fr); gap: 6px; height: 140px; align-items: end; margin-top: .8rem; }
+.sm-bars > div { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
+.sm-bars i { width: 100%; max-width: 30px; border-radius: 8px 8px 4px 4px; background: linear-gradient(180deg, #4d84ff, #1f4fe0); }
+.sm-bars i.zero { background: var(--surface-3); }
+.sm-bars span { font-size: 11px; color: var(--text-3); }
+.sm-link { background: var(--surface-2); padding: .4rem .6rem; border-radius: 8px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sm-captions { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+.sm-caption { white-space: pre-wrap; background: var(--surface-2); border-radius: 10px; padding: .75rem .9rem; font-size: 14px; line-height: 1.5; flex: 1; }

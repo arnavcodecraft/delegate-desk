@@ -30,6 +30,7 @@ import { DelegateChat } from './chat/DelegateChat';
 import { CvPage } from './platform/Cv';
 import { AboutPage, ContactPage, ServicesPage, TeamPage } from './platform/Site';
 import { PlatformInbox } from './staff/Inbox';
+import { SocialDashboard } from './staff/Social';
 import { ChatAdmin } from './staff/Chat';
 import { SetupPage } from './platform/Setup';
 import { PrepHome, ResearchHome, ProjectPage, ItemPage } from './prep/Research';
@@ -117,6 +118,7 @@ function App() {
       <Route path="/app/documents" element={staff(<Documents />)} />
       <Route path="/app/chat" element={staff(<ChatAdmin />)} />
       <Route path="/app/inbox" element={staff(<PlatformInbox />)} />
+      <Route path="/app/social" element={staff(<SocialDashboard />)} />
       <Route path="/app/sessions" element={staff(<Sessions />)} />
       <Route path="*" element={<div className="empty"><h1>Page not found</h1><a href="/login">Go to sign-in</a></div>} />
     </Routes>

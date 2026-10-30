@@ -300,10 +300,13 @@ export function confirmFree(regId: string) {
 }
 
 // ---------- traffic sources ----------
-const CHANNELS = ['instagram', 'whatsapp', 'facebook', 'tiktok', 'linkedin', 'email', 'explore', 'google', 'school', 'friend', 'direct', 'other'];
+const CHANNELS = ['instagram', 'whatsapp', 'facebook', 'tiktok', 'linkedin', 'x', 'youtube', 'email', 'explore', 'google', 'school', 'friend', 'direct', 'other'];
 export function normChannel(v: unknown, referrer?: string) {
   const c = String(v ?? '').toLowerCase().trim();
   if (CHANNELS.includes(c)) return c;
+  if (c === 'twitter') return 'x';
+  // Organisers' own campaign tags from the social media screen, e.g. ?src=c-early-bird.
+  if (/^c-[a-z0-9-]{1,40}$/.test(c)) return c;
   const r = String(referrer ?? '').toLowerCase();
   if (/instagram/.test(r)) return 'instagram';
   if (/whatsapp|wa\.me/.test(r)) return 'whatsapp';

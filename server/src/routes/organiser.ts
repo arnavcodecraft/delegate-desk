@@ -23,6 +23,7 @@ import { createSession, sessionsFor, sessionRow, rotateChairKey, sessionMarks } 
 import { currentWorkspace } from '../platform.ts';
 import { checkUpload } from '../services/scanner.ts';
 import { staffChannels, staffRead, staffPost, removeMessage, reports as chatReports, resolveReport } from '../services/chat.ts';
+import { socialOverview, addPost, updatePost, removePost, campaignTag } from '../services/social.ts';
 
 export const organiserRouter = express.Router();
 organiserRouter.use(requireUser);
@@ -205,3 +206,10 @@ organiserRouter.post('/events/:id/chat/settings', requirePerm('event.config'), h
   audit('chat.settings', 'event', P(req).id, undefined, { enabled: req.body?.enabled !== false, dms: req.body?.dms !== false });
   return { ok: true };
 }));
+
+// ---------- social media dashboard ----------
+organiserRouter.get('/events/:id/social', requirePerm('event.config', 'messages.read'), h((req) => socialOverview(P(req).id)));
+organiserRouter.post('/events/:id/social/campaign', requirePerm('event.config', 'messages.read'), h((req) => ({ tag: campaignTag(String(req.body?.name ?? '')) })));
+organiserRouter.post('/events/:id/social/posts', requirePerm('event.config', 'messages.read'), h((req) => addPost(P(req).id, req.body ?? {})));
+organiserRouter.patch('/events/:id/social/posts/:pid', requirePerm('event.config', 'messages.read'), h((req) => { updatePost(P(req).id, P(req).pid, req.body ?? {}); return { ok: true }; }));
+organiserRouter.delete('/events/:id/social/posts/:pid', requirePerm('event.config', 'messages.read'), h((req) => { removePost(P(req).id, P(req).pid); return { ok: true }; }));
