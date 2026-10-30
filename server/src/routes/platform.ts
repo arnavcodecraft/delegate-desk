@@ -17,7 +17,7 @@ import {
 } from '../platform.ts';
 import { launchConference, suggestCode, syncListing, trackView, normChannel, publicLink, registrationLink, acronymFrom, type Draft } from '../services/conference.ts';
 import { applyForRole, roleApplicationView, withdrawRoleApplication } from '../services/applications.ts';
-import { createSession, view, chairAction, endSession, claimSeat, releaseClaim, requestToSpeak, deviceBallot, exportMarks, inviteCoChair, MOTION_TYPES, P5 } from '../services/live.ts';
+import { createSession, view, chairAction, endSession, claimSeat, releaseClaim, requestToSpeak, deviceBallot, exportMarks, inviteCoChair, selfPresence, submitDoc, chatList, chatSend, MOTION_TYPES, P5, POINT_LABELS, RANKED_MOTIONS } from '../services/live.ts';
 import { PRESETS } from '../services/marking.ts';
 import { getEvent } from '../settings.ts';
 import { h, upload, P } from './public.ts';
@@ -160,7 +160,7 @@ function result(eventId: string) {
 // ---------- live committee sessions ----------
 export const liveRouter = express.Router();
 const key = (req: express.Request) => String(req.headers['x-chair-key'] ?? '');
-liveRouter.get('/meta', h(() => ({ motions: Object.entries(MOTION_TYPES).map(([k, v]) => ({ key: k, ...v })), p5: P5, presets: Object.entries(PRESETS).map(([k, v]) => ({ key: k, label: v.label })) })));
+liveRouter.get('/meta', h(() => ({ motions: Object.entries(MOTION_TYPES).map(([k, v]) => ({ key: k, ...v })), p5: P5, presets: Object.entries(PRESETS).map(([k, v]) => ({ key: k, label: v.label })), points: POINT_LABELS, ranked: RANKED_MOTIONS })));
 liveRouter.get('/:code/marksheet.xlsx', async (req, res, next) => {
   try {
     const { name, file } = await exportMarks(P(req).code, key(req));
@@ -176,12 +176,17 @@ liveRouter.post('/', h((req) => {
   const delegates = (Array.isArray(b.delegates) ? b.delegates : []).slice(0, 400);
   return createSession({ name: String(b.name ?? ''), short: b.short, delegates });
 }));
-liveRouter.get('/:code', h((req) => view(P(req).code, { chairKey: key(req), since: Number(req.query.v ?? 0) || undefined })));
+const seat = (req: express.Request) => String(req.headers['x-seat'] ?? '') || null;
+liveRouter.get('/:code', h((req) => view(P(req).code, { chairKey: key(req), since: Number(req.query.v ?? 0) || undefined, seat: seat(req) })));
+liveRouter.get('/:code/chat', h((req) => chatList(P(req).code, key(req), seat(req), Number(req.query.after ?? 0))));
+liveRouter.post('/:code/chat', h((req) => { rateLimit(`lchat:${req.ip}`, 40, 60_000); return chatSend(P(req).code, key(req), seat(req), String(req.body?.to ?? ''), String(req.body?.text ?? '')); }));
+liveRouter.post('/:code/presence', h((req) => { selfPresence(P(req).code, String(req.body?.delegateId ?? ''), String(req.body?.seatToken ?? ''), req.body?.presence); return { ok: true }; }));
+liveRouter.post('/:code/doc', h((req) => { rateLimit(`ldoc:${req.ip}`, 20, 10 * 60_000); submitDoc(P(req).code, String(req.body?.delegateId ?? ''), String(req.body?.seatToken ?? ''), req.body ?? {}); return { ok: true }; }));
 liveRouter.post('/:code/action', h((req) => chairAction(P(req).code, key(req), req.body ?? {})));
 liveRouter.post('/:code/cochair', h((req) => { rateLimit(`cochair:${req.ip}`, 20, 10 * 60_000); return inviteCoChair(P(req).code, key(req), String(req.body?.name ?? '')); }));
 liveRouter.post('/:code/end', h((req) => { endSession(P(req).code, key(req)); return { ok: true }; }));
 liveRouter.post('/:code/release', h((req) => { releaseClaim(P(req).code, key(req), String(req.body?.delegateId ?? '')); return { ok: true }; }));
 liveRouter.post('/:code/claim', h((req) => { rateLimit(`claim:${req.ip}`, 30, 10 * 60_000); return claimSeat(P(req).code, String(req.body?.delegateId ?? '')); }));
 liveRouter.post('/:code/request', h((req) => { requestToSpeak(P(req).code, String(req.body?.delegateId ?? ''), String(req.body?.seatToken ?? '')); return { ok: true }; }));
-liveRouter.post('/:code/ballot', h((req) => { deviceBallot(P(req).code, String(req.body?.delegateId ?? ''), String(req.body?.seatToken ?? ''), req.body?.ballot); return { ok: true }; }));
+liveRouter.post('/:code/ballot', h((req) => { deviceBallot(P(req).code, String(req.body?.delegateId ?? ''), String(req.body?.seatToken ?? ''), req.body?.ballot, !!req.body?.rights); return { ok: true }; }));
 

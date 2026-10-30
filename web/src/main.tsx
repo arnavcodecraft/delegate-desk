@@ -6,6 +6,8 @@ import '@fontsource-variable/plus-jakarta-sans';
 import 'flag-icons/css/flag-icons.min.css';
 import './styles.css';
 import './platform.css';
+import './room.css';
+import './site.css';
 import { applyTheme, savedTheme } from './ui';
 import { ToastHost } from './ui';
 import Register from './pages/Register';
@@ -24,7 +26,9 @@ import Settings from './staff/Settings';
 import CheckIn from './staff/CheckIn';
 import ListConference from './platform/ListConference';
 import { Explore, ConferencePage, Jobs, ApplicationStatus } from './platform/Explore';
-import { StartSession, SessionView, ChairConsole } from './platform/Live';
+import { StartSession } from './platform/Live';
+import { ChairRoom, DelegateRoom } from './platform/Room';
+import { Home as SiteHome } from './platform/Home';
 import { AccountPage, SetPasswordPage, SignInPage } from './platform/Account';
 import { DelegateChat } from './chat/DelegateChat';
 import { CvPage } from './platform/Cv';
@@ -49,15 +53,15 @@ const staff = (el: React.ReactNode) => <StaffGate>{el}</StaffGate>;
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Explore home />} />
+      <Route path="/" element={<SiteHome />} />
       <Route path="/explore" element={<Explore />} />
       <Route path="/c/:slug" element={<ConferencePage />} />
       <Route path="/jobs" element={<Jobs />} />
       <Route path="/list" element={<ListConference />} />
       <Route path="/application/:token" element={<ApplicationStatus />} />
       <Route path="/session" element={<StartSession />} />
-      <Route path="/session/:code" element={<SessionView />} />
-      <Route path="/session/:code/chair" element={<ChairConsole />} />
+      <Route path="/session/:code" element={<DelegateRoom />} />
+      <Route path="/session/:code/chair" element={<ChairRoom />} />
       <Route path="/register/:code" element={<Register />} />
       <Route path="/register/:code/delegation" element={<DelegationRegister />} />
       <Route path="/r/:token" element={<Portal />} />

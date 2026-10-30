@@ -295,15 +295,18 @@ await step('chair signs in, reviews the position paper and runs a live session',
   await ch.getByRole('button', { name: 'Send feedback' }).click(); await ch.waitForTimeout(700);
   await ch.goto(`${B}/app/sessions`); await ch.waitForSelector('text=Start live session');
   const [con] = await Promise.all([ch.context().waitForEvent('page'), ch.getByRole('button', { name: 'Start live session' }).first().click()]);
-  watch(con, 'chair console'); await con.waitForSelector('text=Roll call');
-  await con.getByRole('button', { name: 'All present' }).click(); await con.waitForTimeout(400);
-  await con.getByRole('button', { name: 'Add motion' }).click(); await con.waitForTimeout(300);
-  await con.getByRole('button', { name: 'Vote', exact: true }).first().click(); await con.waitForTimeout(300);
-  for (const y of await con.locator('.lv-ballot button.for').all()) await y.click();
+  watch(con, 'chair room'); await con.waitForSelector('[data-testid=chair-room]');
+  await con.getByRole('tab', { name: 'Roll call' }).click(); await con.getByRole('button', { name: 'All present' }).click(); await con.waitForTimeout(400);
+  await con.getByRole('button', { name: 'Finish roll call' }).click();
+  await con.getByRole('tab', { name: 'Motions' }).click(); await con.getByRole('button', { name: 'Raise a motion' }).first().click();
+  await con.getByPlaceholder('e.g. Humanitarian response in conflict zones').fill('Maritime security'); await con.locator('.rm-raise-foot button').click(); await con.waitForTimeout(400);
+  await con.locator('.rm-motion').getByRole('button', { name: 'Vote' }).first().click(); await con.waitForSelector('.rm-ballots');
+  for (const y of await con.locator('.rm-ballot button[title="For"]').all()) await y.click();
   await con.getByRole('button', { name: 'Close the vote' }).click(); await con.waitForSelector('text=Passes');
-  await con.screenshot({ path: `${SHOTS}/07-chair-console.png`, fullPage: true });
+  await con.screenshot({ path: `${SHOTS}/07-chair-console.png` });
   // EB marking: a caucus segment, a recognised speech with a mark and verbatim, a POI, a chit, lobbying, the export and awards.
-  await con.getByRole('tab', { name: /EB marking/ }).click(); await con.getByRole('button', { name: 'Start marking' }).click(); await con.waitForSelector('text=Segments');
+  await con.getByRole('button', { name: 'Clear result' }).click();
+  await con.getByRole('button', { name: 'Scores' }).click(); await con.getByRole('button', { name: /EB marking/ }).click(); await con.getByRole('button', { name: 'Start marking' }).click(); await con.waitForSelector('text=Segments');
   await con.getByPlaceholder('Topic (optional)').fill('Maritime security'); await con.getByRole('button', { name: 'Add', exact: true }).click(); await con.waitForSelector('text=MOD-1');
   const rec = con.getByLabel('Recognise a delegation').last(); await rec.selectOption({ index: 1 }); await con.getByRole('button', { name: 'Recognise' }).last().click();
   await con.waitForSelector('.mk-speech'); const score = con.locator('.mk-speech .mk-score').first(); await score.fill('4.5'); await score.press('Enter');
@@ -401,7 +404,7 @@ await step('organiser cannot see the demo organiser\'s conference', org, async (
 await step('one account, both roles: the organiser opens their delegate profile and comes back', org, async () => {
   await org.goto(B + '/app/overview'); await org.getByTestId('delegate-profile').click();
   await org.waitForSelector('text=/Hello, /'); await org.waitForSelector('text=MUN CV');
-  await org.getByRole('link', { name: 'Organiser dashboard' }).click(); await org.waitForURL(/\/app/);
+  await org.locator('.pf-pagehead').getByRole('link', { name: 'Organiser dashboard' }).click(); await org.waitForURL(/\/app/);
 });
 
 // ============ delegate account and Prep ============
@@ -464,10 +467,35 @@ await step('anyone can run a session at /session; a delegate joins and asks to s
   await p.goto(`${B}/session`); await p.getByRole('button', { name: 'New session' }).click();
   await p.locator('.pf-editor input.pf-input').first().fill('General Assembly');
   await p.getByRole('button', { name: /^P5/ }).click(); await p.getByRole('button', { name: 'Add committee' }).click();
-  await p.waitForURL(/\/chair/); await p.waitForSelector('.lv-code'); const sc = (await p.locator('.lv-code').innerText()).trim();
-  await p.getByRole('button', { name: 'All present' }).click();
+  await p.waitForURL(/\/chair/); await p.waitForSelector('.rm-code'); const sc = (await p.locator('.rm-code').innerText()).trim();
+  await p.getByRole('tab', { name: 'Roll call' }).click(); await p.getByRole('button', { name: 'All present' }).click(); await p.getByRole('button', { name: 'Finish roll call' }).click();
   const d = await newPage('session delegate', true); await d.goto(`${B}/session/${sc}`); await d.getByRole('button', { name: /France/ }).click();
   await d.getByRole('button', { name: 'Ask to speak' }).click(); await p.waitForSelector('text=Asking to speak', { timeout: 6000 });
+  // The chair takes the request, starts the speech and sees the timer run.
+  await p.locator('.rm-requests button[aria-label="Accept"]').first().click(); await p.getByRole('button', { name: 'Next' }).click();
+  await p.waitForSelector('.rm-now h1:has-text("France")'); await p.getByRole('button', { name: 'Start' }).click(); await p.waitForSelector('button:has-text("Pause")');
+  await d.waitForSelector('.rd-stage h1:has-text("France")', { timeout: 6000 });
+  // Room chat: the delegate writes to everyone, the chair reads it.
+  await d.getByRole('button', { name: 'Chat' }).click(); await d.locator('.rm-chat-item', { hasText: 'Everyone' }).click(); await d.getByLabel('Message…').fill('France requests a moderated caucus.'); await d.getByRole('button', { name: 'Send' }).click();
+  await p.getByRole('button', { name: 'Chat' }).click(); await p.waitForSelector('text=France requests a moderated caucus.', { timeout: 8000 }); await p.keyboard.press('Escape');
+  // Settings save instantly and delegates submit a working paper.
+  await p.getByTestId('room-settings').click(); await p.locator('.rm-set-nav > button', { hasText: 'Voting' }).click(); await p.getByRole('button', { name: /2\/3 Supermajority/ }).click();
+  await p.waitForSelector('.rm-choice.on:has-text("2/3 Supermajority")'); await p.keyboard.press('Escape'); await p.locator('.rm-settings .rm-x').click().catch(() => {});
+  await d.keyboard.press('Escape'); await d.getByRole('button', { name: 'Documents' }).click(); await d.getByRole('button', { name: /Submit new/ }).click();
+  await d.getByLabel('Title *').fill('WP 1: Ocean data sharing'); await d.getByRole('button', { name: 'Submit', exact: true }).click(); await d.waitForSelector('text=WP 1: Ocean data sharing');
+  await p.getByRole('tab', { name: 'Documents' }).click(); await p.waitForSelector('text=WP 1: Ocean data sharing', { timeout: 6000 });
+  await p.screenshot({ path: `${SHOTS}/09-room-documents.png` });
+});
+
+await step('home page: hero, menus, audiences, pricing and FAQ', org, async () => {
+  const h = await newPage('home');
+  await h.goto(`${B}/`); await h.waitForSelector('text=for Model UN'); await h.waitForSelector('#features');
+  await h.locator('.sx-menu').first().hover(); await h.waitForSelector('.sx-menu.open .sx-item:has-text("Live committee room")');
+  await h.getByRole('tab', { name: 'Chairs and EB' }).click(); await h.waitForSelector('text=Chair committee from one screen, together');
+  await h.getByText('Do delegate fees come to us?').click(); await h.waitForSelector('text=straight into your own account');
+  await h.goto(`${B}/#pricing`); await h.waitForSelector('#pricing >> text=Free to run your conference');
+  const m = await newPage('home phone', true); await m.goto(`${B}/`); await m.locator('.sx-burger').click(); await m.waitForSelector('.sx-drawer >> text=Explore conferences');
+  if (await m.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw new Error('home page scrolls sideways on a phone');
 });
 
 // ============ demo workspace: every role, every screen ============
