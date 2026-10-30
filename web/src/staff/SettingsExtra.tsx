@@ -76,11 +76,15 @@ export function SheetsSync() {
 
 export function Backups() {
   const b = useAsync<any>(() => api.get('/api/admin/backups'), []);
-  const { can } = useStaff();
+  const { can, eventId } = useStaff();
   const toast = useToast();
   if (!b.data) return <Loading />;
   return (
     <div className="stack">
+      {can('event.config', 'settings.org') && eventId && <div className="card row" style={{ gap: '1rem', alignItems: 'center' }}>
+        <div style={{ flex: 1, minWidth: 240 }}><h3 style={{ margin: 0 }}>Offline copy</h3><p className="small muted" style={{ margin: '.25rem 0 0' }}>Download this conference's delegates, seats, committees, payments and applications as one Excel file. It opens without DelegateDesk, so keep a copy on a laptop for the conference days in case the internet or the site goes down. It contains personal data: keep it private.</p></div>
+        <a className="btn primary" href={`/api/admin/events/${eventId}/offline-copy.xlsx`} download>Download offline copy</a>
+      </div>}
       <Alert tone={b.data.keyConfigured ? 'info' : 'warn'}>A full encrypted backup (database and uploaded files, AES-256-GCM) runs daily and is restore-tested straight away: decrypted, opened, integrity-checked and its row counts compared. The newest {b.data.keep} are kept. {b.data.keyConfigured ? 'The key is set in BACKUP_KEY — store a copy offline; without it backups cannot be restored.' : 'Set BACKUP_KEY (32 random bytes) for production; until then a key derived from APP_SECRET is used.'} To restore: <span className="mono">npm run restore -- file.ddbak</span>.</Alert>
       {can('settings.org') && <div><Btn kind="primary" icon={DatabaseBackup} onClick={async () => { const r = await api.post<any>('/api/admin/backups'); toast(r.verify.startsWith('ok') ? 'Backup created and verified' : `Backup created but the restore test failed: ${r.verify}`, r.verify.startsWith('ok') ? 'ok' : 'bad'); b.reload(); }}>Back up now</Btn></div>}
       <div className="card flush"><DataTable rows={b.data.backups} empty="No backups yet" columns={[

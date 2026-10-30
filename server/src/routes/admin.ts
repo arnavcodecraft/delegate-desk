@@ -28,6 +28,7 @@ import { serviceAccount, createSync, deleteSync, syncSheet } from '../services/s
 import { ask, aiStatus } from '../services/ai.ts';
 import { badgesPdf, certificatesPdf, checkIn, sendCertificates } from '../services/badges.ts';
 import { createBackup, verifyBackup, backupFilePath } from '../services/backup.ts';
+import { offlineCopy } from '../services/offline.ts';
 import { balanceOf } from '../services/fees.ts';
 import { parseMoney } from '../util.ts';
 import { currentWorkspace } from '../platform.ts';
@@ -632,6 +633,18 @@ adminRouter.get('/backups/:id/download', requirePerm('settings.org'), h((req, re
   audit('backup.download', 'backup', P(req).id);
   res.download(file);
 }));
+
+/** The offline copy: delegates, seats, payments and applications in one Excel file, for when the site can't be reached. */
+adminRouter.get('/events/:id/offline-copy.xlsx', requirePerm('event.config', 'settings.org'), async (req, res, next) => {
+  try {
+    const { name, file } = await offlineCopy(P(req).id);
+    audit('offline_copy.download', 'event', P(req).id);
+    res.setHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('content-disposition', `attachment; filename="${name}"`);
+    res.setHeader('cache-control', 'no-store');
+    res.end(file);
+  } catch (e) { next(e); }
+});
 
 // ---------- data protection: erasure requests and breach register ----------
 adminRouter.post('/erasure-requests/:id/decline', requirePerm('reg.erase'), h((req) => {
