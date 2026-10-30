@@ -45,6 +45,7 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
           <NavLink to="/explore">Explore</NavLink>
           <NavLink to="/jobs">Job Board</NavLink>
           <NavLink to="/prep">Prep</NavLink>
+          <NavLink to="/services" className="hide-sm">Services</NavLink>
           <NavLink to="/session" className="hide-sm">Live session</NavLink>
           <span className="spacer" />
           {person?.person ? <NavLink to="/account" className="ghost-cta"><span className="pf-avatar">{person.person.name.slice(0, 1).toUpperCase()}</span><span className="hide-sm">My account</span></NavLink>
@@ -55,7 +56,7 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
       <main className="pf-wrap">{children}</main>
       <footer className="pf-foot">
         <div><b>DelegateDesk</b><span>Run your conference. Prepare for committee.</span></div>
-        <nav><Link to="/explore">Explore</Link><Link to="/jobs">Job Board</Link><Link to="/prep">Prep</Link><Link to="/prep/tools">MUN tools</Link><Link to="/list">List your conference</Link><Link to="/login">Sign in</Link><Link to="/privacy">Privacy</Link></nav>
+        <nav><Link to="/explore">Explore</Link><Link to="/prep">Prep</Link><Link to="/services">Services</Link><Link to="/list">List your conference</Link><Link to="/about">About</Link><Link to="/team">Team</Link><Link to="/contact">Contact</Link><Link to="/privacy">Privacy</Link></nav>
       </footer>
     </div>
   );

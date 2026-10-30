@@ -52,6 +52,10 @@ export const DEFAULT_TEMPLATES: Record<string, Tpl> = {
     subject: 'You are in: {{committee}} – {{portfolio}} ({{ref}})',
     body: `Hi {{name}},\n\nThank you for registering for {{event_name}}. We have provisionally allotted you:\n\nCommittee: {{committee}}\nPortfolio: {{portfolio}}\n\nAmount due: {{amount}}\nPlease pay by {{due_date}} to keep this seat. After that it returns to the pool.\n\nPay now: {{payment_link}}\n\nYour delegate page (no password needed): {{portal_link}}\n\nRegards,\n{{event_name}} Secretariat`,
   },
+  inbox_received: {
+    subject: 'We got your message: {{topic}}',
+    body: `Hi {{name}},\n\nThank you for writing to DelegateDesk about "{{topic}}". A person from our team reads every message and will reply to this email address, usually within two working days.\n\nRegards,\nThe DelegateDesk team`,
+  },
   registration_pay_first: {
     subject: 'Pay to get your seat at {{event_name}} ({{ref}})',
     body: `Hi {{name}},\n\nThank you for registering for {{event_name}}. At this conference seats are given in the order payments are confirmed, using your committee and portfolio preferences and your experience.\n\nAmount due: {{amount}}\nPay now: {{payment_link}}\n\nAs soon as your payment is confirmed you get your committee and portfolio by email.\n\nYour delegate page (no password needed): {{portal_link}}\n\nRegards,\n{{event_name}} Secretariat`,

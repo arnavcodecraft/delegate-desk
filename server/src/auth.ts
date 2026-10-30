@@ -76,6 +76,7 @@ const PERMS: Record<string, Role[]> = {
   'import.registrations': ['secretariat', 'superadmin', 'admin', 'registration_exec'],
   'attendance.mark': ['secretariat', 'superadmin', 'admin', 'registration_exec', 'chair'],
   'settings.org': ['superadmin', 'admin'],
+  'platform.inbox': ['superadmin', 'admin'],   // only in the main (platform owner's) workspace
   'settings.finance': ['cfo'],
 };
 export const permissionMatrix = () => PERMS;

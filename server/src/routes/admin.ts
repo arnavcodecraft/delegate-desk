@@ -29,9 +29,10 @@ import { ask, aiStatus } from '../services/ai.ts';
 import { badgesPdf, certificatesPdf, checkIn, sendCertificates } from '../services/badges.ts';
 import { createBackup, verifyBackup, backupFilePath } from '../services/backup.ts';
 import { offlineCopy } from '../services/offline.ts';
+import { inbox, markHandled, newCount } from '../services/inbox.ts';
 import { balanceOf } from '../services/fees.ts';
 import { parseMoney } from '../util.ts';
-import { currentWorkspace } from '../platform.ts';
+import { currentWorkspace, MAIN } from '../platform.ts';
 import { syncListing } from '../services/conference.ts';
 
 import { signIn, startPersonSession } from '../services/people.ts';
@@ -105,7 +106,8 @@ authRouter.post('/logout', h((req, res) => { endSession(req, res); return { ok: 
 authRouter.get('/me', h((req) => {
   if (!req.auth) return { user: null };
   const a = req.auth;
-  const perms = Object.keys(permissionMatrix()).filter((p) => can(a.roleNames, p));
+  // The platform inbox belongs to the DelegateDesk team (main workspace), not to organisers in their own workspaces.
+  const perms = Object.keys(permissionMatrix()).filter((p) => can(a.roleNames, p) && (p !== 'platform.inbox' || currentWorkspace().id === MAIN.id));
   return {
     user: { id: a.user.id, name: a.user.name, email: a.user.email, totp: !!a.user.totp_enabled },
     roles: a.roles.map((r) => ({ role: r.role, label: ROLE_LABELS[r.role as Role], committee_id: r.committee_id, event_id: r.event_id, referrer_id: r.referrer_id })),
@@ -645,6 +647,11 @@ adminRouter.get('/events/:id/offline-copy.xlsx', requirePerm('event.config', 'se
     res.end(file);
   } catch (e) { next(e); }
 });
+
+// ---------- the platform team's inbox (contact messages and service requests) ----------
+const platformOwner = () => { if (currentWorkspace().id !== MAIN.id) throw forbidden('Only the DelegateDesk team sees this inbox'); };
+adminRouter.get('/platform-inbox', requirePerm('platform.inbox'), h((req) => { platformOwner(); return { messages: inbox(req.query.status ? String(req.query.status) : undefined), unread: newCount() }; }));
+adminRouter.post('/platform-inbox/:id', requirePerm('platform.inbox'), h((req) => { platformOwner(); markHandled(P(req).id, req.body?.handled !== false, req.body?.note); audit('inbox.handle', 'inbox_message', P(req).id); return { ok: true }; }));
 
 // ---------- data protection: erasure requests and breach register ----------
 adminRouter.post('/erasure-requests/:id/decline', requirePerm('reg.erase'), h((req) => {

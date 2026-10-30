@@ -117,6 +117,19 @@ function Landing({ stats }: { stats: any }) {
           { t: 'For chairs', d: 'Roll call, speakers list, motions and voting, plus EB marking for every speech, POI and chit, with the marksheet, verbatim and recognition exported to Excel.', to: '/session', l: 'Start a session' },
         ].map((x) => <Link key={x.t} to={x.to} className="pf-pillar"><b>{x.t}</b><p>{x.d}</p><span>{x.l} →</span></Link>)}
       </section>
+      <section className="st-strip">
+        <div><div className="pf-eyebrow">New</div><b>Built for how MUNs really run</b></div>
+        <ul>
+          <li>Seats allotted automatically by preference and experience</li>
+          <li>Conference chat: all committees, each committee, and private messages</li>
+          <li>The whole EB marks together, live</li>
+          <li>A MUN CV that builds itself from your conferences</li>
+        </ul>
+      </section>
+      <section className="st-services-teaser">
+        <div><div className="pf-eyebrow">Services</div><h2 className="pf-h2">Mentorship, classes and on-ground support</h2><p className="pf-muted">One-to-one mentorship, recorded courses and batch classes for delegates; logistics, EB support and legal and financial help for organisers.</p></div>
+        <Link className="pf-btn primary" to="/services">See services</Link>
+      </section>
     </>
   );
 }

@@ -6,6 +6,7 @@ import express from 'express';
 import { insert, all } from '../db.ts';
 import { config } from '../config.ts';
 import { createUser, rateLimit, startSession, can, type Role } from '../auth.ts';
+import { contact, requestService, SERVICES, CONTACT_TOPICS } from '../services/inbox.ts';
 import { bad, now, uid, isEmail, asSystem, ctxStore, notFound, json } from '../util.ts';
 import { seedChart } from '../services/ledger.ts';
 import { seedTemplates } from '../services/notify.ts';
@@ -70,6 +71,11 @@ platformRouter.get('/jobs', h((req) => {
   const kind = String(req.query.kind ?? ''); const q = String(req.query.q ?? '').toLowerCase();
   return positionListings().filter((p) => (!kind || p.kind === kind) && (!q || `${p.title} ${p.conference} ${p.committee ?? ''} ${p.city ?? ''}`.toLowerCase().includes(q)) && (!p.deadline || p.deadline >= now()));
 }));
+
+// ---------- contact and services ----------
+platformRouter.post('/contact', h((req) => { rateLimit(`contact:${req.ip}`, 6, 60 * 60_000); return contact(req.body ?? {}); }));
+platformRouter.post('/services/request', h((req) => { rateLimit(`service:${req.ip}`, 6, 60 * 60_000); return requestService(req.body ?? {}); }));
+platformRouter.get('/site', h(() => ({ contactEmail: process.env.PLATFORM_CONTACT_EMAIL || null, services: SERVICES, topics: CONTACT_TOPICS })));
 
 // ---------- role applications (chairs, secretariat, staff, press, volunteers, advisors, observers) ----------
 platformRouter.post('/conferences/:slug/apply', upload.single('cv'), h((req) => {

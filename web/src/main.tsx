@@ -28,6 +28,8 @@ import { StartSession, SessionView, ChairConsole } from './platform/Live';
 import { AccountPage, SetPasswordPage, SignInPage } from './platform/Account';
 import { DelegateChat } from './chat/DelegateChat';
 import { CvPage } from './platform/Cv';
+import { AboutPage, ContactPage, ServicesPage, TeamPage } from './platform/Site';
+import { PlatformInbox } from './staff/Inbox';
 import { ChatAdmin } from './staff/Chat';
 import { SetupPage } from './platform/Setup';
 import { PrepHome, ResearchHome, ProjectPage, ItemPage } from './prep/Research';
@@ -60,6 +62,10 @@ function App() {
       <Route path="/pay/sandbox/:orderId" element={<SandboxPay />} />
       <Route path="/consent/:token" element={<Consent />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/about" element={<AboutPage />} />
+      <Route path="/team" element={<TeamPage />} />
+      <Route path="/contact" element={<ContactPage />} />
+      <Route path="/services" element={<ServicesPage />} />
       <Route path="/delegation/:token" element={<DelegationPortal />} />
       <Route path="/referrer/:token" element={<ReferrerStatement />} />
       <Route path="/share/:token" element={<SharedList />} />
@@ -110,6 +116,7 @@ function App() {
       <Route path="/app/jobs" element={staff(<JobBoard />)} />
       <Route path="/app/documents" element={staff(<Documents />)} />
       <Route path="/app/chat" element={staff(<ChatAdmin />)} />
+      <Route path="/app/inbox" element={staff(<PlatformInbox />)} />
       <Route path="/app/sessions" element={staff(<Sessions />)} />
       <Route path="*" element={<div className="empty"><h1>Page not found</h1><a href="/login">Go to sign-in</a></div>} />
     </Routes>
