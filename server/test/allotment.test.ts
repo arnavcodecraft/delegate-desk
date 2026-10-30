@@ -80,11 +80,11 @@ test('a delegate with the wrong portfolio asks for another one in their committe
   const disec = ctx.committeeIds.DISEC;
   const { registration: r } = reg({ preferences: [disec], mun_count: 1 });
   const before = seatOf(r.id);
-  const options = changeOptions(one('SELECT * FROM registration WHERE id = ?', r.id));
+  const options = changeOptions(one('SELECT * FROM registration WHERE id = ?', r.id)!);
   const target = options.find((c: any) => c.id === disec)!.portfolios.find((p: any) => p.qualifies && p.name !== before.name)!;
-  assert.throws(() => requestSwap(one('SELECT * FROM registration WHERE id = ?', r.id), { committee_id: disec }), /Pick the portfolio you want/);
-  const id = requestSwap(one('SELECT * FROM registration WHERE id = ?', r.id), { committee_id: disec, portfolio_id: target.id, reason: 'wrong_portfolio', note: 'I asked for this in my form' });
-  assert.throws(() => requestSwap(one('SELECT * FROM registration WHERE id = ?', r.id), { committee_id: disec, portfolio_id: target.id }), /already have a pending/);
+  assert.throws(() => requestSwap(one('SELECT * FROM registration WHERE id = ?', r.id)!, { committee_id: disec }), /Pick the portfolio you want/);
+  const id = requestSwap(one('SELECT * FROM registration WHERE id = ?', r.id)!, { committee_id: disec, portfolio_id: target.id, reason: 'wrong_portfolio', note: 'I asked for this in my form' });
+  assert.throws(() => requestSwap(one('SELECT * FROM registration WHERE id = ?', r.id)!, { committee_id: disec, portfolio_id: target.id }), /already have a pending/);
   asSystem(() => decideSwap(id, true, ['admin']));
   assert.equal(seatOf(r.id).name, target.name);
   assert.equal(one('SELECT reason FROM swap_request WHERE id = ?', id).reason, 'wrong_portfolio');
