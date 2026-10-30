@@ -158,7 +158,7 @@ organiserRouter.post('/committees/:id/live', requirePerm('lists.read', 'attendan
   const delegates = all(`SELECT p.name, p.code, GROUP_CONCAT(r.full_name, ' & ') AS person FROM portfolio p LEFT JOIN seat s ON s.portfolio_id = p.id AND s.state <> 'open'
     LEFT JOIN registration r ON r.id = s.registration_id WHERE p.committee_id = ? GROUP BY p.id ORDER BY p.name`, c.id);
   if (!delegates.length) throw bad('Add portfolios to this committee first');
-  const out = createSession({ name: c.name, short: c.short, delegates, workspaceId: currentWorkspace().id, eventId: c.event_id, committeeId: c.id });
+  const out = createSession({ name: c.name, short: c.short, delegates, workspaceId: currentWorkspace().id, eventId: c.event_id, committeeId: c.id, chairName: req.auth!.user.name });
   audit('live.create', 'committee', c.id, undefined, { code: out.code });
   return out;
 }));
@@ -166,7 +166,7 @@ organiserRouter.post('/live/:code/open', requirePerm('lists.read', 'attendance.m
   const row = sessionRow(P(req).code);
   if (row.workspace_id !== currentWorkspace().id) throw notFound('Session');
   mayRunCommittee(req, row.committee_id);
-  return { code: row.code, chairKey: rotateChairKey(row.code) };
+  return { code: row.code, chairKey: rotateChairKey(row.code, req.auth!.user.name) };
 }));
 
 /** Hand the EB's awards to the delegates holding those portfolios, so certificates print them. */

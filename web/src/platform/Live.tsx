@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
-  Play, Pause, RotateCcw, SkipForward, Hand, Users, Gavel, Timer, Vote, Plus, X, Check, Copy, LogIn, Radio, Power, Trash2, ShieldAlert, Smartphone, ClipboardList,
+  Play, Pause, RotateCcw, SkipForward, Hand, Users, Gavel, Timer, Vote, Plus, X, Check, Copy, LogIn, Radio, Power, Trash2, ShieldAlert, Smartphone, ClipboardList, UserPlus, MessageSquare, Send,
 } from 'lucide-react';
 import { api } from '../api';
 import { PlatformShell } from './Shell';
@@ -27,6 +27,7 @@ function useSession(code: string, chairKey?: string | null) {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? 'Session not found');
       if (!d.unchanged) { ver.current = d.version; offset.current = Date.now() - new Date(d.serverTime).getTime(); setS({ ...d, receivedAt: Date.now() }); }
+      else if (d.eb) setS((prev: any) => (prev ? { ...prev, eb: d.eb } : prev));
       setError(null);
     } catch (e: any) { setError(e.message); }
   };
@@ -158,6 +159,45 @@ export function SessionView() {
 }
 
 // ---------- chair console ----------
+/** The EB room: who on the dais is online, invite a co-chair, and private notes between EB members. */
+function EbRoom({ s, code, chairKey, run }: { s: any; code: string; chairKey: string; run: (a: any) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  const [invite, setInvite] = useState<{ name: string; link: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const notes = s.ebNotes ?? [];
+  const unread = notes.length - Number(store.get(`dd-eb-read-${code}`) ?? 0);
+  useEffect(() => { if (open) store.set(`dd-eb-read-${code}`, String(notes.length)); }, [open, notes.length, code]);
+  const addCoChair = async () => {
+    const name = prompt('Co-chair’s name or role (e.g. Vice-Chair Kabir, Rapporteur)');
+    if (!name?.trim()) return;
+    const r = await fetch(`/api/live/${code}/cochair`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-chair-key': chairKey }, body: JSON.stringify({ name }) });
+    const d = await r.json(); if (!r.ok) { alert(d.error); return; }
+    setInvite({ name: name.trim(), link: `${location.origin}/session/${code}/chair#k=${d.chairKey}` }); setOpen(true);
+  };
+  return (
+    <div className="pf-card eb-room">
+      <div className="eb-head">
+        <b>Executive Board</b>
+        <div className="eb-people">{(s.eb ?? []).map((c: any, i: number) => <span key={i} className={`eb-chip ${c.online ? 'on' : ''}`} title={c.online ? 'Online now' : 'Not on the console right now'}><i />{c.name}{c.name === s.me ? ' (you)' : ''}</span>)}</div>
+        <span style={{ flex: 1 }} />
+        <button className="pf-btn ghost sm" onClick={addCoChair}><UserPlus className="icon" />Invite co-chair</button>
+        <button className="pf-btn ghost sm" onClick={() => setOpen(!open)} aria-expanded={open}><MessageSquare className="icon" />EB notes{!open && unread > 0 ? ` (${unread})` : ''}</button>
+      </div>
+      {invite && <div className="pf-note" style={{ marginTop: 10 }}><span>Send this link to <b>{invite.name}</b>. It opens this console with their own access, and marks they give show their name. Anyone with the link can chair, so share it privately.<br /><code className="eb-link">{invite.link}</code></span>
+        <button className="pf-btn ghost sm" onClick={async () => { try { await navigator.clipboard.writeText(invite.link); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* blocked */ } }}>{copied ? <Check className="icon" /> : <Copy className="icon" />}{copied ? 'Copied' : 'Copy'}</button></div>}
+      {open && <div className="eb-notes">
+        {!notes.length && <div className="pf-small pf-muted">Notes here are only for the EB: agree on marks, flag a delegate, plan the next caucus. Delegates never see them.</div>}
+        {notes.slice(-40).map((n: any, i: number) => <div key={i} className={`eb-note ${n.by === s.me ? 'mine' : ''}`}><b>{n.by}</b><span>{n.text}</span><time>{new Date(n.at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</time></div>)}
+        <form className="mk-row" onSubmit={async (e) => { e.preventDefault(); if (!note.trim()) return; await run({ type: 'eb_note', text: note }); setNote(''); }}>
+          <input className="pf-input" style={{ flex: 1, minHeight: 38 }} placeholder="Note to the EB…" value={note} onChange={(e) => setNote(e.target.value)} aria-label="Note to the EB" maxLength={1000} />
+          <button className="pf-btn primary sm" disabled={!note.trim()}><Send className="icon" />Send</button>
+        </form>
+      </div>}
+    </div>
+  );
+}
+
 export function ChairConsole() {
   const { code = '' } = useParams();
   const nav = useNavigate();
@@ -203,6 +243,7 @@ export function ChairConsole() {
         <button className="pf-btn danger sm" onClick={async () => { if (confirm('End this session? It becomes read-only.')) { await fetch(`/api/live/${code}/end`, { method: 'POST', headers: { 'x-chair-key': key } }); nav('/session'); } }}><Power className="icon" />End</button>
       </div>
       {err && <div className="pf-note" style={{ marginBottom: 12, background: 'var(--pf-red-soft)', color: 'var(--pf-red)' }}><ShieldAlert className="icon" /><span>{err}</span></div>}
+      <EbRoom s={s} code={code} chairKey={key} run={run} />
       <div className="mk-switch" role="tablist" aria-label="Console view">
         <button role="tab" aria-selected={view === 'floor'} className={view === 'floor' ? 'on' : ''} onClick={() => setView('floor')}><Gavel className="icon" />Floor</button>
         <button role="tab" aria-selected={view === 'marking'} className={view === 'marking' ? 'on' : ''} onClick={() => setView('marking')}><ClipboardList className="icon" />EB marking{s.marking ? '' : ' (off)'}</button>

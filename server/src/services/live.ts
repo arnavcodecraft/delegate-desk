@@ -33,6 +33,7 @@ export interface LiveState {
   claims: Record<string, string>;      // delegate id -> hashed device token
   marking?: Marking;                   // EB marks: never shown to delegates
   amendments?: Amendment[];
+  ebNotes?: { at: string; by: string; text: string }[];   // private notes between EB members: never shown to delegates
 }
 export interface Amendment { id: string; draft: string; clause: string; text: string; proposer: string | null; kind: 'friendly' | 'unfriendly'; status: 'pending' | 'passed' | 'failed' | 'incorporated' | 'withdrawn'; at: string }
 
@@ -92,6 +93,7 @@ export function tally(s: LiveState, v: Vote) {
 }
 
 export type Action =
+  | { type: 'eb_note'; text: string; by?: string }
   | { type: 'presence'; delegateId: string; presence: Presence }
   | { type: 'roll_call'; on: boolean }
   | { type: 'mark_all'; presence: Presence }
@@ -128,6 +130,12 @@ const mustHave = (s: LiveState, id: string) => { if (!s.delegates.some((d) => d.
 /** The chair's actions. Pure apart from timestamps: takes a state and returns the next one. */
 export function apply(prev: LiveState, a: Action): LiveState {
   const s: LiveState = structuredClone(prev);
+  if (a.type === 'eb_note') {
+    const text = String((a as any).text ?? '').trim().slice(0, 1000);
+    if (!text) throw bad('Write a note first');
+    s.ebNotes = [...(s.ebNotes ?? []), { at: now(), by: String((a as any).by ?? 'Chair').slice(0, 60), text }].slice(-200);
+    return s;
+  }
   if (a.type.startsWith('eb_')) {
     applyMark(s, a as MarkAction);
     // Recognising a delegation in a caucus gives them the floor too.
@@ -287,51 +295,86 @@ const DB = () => {
   d.exec(`CREATE TABLE IF NOT EXISTS live_session (
     id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, chair_key_hash TEXT NOT NULL, name TEXT NOT NULL,
     workspace_id TEXT, event_id TEXT, committee_id TEXT, state TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL, updated_at TEXT NOT NULL, ended_at TEXT)`);
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL, ended_at TEXT);
+    CREATE TABLE IF NOT EXISTS live_chair (
+      key_hash TEXT PRIMARY KEY, code TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL, last_seen TEXT);
+    CREATE INDEX IF NOT EXISTS ix_live_chair_code ON live_chair(code);`);
   return d;
 };
 const hash = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
+const ONLINE_MS = 15_000;
 
-export function createSession(o: { name: string; short?: string; delegates: { name: string; code?: string | null; person?: string | null }[]; workspaceId?: string; eventId?: string; committeeId?: string }) {
+/** A new chair key for one EB member. Every member keeps their own key, so several can run the session together. */
+function addChair(code: string, name: string) {
+  const chairKey = crypto.randomBytes(24).toString('base64url');
+  DB().prepare('INSERT INTO live_chair (key_hash, code, name, created_at) VALUES (?,?,?,?)').run(hash(chairKey), code.toUpperCase(), String(name || 'Chair').trim().slice(0, 60) || 'Chair', now());
+  return chairKey;
+}
+/** Which EB member a key belongs to (sessions made before co-chairs keep their original key as "Chair"). */
+function chairOf(row: any, chairKey?: string | null) {
+  if (!chairKey) return null;
+  const h = hash(chairKey);
+  const c = DB().prepare('SELECT name FROM live_chair WHERE key_hash = ? AND code = ?').get(h, row.code) as any;
+  if (c) return { name: c.name as string, hash: h };
+  return h === row.chair_key_hash ? { name: 'Chair', hash: h } : null;
+}
+
+export function createSession(o: { name: string; short?: string; delegates: { name: string; code?: string | null; person?: string | null }[]; workspaceId?: string; eventId?: string; committeeId?: string; chairName?: string }) {
   const state = newState(o);
   const d = DB();
   let code = '';
   do code = Array.from(crypto.randomBytes(6), (b) => CODE_CHARS[b % CODE_CHARS.length]).join(''); while (d.prepare('SELECT 1 FROM live_session WHERE code = ?').get(code));
-  const chairKey = crypto.randomBytes(24).toString('base64url');
   d.prepare('INSERT INTO live_session (id, code, chair_key_hash, name, workspace_id, event_id, committee_id, state, version, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,1,?,?)')
-    .run(crypto.randomUUID(), code, hash(chairKey), state.committee.name, o.workspaceId ?? null, o.eventId ?? null, o.committeeId ?? null, JSON.stringify(state), now(), now());
-  return { code, chairKey };
+    .run(crypto.randomUUID(), code, hash(crypto.randomBytes(24).toString('base64url')), state.committee.name, o.workspaceId ?? null, o.eventId ?? null, o.committeeId ?? null, JSON.stringify(state), now(), now());
+  return { code, chairKey: addChair(code, o.chairName ?? 'Chair') };
 }
 function load(code: string) {
   const row = DB().prepare('SELECT * FROM live_session WHERE code = ?').get(String(code ?? '').toUpperCase()) as any;
   if (!row) throw notFound('Session');
   return { row, state: JSON.parse(row.state) as LiveState };
 }
-function save(code: string, state: LiveState) {
-  DB().prepare('UPDATE live_session SET state = ?, version = version + 1, updated_at = ? WHERE code = ?').run(JSON.stringify(state), now(), code.toUpperCase());
+/** Saves only if nobody else saved in between; returns false so the caller can re-apply on the fresh state. */
+function save(code: string, state: LiveState, version?: number) {
+  const r = version == null
+    ? DB().prepare('UPDATE live_session SET state = ?, version = version + 1, updated_at = ? WHERE code = ?').run(JSON.stringify(state), now(), code.toUpperCase())
+    : DB().prepare('UPDATE live_session SET state = ?, version = version + 1, updated_at = ? WHERE code = ? AND version = ?').run(JSON.stringify(state), now(), code.toUpperCase(), version);
+  return Number(r.changes) === 1;
 }
 export function sessionsFor(workspaceId: string, eventId: string) {
   return (DB().prepare('SELECT code, name, committee_id, created_at, updated_at, ended_at FROM live_session WHERE workspace_id = ? AND event_id = ? ORDER BY created_at DESC').all(workspaceId, eventId) as any[]);
 }
-/** Staff open their own committee's console without the chair key; this hands it over (new key each time). */
-export function rotateChairKey(code: string) {
+/** Staff open their committee's console without a key: each staff member gets their own key; nobody else is signed out. */
+export function rotateChairKey(code: string, name = 'Chair') {
   load(code);
-  const chairKey = crypto.randomBytes(24).toString('base64url');
-  DB().prepare('UPDATE live_session SET chair_key_hash = ? WHERE code = ?').run(hash(chairKey), code.toUpperCase());
-  return chairKey;
+  return addChair(code, name);
+}
+/** A chair invites a co-chair (vice-chair, rapporteur): a key of their own, sent as a link. */
+export function inviteCoChair(code: string, chairKey: string, name: string) {
+  const { row } = load(code);
+  if (!chairOf(row, chairKey)) throw forbidden('Only the chair can do that');
+  if (row.ended_at) throw conflict('This session has ended');
+  if (!String(name ?? '').trim()) throw bad('Enter the co-chair’s name or role');
+  return { chairKey: addChair(code, name) };
 }
 export const sessionRow = (code: string) => load(code).row;
 
-/** What everyone sees. The chair also sees device claims; nobody sees other devices' tokens. */
+/** What everyone sees. The EB also sees marks, notes, device claims and which EB members are online. */
 export function view(code: string, o: { chairKey?: string; since?: number } = {}) {
   const { row, state } = load(code);
-  const isChair = !!o.chairKey && hash(o.chairKey) === row.chair_key_hash;
-  if (o.since && o.since === row.version) return { unchanged: true, version: row.version };
-  const { claims, marking, ...pub } = state;
+  const me = chairOf(row, o.chairKey);
+  if (me) DB().prepare('UPDATE live_chair SET last_seen = ? WHERE key_hash = ?').run(now(), me.hash);
+  if (o.since && o.since === row.version && !me) return { unchanged: true, version: row.version };
+  const isChair = !!me;
+  const { claims, marking, ebNotes, ...pub } = state;
+  const eb = isChair ? (DB().prepare('SELECT name, last_seen FROM live_chair WHERE code = ? ORDER BY created_at').all(row.code) as any[])
+    .map((c) => ({ name: c.name, online: !!c.last_seen && Date.now() - new Date(c.last_seen).getTime() < ONLINE_MS })) : undefined;
+  if (o.since && o.since === row.version) return { unchanged: true, version: row.version, eb };
   return {
     marking: isChair ? marking ?? null : undefined,
     marksheet: isChair ? marksheet(state) : undefined,
     recognition: isChair ? recognition(state, (t) => MOTION_TYPES[t]?.label ?? t) : undefined,
+    ebNotes: isChair ? ebNotes ?? [] : undefined,
+    eb, me: me?.name,
     code: row.code, version: row.version, isChair, ended: !!row.ended_at, ...pub,
     timer: { ...state.timer, remaining: remaining(state.timer) }, serverTime: now(), quorum: quorum(state),
     claimed: isChair ? Object.keys(claims) : undefined,
@@ -339,55 +382,81 @@ export function view(code: string, o: { chairKey?: string; since?: number } = {}
     tally: state.vote ? tally(state, state.vote) : null,
   };
 }
+/** Stamps which EB member made or changed each mark. */
+function stampMarks(before: LiveState, after: LiveState, who: string) {
+  const m0 = before.marking, m1 = after.marking;
+  if (!m1) return;
+  for (const k of ['speeches', 'pois', 'chits'] as const) {
+    const old = new Map(((m0?.[k] ?? []) as any[]).map((x) => [x.id, JSON.stringify(x)]));
+    for (const x of m1[k] as any[]) if (old.get(x.id) !== JSON.stringify(x)) x.markedBy = who;
+  }
+}
 export function chairAction(code: string, chairKey: string, a: Action) {
-  const { row, state } = load(code);
-  if (!chairKey || hash(chairKey) !== row.chair_key_hash) throw forbidden('Only the chair can do that');
-  if (row.ended_at) throw conflict('This session has ended');
-  save(code, apply(state, a));
-  return view(code, { chairKey });
+  // Several EB members act at once: apply on the latest state and retry if someone saved in between.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { row, state } = load(code);
+    const me = chairOf(row, chairKey);
+    if (!me) throw forbidden('Only the chair can do that');
+    if (row.ended_at) throw conflict('This session has ended');
+    const next = apply(state, a.type === 'eb_note' ? { ...a, by: me.name } : a);
+    if (a.type.startsWith('eb_')) stampMarks(state, next, me.name);
+    if (save(code, next, row.version)) return view(code, { chairKey });
+  }
+  throw conflict('The session is busy; try again');
 }
 export function endSession(code: string, chairKey: string) {
   const { row } = load(code);
-  if (hash(chairKey) !== row.chair_key_hash) throw forbidden('Only the chair can do that');
+  if (!chairOf(row, chairKey)) throw forbidden('Only the chair can do that');
   DB().prepare('UPDATE live_session SET ended_at = ?, version = version + 1 WHERE code = ?').run(now(), code.toUpperCase());
+}
+
+/** Change the state safely while others change it too: re-read and retry if someone saved in between. */
+function mutate<T>(code: string, fn: (state: LiveState, row: any) => T): T {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { row, state } = load(code);
+    const out = fn(state, row);
+    if (save(code, state, row.version)) return out;
+  }
+  throw conflict('The session is busy; try again');
 }
 
 // Delegates: claim a seat on this device, ask to speak, vote when the chair allows device voting.
 export function claimSeat(code: string, delegateId: string) {
-  const { state } = load(code);
-  mustHave(state, delegateId);
-  if (state.claims[delegateId]) throw conflict('Someone has already joined as this delegation. Ask the chair to reset it.');
-  const tok = crypto.randomBytes(18).toString('base64url');
-  state.claims[delegateId] = hash(tok);
-  save(code, state);
-  return { seatToken: tok };
+  return mutate(code, (state) => {
+    mustHave(state, delegateId);
+    if (state.claims[delegateId]) throw conflict('Someone has already joined as this delegation. Ask the chair to reset it.');
+    const tok = crypto.randomBytes(18).toString('base64url');
+    state.claims[delegateId] = hash(tok);
+    return { seatToken: tok };
+  });
 }
 export function releaseClaim(code: string, chairKey: string, delegateId: string) {
-  const { row, state } = load(code);
-  if (hash(chairKey) !== row.chair_key_hash) throw forbidden('Only the chair can do that');
-  delete state.claims[delegateId];
-  save(code, state);
+  mutate(code, (state, row) => {
+    if (!chairOf(row, chairKey)) throw forbidden('Only the chair can do that');
+    delete state.claims[delegateId];
+  });
 }
 function seatOwner(state: LiveState, delegateId: string, seatToken: string) {
   if (!state.claims[delegateId] || state.claims[delegateId] !== hash(seatToken ?? '')) throw forbidden('Join as your delegation first');
 }
 export function requestToSpeak(code: string, delegateId: string, seatToken: string) {
-  const { state } = load(code);
-  seatOwner(state, delegateId, seatToken);
-  if (!state.speakers.requests.includes(delegateId) && !state.speakers.queue.includes(delegateId)) state.speakers.requests.push(delegateId);
-  save(code, state);
+  mutate(code, (state) => {
+    seatOwner(state, delegateId, seatToken);
+    if (!state.speakers.requests.includes(delegateId) && !state.speakers.queue.includes(delegateId)) state.speakers.requests.push(delegateId);
+  });
 }
 export function deviceBallot(code: string, delegateId: string, seatToken: string, ballot: Ballot) {
-  const { state } = load(code);
-  seatOwner(state, delegateId, seatToken);
-  if (!state.vote?.open || !state.vote.deviceVoting) throw conflict('Voting on devices is not open');
-  save(code, apply(state, { type: 'ballot', delegateId, ballot }));
+  mutate(code, (state) => {
+    seatOwner(state, delegateId, seatToken);
+    if (!state.vote?.open || !state.vote.deviceVoting) throw conflict('Voting on devices is not open');
+    Object.assign(state, apply(state, { type: 'ballot', delegateId, ballot }));
+  });
 }
 
 /** The EB's marksheet as an Excel workbook (chair only). */
 export async function exportMarks(code: string, chairKey: string) {
   const { row, state } = load(code);
-  if (!chairKey || hash(chairKey) !== row.chair_key_hash) throw forbidden('Only the chair can do that');
+  if (!chairOf(row, chairKey)) throw forbidden('Only the chair can do that');
   return { name: row.name as string, file: await marksheetXlsx(state, (t) => MOTION_TYPES[t]?.label ?? t) };
 }
 

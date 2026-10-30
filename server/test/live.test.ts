@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './helpers.ts';
-import { newState, apply, quorum, createSession, chairAction, view, claimSeat, deviceBallot, requestToSpeak, type LiveState, type Action } from '../src/services/live.ts';
+import { newState, apply, quorum, createSession, chairAction, view, claimSeat, deviceBallot, requestToSpeak, inviteCoChair, rotateChairKey, type LiveState, type Action } from '../src/services/live.ts';
 
 const SC = [
   ['United States', 'us'], ['China', 'cn'], ['Russian Federation', 'ru'], ['United Kingdom', 'gb'], ['France', 'fr'],
@@ -92,4 +92,31 @@ test('a stored session: chair key required, delegates claim seats, ask to speak 
   assert.equal(v.tally.for, 1);
   assert.deepEqual(v.claimed, [india]);
   assert.equal((view(code, { since: v.version }) as any).unchanged, true, 'polling returns nothing new when unchanged');
+});
+
+test('EB collaboration: co-chairs keep their own keys, see who is online, share private notes, and marks show who gave them', () => {
+  const { code, chairKey: director } = createSession({ name: 'Security Council', short: 'UNSC', delegates: SC, chairName: 'Director Ananya' });
+  const { chairKey: vice } = inviteCoChair(code, director, 'Vice-Director Kabir');
+  const staff = rotateChairKey(code, 'Rapporteur Meera');
+  // Opening the console for one EB member never signs another out.
+  for (const k of [director, vice, staff]) assert.equal(view(code, { chairKey: k }).isChair, true);
+  const eb = view(code, { chairKey: director }).eb!;
+  assert.deepEqual(eb.map((c: any) => c.name), ['Director Ananya', 'Vice-Director Kabir', 'Rapporteur Meera']);
+  assert.ok(eb.every((c: any) => c.online));
+  // Private notes: the EB sees them with names; delegates never do.
+  chairAction(code, vice, { type: 'eb_note', text: 'France was strong in the last mod' });
+  assert.equal(view(code, { chairKey: director }).ebNotes![0].by, 'Vice-Director Kabir');
+  assert.equal(view(code, {}).ebNotes, undefined);
+  // Marks carry the name of the EB member who gave them.
+  chairAction(code, director, { type: 'mark_all', presence: 'present' } as Action);
+  chairAction(code, director, { type: 'eb_enable', preset: 'verbatim_chits' } as Action);
+  const v0 = view(code, { chairKey: director });
+  const france = v0.delegates.find((d: any) => d.name === 'France').id;
+  chairAction(code, vice, { type: 'eb_recognise', delegateId: france } as Action);
+  const sp = view(code, { chairKey: director }).marking!.speeches.at(-1)!;
+  chairAction(code, director, { type: 'eb_speech', speechId: sp.id, score: 8 } as Action);
+  assert.equal(view(code, { chairKey: vice }).marking!.speeches.at(-1)!.markedBy, 'Director Ananya');
+  // A stranger's key does nothing.
+  assert.throws(() => chairAction(code, 'not-a-key', { type: 'eb_note', text: 'hi' }), /Only the chair/);
+  assert.throws(() => inviteCoChair(code, 'not-a-key', 'Someone'), /Only the chair/);
 });

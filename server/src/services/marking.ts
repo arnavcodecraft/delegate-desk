@@ -28,9 +28,9 @@ export interface Scheme {
   awards: { label: string; count: number }[];
 }
 export interface Segment { id: string; kind: 'gsl' | 'mod' | 'other'; column: string; label: string; topic: string | null; totalSeconds: number | null; speakingSeconds: number | null; proposer: string | null; day: number; startedAt: string }
-export interface Speech { id: string; segmentId: string; delegateId: string; at: string; score: number | null; notes: string; offline: boolean }
-export interface Poi { id: string; segmentId: string | null; by: string; to: string | null; at: string; score: number | null; notes: string }
-export interface Chit { id: string; kind: 'substantive' | 'poi'; by: string; to: string | null; at: string; score: number | null; notes: string }
+export interface Speech { id: string; segmentId: string; delegateId: string; at: string; score: number | null; notes: string; offline: boolean; markedBy?: string }
+export interface Poi { id: string; segmentId: string | null; by: string; to: string | null; at: string; score: number | null; notes: string; markedBy?: string }
+export interface Chit { id: string; kind: 'substantive' | 'poi'; by: string; to: string | null; at: string; score: number | null; notes: string; markedBy?: string }
 export interface Marking {
   enabled: boolean;
   day: number;

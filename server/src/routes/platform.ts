@@ -14,7 +14,7 @@ import {
 } from '../platform.ts';
 import { launchConference, suggestCode, syncListing, trackView, normChannel, publicLink, registrationLink, acronymFrom, type Draft } from '../services/conference.ts';
 import { applyForRole, roleApplicationView, withdrawRoleApplication } from '../services/applications.ts';
-import { createSession, view, chairAction, endSession, claimSeat, releaseClaim, requestToSpeak, deviceBallot, exportMarks, MOTION_TYPES, P5 } from '../services/live.ts';
+import { createSession, view, chairAction, endSession, claimSeat, releaseClaim, requestToSpeak, deviceBallot, exportMarks, inviteCoChair, MOTION_TYPES, P5 } from '../services/live.ts';
 import { PRESETS } from '../services/marking.ts';
 import { getEvent } from '../settings.ts';
 import { h, upload, P } from './public.ts';
@@ -161,6 +161,7 @@ liveRouter.post('/', h((req) => {
 }));
 liveRouter.get('/:code', h((req) => view(P(req).code, { chairKey: key(req), since: Number(req.query.v ?? 0) || undefined })));
 liveRouter.post('/:code/action', h((req) => chairAction(P(req).code, key(req), req.body ?? {})));
+liveRouter.post('/:code/cochair', h((req) => { rateLimit(`cochair:${req.ip}`, 20, 10 * 60_000); return inviteCoChair(P(req).code, key(req), String(req.body?.name ?? '')); }));
 liveRouter.post('/:code/end', h((req) => { endSession(P(req).code, key(req)); return { ok: true }; }));
 liveRouter.post('/:code/release', h((req) => { releaseClaim(P(req).code, key(req), String(req.body?.delegateId ?? '')); return { ok: true }; }));
 liveRouter.post('/:code/claim', h((req) => { rateLimit(`claim:${req.ip}`, 30, 10 * 60_000); return claimSeat(P(req).code, String(req.body?.delegateId ?? '')); }));

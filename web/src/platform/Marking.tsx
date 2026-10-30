@@ -140,7 +140,7 @@ function LiveMarks({ s, run }: { s: any; run: Run }) {
         {!speeches.length && <div className="pf-small pf-muted" style={{ padding: '8px 0' }}>No speeches in this segment yet.</div>}
         {[...speeches].reverse().map((sp: any) => (
           <div key={sp.id} className="mk-speech">
-            <div className="mk-row"><Flag code={code(sp.delegateId)} title={name(sp.delegateId)} /><b style={{ flex: 1 }}>{name(sp.delegateId)}</b><span className="pf-small pf-faint">{new Date(sp.at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</span>
+            <div className="mk-row"><Flag code={code(sp.delegateId)} title={name(sp.delegateId)} /><b style={{ flex: 1 }}>{name(sp.delegateId)}</b><span className="pf-small pf-faint">{new Date(sp.at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}{sp.markedBy ? ` · marked by ${sp.markedBy}` : ''}</span>
               <ScoreInput value={sp.score} max={m.scheme.speechMax} label={`Mark for ${name(sp.delegateId)}`} onSave={(v) => run({ type: 'eb_speech', speechId: sp.id, score: v })} />
               <button className="pf-btn link" aria-label="Remove speech" onClick={() => confirm('Remove this speech and its marks?') && run({ type: 'eb_speech_remove', speechId: sp.id })}><Trash2 className="icon" /></button></div>
             <Notes value={sp.notes} placeholder="Verbatim notes…" onSave={(v) => run({ type: 'eb_speech', speechId: sp.id, notes: v })} />
