@@ -46,7 +46,7 @@ test('the team moderates groups, sees private messages only when reported, and c
   // A chair only sees their own committee; the team cannot open private chats.
   const scope = [ctx.committeeIds.UNSC];
   assert.deepEqual(chat.staffChannels(ctx.eventId, scope).channels.map((x) => x.key), [`c:${ctx.committeeIds.UNSC}`]);
-  assert.throws(() => chat.staffRead(ctx.eventId, `c:${ctx.committeeIds.DISEC}`, scope), /Private chats|forbidden|only visible/i);
+  assert.throws(() => chat.staffRead(ctx.eventId, `c:${ctx.committeeIds.DISEC}`, scope), /only see your own committee/);
   const dm = chat.delegateInbox(reg(c)).channels.find((x) => x.kind === 'dm')!.key;
   assert.throws(() => chat.staffRead(ctx.eventId, dm, null), /only visible when reported/);
   chat.staffPost(ctx.eventId, 'all', { id: 'u1', name: 'Sana Shah' }, 'Secretariat', null, 'Lunch is at 1 pm');
