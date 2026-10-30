@@ -186,3 +186,27 @@ export function participations(p: Person) {
 }
 
 export const personView = pub;
+
+// ---------- one person, two roles: the same email can run conferences and attend them ----------
+export const personByEmail = (email: string) => get('SELECT * FROM person WHERE email = ?', String(email ?? '').trim().toLowerCase()) as Person | undefined;
+/**
+ * The delegate profile that goes with an organiser or team account (same email). Created on first use with the
+ * team account's password, so one email and one password open both.
+ */
+/**
+ * The delegate profile for an organiser account with the same email. A missing profile is created with the
+ * organiser's password. An existing one is linked only with proof it belongs to them: it shares the password,
+ * or `password` (typed just now) opens it. Otherwise null, so registering an organiser account with someone
+ * else's email never opens that person's profile.
+ */
+export async function personForStaff(user: { name: string; email: string; password_hash: string }, password?: string): Promise<Person | null> {
+  const email = String(user.email).trim().toLowerCase();
+  const found = personByEmail(email);
+  const stored = found && personPasswordHash(found.id);
+  if (found) return stored === user.password_hash || (password != null && await verifyPasswordAsync(password, stored)) ? found : null;
+  const id = 'p_' + crypto.randomUUID();
+  try { exec('INSERT INTO person (id, email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)', id, email, user.name, user.password_hash, 'delegate', now()); }
+  catch (e: any) { if (!/UNIQUE/i.test(String(e?.message))) throw e; return personForStaff(user, password); }
+  return personByEmail(email)!;
+}
+export const personPasswordHash = (id: string) => (get('SELECT password_hash FROM person WHERE id = ?', id)?.password_hash ?? null) as string | null;

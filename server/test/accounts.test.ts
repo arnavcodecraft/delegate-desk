@@ -116,3 +116,46 @@ test('one sign-in for everyone: the same form signs in team accounts and partici
   assert.equal(staff.body.kind, 'staff');
   assert.equal((await jar()('POST', '/api/auth/login', { email: 'uma@example.com', password: 'wrong-password' })).status, 400);
 });
+
+const tinyDraft = (acronym: string) => ({
+  name: `${acronym} Model United Nations`, acronym, banner: 'p3', startDate: '2027-05-10', endDate: '2027-05-11', format: 'in_person', level: 'high_school', country: 'in', city: 'Pune', expected: 40,
+  committees: [{ type: 'mun', name: 'General Assembly', short: 'GA', perCountry: 1, portfolios: [{ name: 'India' }, { name: 'Japan' }] }], free: true, uses: [],
+});
+
+test('one account, both roles: an organiser sign-in also opens their delegate profile, and signing out ends both', async () => {
+  const s = jar();
+  const r = await s('POST', '/api/auth/login', { email: 'desk@example.org', password: 'brand-new-pass-1' });
+  assert.equal(r.body.kind, 'staff'); assert.equal(r.body.person, true);
+  assert.equal((await s('GET', '/api/me')).body.person.email, 'desk@example.org');
+  // The delegate profile shares the password: the same email and password signs straight in either way.
+  assert.equal((await s('POST', '/api/me/logout')).status, 200);
+  assert.equal((await s('GET', '/api/me')).body.person, null);
+  assert.equal((await s('GET', '/api/auth/me')).body.user ?? null, null);
+});
+
+test('a delegate creates a conference with the account they already have, then one sign-in opens both', async () => {
+  const d = jar();
+  await d('POST', '/api/me/signup', { name: 'Ria Delegate', email: 'ria@example.com', password: 'ria-pass-12345' });
+  const out = await d('POST', '/api/platform/launch', { draft: tinyDraft('RIAMUN'), account: { organisation: 'Ria Society' }, usePerson: true });
+  assert.equal(out.status, 200, JSON.stringify(out.body));
+  assert.equal((await d('GET', '/api/auth/me')).body.user.email, 'ria@example.com');
+  assert.equal((await d('GET', '/api/me')).body.person.email, 'ria@example.com');
+  const again = jar();
+  const r = await again('POST', '/api/auth/login', { email: 'ria@example.com', password: 'ria-pass-12345' });
+  assert.equal(r.body.kind, 'staff'); assert.equal(r.body.person, true);
+  assert.equal((await jar()('POST', '/api/platform/launch', { draft: tinyDraft('NOPE'), account: {}, usePerson: true })).status, 400);
+});
+
+test('an organiser account made with someone else\'s email never opens that person\'s delegate profile', async () => {
+  await jar()('POST', '/api/me/signup', { name: 'Vic', email: 'vic@example.com', password: 'vic-real-pass-1' });
+  const x = jar();
+  const out = await x('POST', '/api/platform/launch', { draft: tinyDraft('VICMUN'), account: { name: 'Not Vic', email: 'vic@example.com', password: 'attacker-pass-1', organisation: 'X' } });
+  assert.equal(out.status, 200, JSON.stringify(out.body));
+  assert.equal((await x('GET', '/api/me')).body.person, null);
+  assert.equal((await x('POST', '/api/me/from-staff')).status, 409);
+  assert.equal((await x('POST', '/api/me/from-staff', { password: 'attacker-pass-1' })).status, 409);
+  assert.equal((await jar()('POST', '/api/auth/login', { email: 'vic@example.com', password: 'attacker-pass-1' })).body.person, false);
+  // The real owner, signed in as the organiser, links them by typing the delegate password once.
+  const ok = await x('POST', '/api/me/from-staff', { password: 'vic-real-pass-1' });
+  assert.equal(ok.status, 200); assert.equal(ok.body.person.email, 'vic@example.com');
+});

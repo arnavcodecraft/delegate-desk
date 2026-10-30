@@ -1,11 +1,13 @@
 /** Participant accounts: sign-up, sign-in, email confirmation, password reset, profile and "my conferences". */
 import express from 'express';
-import { rateLimit } from '../auth.ts';
+import { rateLimit, endSession } from '../auth.ts';
+import { HttpError } from '../util.ts';
+import { one } from '../db.ts';
 import { h } from './public.ts';
 import { mailConfigured } from '../services/mail.ts';
 import {
   signUp, signIn, startPersonSession, endPersonSession, currentPerson, requirePerson, verifyEmail, resendVerification,
-  forgot, resetWithCode, showCodesOnScreen, changePassword, updateProfile, deleteAccount, participations, personView,
+  forgot, resetWithCode, showCodesOnScreen, personForStaff, changePassword, updateProfile, deleteAccount, participations, personView,
 } from '../services/people.ts';
 import { saved, setSaved, isSaved, cv, addCv, updateCv, removeCv, saveProfileExtras, deleteProfileData } from '../services/profile.ts';
 
@@ -30,7 +32,18 @@ meRouter.post('/login', h(async (req, res) => {
   startPersonSession(res, p.id);
   return { person: personView(p) };
 }));
-meRouter.post('/logout', h((req, res) => { endPersonSession(req, res); return { ok: true }; }));
+meRouter.post('/logout', h((req, res) => { endPersonSession(req, res); if (req.auth) endSession(req, res); return { ok: true }; }));
+/** An organiser already signed in opens their delegate profile (same email; created on first use). */
+meRouter.post('/from-staff', h(async (req, res) => {
+  if (!req.auth) throw new HttpError(401, 'Sign in first');
+  rateLimit(`fromstaff:${req.auth.user.id}`, 10, 15 * 60_000);
+  const user = one('SELECT * FROM user WHERE id = ?', req.auth.user.id);
+  const p = user && await personForStaff(user, req.body?.password == null ? undefined : String(req.body.password));
+  // A delegate account with this email and a different password: ask for that password once to link them.
+  if (!p) throw new HttpError(409, 'You already have a delegate account with this email. Enter its password to open it here.');
+  startPersonSession(res, p.id);
+  return { person: personView(p) };
+}));
 meRouter.post('/verify', h((req) => { const p = requirePerson(req); rateLimit(`pverify:${p.id}`, 10, 15 * 60_000); verifyEmail(p, String(req.body?.code ?? '')); return { ok: true }; }));
 meRouter.post('/verify/resend', h((req) => { const p = requirePerson(req); rateLimit(`presend:${p.id}`, 4, 15 * 60_000); return { ok: true, devCode: resendVerification(p) }; }));
 meRouter.post('/forgot', h((req) => { rateLimit(`pforgot:${req.ip}`, 5, 15 * 60_000); const devCode = forgot(String(req.body?.email ?? '')); return { ok: true, devCode: devCode ?? undefined }; }));

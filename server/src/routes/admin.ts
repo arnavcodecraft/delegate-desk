@@ -35,7 +35,7 @@ import { parseMoney } from '../util.ts';
 import { currentWorkspace, MAIN } from '../platform.ts';
 import { syncListing } from '../services/conference.ts';
 
-import { signIn, startPersonSession } from '../services/people.ts';
+import { signIn, startPersonSession, endPersonSession, personForStaff } from '../services/people.ts';
 import { sendNow, forgotPassword, inviteStaff, issueUserToken, peekUserToken, resendInvite, useUserToken } from '../services/accounts.ts';
 
 export const authRouter = express.Router();
@@ -57,7 +57,10 @@ authRouter.post('/login', h(async (req, res) => {
   const needsMfa = roles.some((r) => MFA_ROLES.includes(r as Role));
   startSession(res, req, user.id, !needsMfa);
   run('UPDATE user SET last_login_at = ? WHERE id = ?', now(), user.id);
-  return { ok: true, kind: 'staff', mfa: needsMfa ? (user.totp_enabled ? 'verify' : 'enroll') : null };
+  // The same sign-in also opens this person's delegate profile (created on first use), so organisers can attend conferences too.
+  const person = await personForStaff(user, String(req.body?.password ?? ''));
+  if (person) startPersonSession(res, person.id);
+  return { ok: true, kind: 'staff', person: !!person, mfa: needsMfa ? (user.totp_enabled ? 'verify' : 'enroll') : null };
 }));
 authRouter.post('/forgot', h((req) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase();
@@ -102,7 +105,7 @@ authRouter.post('/mfa/confirm', h((req) => {
   audit('auth.mfa_enrolled', 'user', u.id);
   return { ok: true };
 }));
-authRouter.post('/logout', h((req, res) => { endSession(req, res); return { ok: true }; }));
+authRouter.post('/logout', h((req, res) => { endSession(req, res); endPersonSession(req, res); return { ok: true }; }));
 authRouter.get('/me', h((req) => {
   if (!req.auth) return { user: null };
   const a = req.auth;

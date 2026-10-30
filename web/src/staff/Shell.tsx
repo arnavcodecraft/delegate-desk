@@ -131,6 +131,8 @@ function Shell({ children }: { children: React.ReactNode }) {
           <span className="avatar" aria-hidden>{initials(me.user!.name)}</span>
           <div className="who"><div style={{ fontWeight: 600 }}>{me.user!.name}</div><div className="small faint">{me.roles.map((r) => r.label).join(', ')}</div></div>
         </div>
+        {/* The same sign-in is also a delegate account: registrations, saved conferences, MUN CV and Prep. */}
+        <a href="/account" className="btn sm switch-role" data-testid="delegate-profile"><GraduationCap className="icon" />My delegate profile</a>
         <div className="row" style={{ padding: '.4rem .4rem 0', gap: '.3rem' }}>
           <NavLink to="/app/account" className="btn sm ghost"><UserRound className="icon" />Account</NavLink>
           <a href="/" className="btn sm ghost icon-only" title="Explore conferences" aria-label="Explore conferences"><Globe2 className="icon" /></a>

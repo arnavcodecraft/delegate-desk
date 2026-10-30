@@ -398,6 +398,12 @@ await step('organiser cannot see the demo organiser\'s conference', org, async (
   const me = await api(org, 'GET', '/api/auth/me'); if (me.events.some((e) => e.code === 'BGYS27')) throw new Error('isolation broken');
 });
 
+await step('one account, both roles: the organiser opens their delegate profile and comes back', org, async () => {
+  await org.goto(B + '/app/overview'); await org.getByTestId('delegate-profile').click();
+  await org.waitForSelector('text=/Hello, /'); await org.waitForSelector('text=MUN CV');
+  await org.getByRole('link', { name: 'Organiser dashboard' }).click(); await org.waitForURL(/\/app/);
+});
+
 // ============ delegate account and Prep ============
 await step('delegate account: sign up, confirm the email, see the conference', org, async () => {
   const s = await newPage('student');

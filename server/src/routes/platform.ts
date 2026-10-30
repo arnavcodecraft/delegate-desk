@@ -3,10 +3,12 @@
  * "List your conference" (sign-up + onboarding launch) and live committee sessions.
  */
 import express from 'express';
-import { insert, all } from '../db.ts';
+import nodeCrypto from 'node:crypto';
+import { insert, all, one, run } from '../db.ts';
 import { config } from '../config.ts';
 import { createUser, rateLimit, startSession, can, type Role } from '../auth.ts';
 import { contact, requestService, SERVICES, CONTACT_TOPICS } from '../services/inbox.ts';
+import { currentPerson, personPasswordHash, personForStaff, startPersonSession } from '../services/people.ts';
 import { bad, now, uid, isEmail, asSystem, ctxStore, notFound, json } from '../util.ts';
 import { seedChart } from '../services/ledger.ts';
 import { seedTemplates } from '../services/notify.ts';
@@ -100,7 +102,7 @@ platformRouter.get('/check-email', h((req) => ({ taken: emailTaken(String(req.qu
  * Creates the conference from the wizard. Signed-in organisers add it to their own workspace; new organisers
  * get a fresh workspace (own database, books and files) and are signed in as its admin.
  */
-platformRouter.post('/launch', h((req, res) => {
+platformRouter.post('/launch', h(async (req, res) => {
   rateLimit(`launch:${req.ip}`, 10, 60 * 60_000);
   const draft = (req.body?.draft ?? {}) as Draft;
   if (req.auth) {
@@ -109,6 +111,10 @@ platformRouter.post('/launch', h((req, res) => {
     return result(eventId);
   }
   const a = req.body?.account ?? {};
+  // A signed-in delegate creates the conference with the account they already have (same email and password).
+  const person = req.body?.usePerson ? currentPerson(req) : null;
+  if (req.body?.usePerson && !person) throw bad('Sign in to your DelegateDesk account first');
+  if (person) { a.name = person.name; a.email = person.email; a.password = nodeCrypto.randomBytes(24).toString('base64url'); }
   const name = String(a.name ?? '').trim(); const email = String(a.email ?? '').trim().toLowerCase();
   const organisation = String(a.organisation ?? '').trim() || String(draft.name ?? '').trim();
   const errors: Record<string, string> = {};
@@ -120,19 +126,24 @@ platformRouter.post('/launch', h((req, res) => {
   if (String(draft.name ?? '').trim().length < 3) throw bad('Enter the conference name');
   const w = createWorkspace(organisation, email);
   try {
-    return inWorkspace(w, () => asSystem(() => {
+    const made = inWorkspace(w, () => asSystem(() => {
       seedChart(); seedTemplates();
       const orgId = uid();
       insert('organization', { id: orgId, name: organisation, legal_name: organisation, entity_type: 'other', state_code: '29', grievance_contact: email, settings: '{}', created_at: now() });
       // A new organiser is usually one person, so the owner gets both the admin and CFO rights; they can add
       // team members with narrower roles later (Settings → Users & roles).
       const userId = createUser({ name, email, password: String(a.password), roles: [{ role: 'admin' as Role }, { role: 'cfo' as Role }] });
+      // One email, one password, both roles: the organiser account and the delegate profile share the password.
+      if (person) run('UPDATE user SET password_hash = ? WHERE id = ?', personPasswordHash(person.id), userId);
       const eventId = ctxStore.run({ userId, userLabel: `${name} <${email}>`, ip: req.ip, roles: ['admin', 'cfo'] }, () => launchConference({ ...draft, contactEmail: draft.contactEmail || email }));
       // The account was created moments ago in this same request, so this first session counts as verified;
       // two-factor set-up is asked for at the next sign-in.
       startSession(res, req, userId, true);
-      return result(eventId);
+      return { eventId, userId };
     }));
+    const linked = person ?? await personForStaff(inWorkspace(w, () => one('SELECT * FROM user WHERE id = ?', made.userId)!), String(a.password));
+    if (linked) startPersonSession(res, linked.id);
+    return inWorkspace(w, () => result(made.eventId));
   } catch (e) {
     // Undo the half-made workspace so the organiser can simply try again with the same email.
     const d = platformDb();

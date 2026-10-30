@@ -8,7 +8,7 @@ import {
 import { api, ApiError } from '../api';
 import { PLACES, countryName } from '../data/countries';
 import { TYPE_INFO, type CommitteeType } from '../data/committees';
-import { PlatformShell, useMe, refreshMe } from './Shell';
+import { PlatformShell, useMe, usePerson, refreshMe } from './Shell';
 import { InPersonArt, OnlineArt, SchoolArt, UniversityArt, People, Emblem, BANNER_PRESETS, bannerStyle, shrinkImage } from './art';
 import { CommitteeEditor, TypePicker, blankCommittee, toApi, shortFrom, type CommitteeDraft } from './CommitteeEditor';
 
@@ -332,6 +332,10 @@ function StepReview({ d, set, go, back, signedIn, canCreate, me, onDone }: { d: 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState<string>('');
+  // Signed in as a delegate but not as an organiser: create it with that same account.
+  const person = usePerson()?.person;
+  const [asPerson, setAsPerson] = useState(true);
+  const usePersonAcct = !signedIn && !!person && asPerson;
   useEffect(() => { api.get<{ code: string }>(`/api/platform/check-code?acronym=${encodeURIComponent(d.acronym || shortFrom(d.name))}&start=${d.startDate}`).then((r) => setCode(r.code)).catch(() => {}); }, [d.acronym, d.name, d.startDate]);
   useEffect(() => { if (!d.contactEmail && signedIn) set({ contactEmail: me?.user?.email ?? '' }); }, [signedIn]); // eslint-disable-line react-hooks/exhaustive-deps
   const rows: [string, React.ReactNode, Step][] = [
@@ -358,9 +362,9 @@ function StepReview({ d, set, go, back, signedIn, canCreate, me, onDone }: { d: 
         name: d.name.trim(), acronym: d.acronym.trim(), logo: d.logo, banner: d.banner, startDate: d.datesTbd ? null : d.startDate || null, endDate: d.datesTbd ? null : d.endDate || d.startDate || null,
         datesTbd: d.datesTbd || !d.startDate, format: d.format, level: d.level, country: d.country, city: d.city.trim(), expected: d.expected ?? 0,
         committees: d.committees.map(toApi), description: d.description, socials: d.socials, free: d.paid === false, delegateFeePaise: d.paid ? Math.round(Number(d.feeRupees) * 100) : 0,
-        uses: d.uses, contactEmail: d.contactEmail.trim() || acct.email.trim(),
+        uses: d.uses, contactEmail: d.contactEmail.trim() || (usePersonAcct ? person.email : acct.email.trim()),
       };
-      const out = await api.post('/api/platform/launch', signedIn ? { draft } : { draft, account: acct });
+      const out = await api.post('/api/platform/launch', signedIn ? { draft } : usePersonAcct ? { draft, account: { organisation: acct.organisation }, usePerson: true } : { draft, account: acct });
       onDone(out);
     } catch (e: any) {
       if (e instanceof ApiError && e.details?.fields) setErrors(e.details.fields);
@@ -376,7 +380,18 @@ function StepReview({ d, set, go, back, signedIn, canCreate, me, onDone }: { d: 
         <label className="pf-label" htmlFor="contact">Organiser contact email</label>
         <div className="pf-icon-input"><Mail className="icon" /><input id="contact" className="pf-input" type="email" value={d.contactEmail} onChange={(e) => set({ contactEmail: e.target.value })} placeholder="Shown on your public page" /></div>
       </div>
-      {!signedIn && (
+      {usePersonAcct && (
+        <div className="pf-card pad" style={{ marginTop: 6 }}>
+          <div className="pf-h2" style={{ fontSize: 19 }}>Use my DelegateDesk account</div>
+          <p className="pf-small pf-muted" style={{ margin: '4px 0 16px' }}>You'll run this conference as <b>{person.email}</b>, with the same password. One sign-in opens both your delegate profile and your organiser dashboard. <button type="button" className="pf-btn link" onClick={() => setAsPerson(false)}>Use a different email</button></p>
+          <div className="pf-field">
+            <label className="pf-label" htmlFor="a-organisation">Organisation or society</label>
+            <input id="a-organisation" className="pf-input" autoComplete="organization" value={acct.organisation} onChange={(e) => setAcct({ ...acct, organisation: e.target.value })} placeholder={d.name || 'e.g. Harbour MUN Society'} />
+          </div>
+          {errors.email && <div className="pf-err">{errors.email}</div>}
+        </div>
+      )}
+      {!signedIn && !usePersonAcct && (
         <div className="pf-card pad" style={{ marginTop: 6 }}>
           <div className="pf-h2" style={{ fontSize: 19 }}>Create your organiser account</div>
           <p className="pf-small pf-muted" style={{ margin: '4px 0 16px' }}>You'll manage the conference from here. Already have one? <a href="/login?next=/list">Sign in</a> and come back; your answers are saved.</p>
