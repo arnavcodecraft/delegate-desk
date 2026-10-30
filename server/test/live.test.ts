@@ -99,23 +99,23 @@ test('EB collaboration: co-chairs keep their own keys, see who is online, share 
   const { chairKey: vice } = inviteCoChair(code, director, 'Vice-Director Kabir');
   const staff = rotateChairKey(code, 'Rapporteur Meera');
   // Opening the console for one EB member never signs another out.
-  for (const k of [director, vice, staff]) assert.equal(view(code, { chairKey: k }).isChair, true);
-  const eb = view(code, { chairKey: director }).eb!;
+  for (const k of [director, vice, staff]) assert.equal((view(code, { chairKey: k }) as any).isChair, true);
+  const eb = (view(code, { chairKey: director }) as any).eb;
   assert.deepEqual(eb.map((c: any) => c.name), ['Director Ananya', 'Vice-Director Kabir', 'Rapporteur Meera']);
   assert.ok(eb.every((c: any) => c.online));
   // Private notes: the EB sees them with names; delegates never do.
   chairAction(code, vice, { type: 'eb_note', text: 'France was strong in the last mod' });
-  assert.equal(view(code, { chairKey: director }).ebNotes![0].by, 'Vice-Director Kabir');
-  assert.equal(view(code, {}).ebNotes, undefined);
+  assert.equal((view(code, { chairKey: director }) as any).ebNotes[0].by, 'Vice-Director Kabir');
+  assert.equal((view(code, {}) as any).ebNotes, undefined);
   // Marks carry the name of the EB member who gave them.
   chairAction(code, director, { type: 'mark_all', presence: 'present' } as Action);
   chairAction(code, director, { type: 'eb_enable', preset: 'verbatim_chits' } as Action);
-  const v0 = view(code, { chairKey: director });
+  const v0 = view(code, { chairKey: director }) as any;
   const france = v0.delegates.find((d: any) => d.name === 'France').id;
   chairAction(code, vice, { type: 'eb_recognise', delegateId: france } as Action);
-  const sp = view(code, { chairKey: director }).marking!.speeches.at(-1)!;
+  const sp = (view(code, { chairKey: director }) as any).marking.speeches.at(-1);
   chairAction(code, director, { type: 'eb_speech', speechId: sp.id, score: 8 } as Action);
-  assert.equal(view(code, { chairKey: vice }).marking!.speeches.at(-1)!.markedBy, 'Director Ananya');
+  assert.equal((view(code, { chairKey: vice }) as any).marking.speeches.at(-1).markedBy, 'Director Ananya');
   // A stranger's key does nothing.
   assert.throws(() => chairAction(code, 'not-a-key', { type: 'eb_note', text: 'hi' }), /Only the chair/);
   assert.throws(() => inviteCoChair(code, 'not-a-key', 'Someone'), /Only the chair/);
