@@ -174,7 +174,7 @@ export function portalView(reg: Record<string, any>) {
   const detailsLocked = !!(s.detailsLockAt && s.detailsLockAt <= now());
   const papers = all('SELECT id, file_name, status, score, feedback, submitted_at, reviewed_at FROM position_paper WHERE registration_id = ? ORDER BY submitted_at DESC', reg.id);
   return {
-    conference: { free: s.free, allocationMode: s.allocationMode, positionPapers: s.positionPapers, papers, logo: s.profile.logo ? `/api/public/media/${s.profile.logo}` : null, acronym: s.profile.acronym, slug: ev.code.toLowerCase() },
+    conference: { free: s.free, allocationMode: s.allocationMode, positionPapers: s.positionPapers, chat: s.chat, papers, logo: s.profile.logo ? `/api/public/media/${s.profile.logo}` : null, acronym: s.profile.acronym, slug: ev.code.toLowerCase() },
     event: { name: ev.name, code: ev.code, venue: ev.venue, city: ev.city, start_date: ev.start_date, end_date: ev.end_date, status: ev.status, dressCode: s.dressCode, reportingTime: s.reportingTime },
     registration: {
       ref: reg.ref, full_name: reg.full_name, email: reg.email, mobile: reg.mobile, institution: reg.institution, class_year: reg.class_year, city: reg.city,

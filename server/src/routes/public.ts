@@ -22,6 +22,7 @@ import { runList } from '../services/lists.ts';
 import { markBounced } from '../services/notify.ts';
 import { hmacHex } from '../services/gateways.ts';
 import { checkUpload } from '../services/scanner.ts';
+import { delegateInbox, delegateRead, delegatePost, directory, block, report } from '../services/chat.ts';
 import { sendOtp, verifyOtp } from '../services/otp.ts';
 import { whatsapp } from '../services/channels.ts';
 import { applyDeliveryStatuses } from '../services/notify.ts';
@@ -182,6 +183,13 @@ publicRouter.post('/r/:token/refund-request', h((req) => {
   const amount = req.body?.amount ? parseMoney(req.body.amount) : r.paid_paise - r.refunded_paise;
   return { id: requestRefund(r.id, amount, String(req.body?.reason ?? ''), { byDelegate: true }) };
 }));
+// Conference chat for delegates (their delegate link is their sign-in).
+publicRouter.get('/r/:token/chat', h((req) => delegateInbox(regByToken(P(req).token))));
+publicRouter.get('/r/:token/chat/directory', h((req) => directory(regByToken(P(req).token))));
+publicRouter.get('/r/:token/chat/messages', h((req) => delegateRead(regByToken(P(req).token), String(req.query.channel ?? 'all'), req.query.since ? String(req.query.since) : null)));
+publicRouter.post('/r/:token/chat', h((req) => delegatePost(regByToken(P(req).token), req.body ?? {})));
+publicRouter.post('/r/:token/chat/block', h((req) => { block(regByToken(P(req).token), String(req.body?.id ?? ''), req.body?.on !== false); return { ok: true }; }));
+publicRouter.post('/r/:token/chat/report', h((req) => { report(regByToken(P(req).token), String(req.body?.messageId ?? ''), String(req.body?.reason ?? '')); return { ok: true }; }));
 publicRouter.post('/r/:token/swap', h((req) => ({ id: requestSwap(regByToken(P(req).token), req.body?.committee_id, req.body?.note) })));
 publicRouter.post('/r/:token/withdraw-consent', h((req) => { withdrawConsent(regByToken(P(req).token)); return { ok: true }; }));
 publicRouter.post('/r/:token/cancel', h((req) => { const r = regByToken(P(req).token); cancelRegistration(r.id, 'Cancelled by delegate'); return { ok: true }; }));

@@ -5,7 +5,7 @@ import { DASHBOARD_TOUR, Tour, tourSeen } from './Tour';
 import { Alert, Btn, Field, Loading, useAsync, applyTheme, savedTheme, type Theme } from '../ui';
 import {
   LayoutDashboard, Users, ListChecks, Landmark, ScanLine, Mail, Upload, ReceiptText, CreditCard, Handshake, Wallet, BookOpen, Settings,
-  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, GraduationCap, type LucideIcon,
+  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, GraduationCap, MessagesSquare, type LucideIcon,
 } from 'lucide-react';
 
 export interface Me {
@@ -57,6 +57,7 @@ const NAV: { group: string; items: { to: string; label: string; perms: string[];
   ] },
   { group: 'Communicate', items: [
     { to: '/app/messages', label: 'Communications', perms: ['messages.read', 'templates.manage'], icon: Mail },
+    { to: '/app/chat', label: 'Chat', perms: ['messages.read', 'lists.read'], icon: MessagesSquare },
   ] },
   { group: 'Money', items: [
     { to: '/app/dashboard', label: 'Finance overview', perms: ['dashboard.read'], icon: TrendingUp },

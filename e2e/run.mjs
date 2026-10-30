@@ -186,6 +186,7 @@ async function registerDelegate(name, email, opts = {}) {
   await d.waitForTimeout(1700);
   await d.getByRole('button', { name: /Register|Send my application/ }).click();
   await d.waitForURL(/\/r\//, { timeout: 15000 }); await d.waitForTimeout(700);
+  d.token = d.url().split('/r/')[1].split(/[?#/]/)[0];
   if (portfolio && !opts.review && !(await d.locator(`text=${portfolio}`).count())) throw new Error(`asked for ${portfolio} but did not get it`);
   return d;
 }
@@ -224,6 +225,32 @@ await step('delegate B registers with coupon, pays in person, organiser records 
   await org.getByRole('button', { name: 'Record payment' }).click(); await org.waitForTimeout(900);
   await delB.reload(); await delB.waitForSelector('text=Confirmed');
 });
+await step('conference chat: All committees, a private message, and the team moderating', org, async () => {
+  const tokA = delA.token, tokB = delB.token;
+  try { await chatFlow(tokA, tokB); } catch (e) { await delA.screenshot({ path: `${SHOTS}/FAIL-chat-A.png` }); await delB.screenshot({ path: `${SHOTS}/FAIL-chat-B.png` }); await delA.goto(`${B}/r/${tokA}`); await delB.goto(`${B}/r/${tokB}`); throw e; }
+});
+async function chatFlow(tokA, tokB) {
+  // On a phone the chat opens on the list of conversations; tap one to open it.
+  await delA.goto(`${B}/r/${tokA}/chat`); await delA.waitForSelector('text=Conference chat');
+  await delA.locator('.ch-item', { hasText: 'All committees' }).click();
+  await delA.getByLabel('Message', { exact: true }).fill('Hello from Aisha'); await delA.getByRole('button', { name: 'Send' }).click();
+  await delA.waitForSelector('.ch-bubble:has-text("Hello from Aisha")');
+  await delB.goto(`${B}/r/${tokB}/chat`); await delB.locator('.ch-item', { hasText: 'All committees' }).click();
+  await delB.waitForSelector('.ch-bubble:has-text("Hello from Aisha")', { timeout: 8000 });
+  await delB.getByRole('button', { name: 'Chats' }).click();
+  // A private message from B to A.
+  await delB.getByRole('button', { name: 'New private message' }).click();
+  await delB.locator('.ch-picker .ch-item').first().click();
+  await delB.getByLabel('Message', { exact: true }).fill('Co-sponsor our paper?'); await delB.getByRole('button', { name: 'Send' }).click();
+  await delB.waitForSelector('.ch-bubble:has-text("Co-sponsor our paper?")');
+  await delA.reload(); await delA.waitForSelector('text=Private messages');
+  await delA.locator('.ch-item', { hasText: '(Bilal)' }).first().click(); await delA.waitForSelector('.ch-bubble:has-text("Co-sponsor our paper?")');
+  await delA.screenshot({ path: `${SHOTS}/10-chat.png` });
+  // The team sees the group message, but not the private one.
+  await org.goto(`${B}/app/chat`); await org.waitForSelector('.ch-bubble:has-text("Hello from Aisha")');
+  if (await org.locator('.ch-bubble:has-text("Co-sponsor our paper?")').count()) throw new Error('team can read a private message');
+  await delA.goto(`${B}/r/${tokA}`); await delB.goto(`${B}/r/${tokB}`);
+}
 await step('review mode: delegate C applies, organiser scores and assigns', org, async () => {
   await org.goto(`${B}/app/applications?tab=settings`); await org.getByText('After we review applications').click();
   await org.getByRole('button', { name: 'Save', exact: true }).click(); await org.waitForTimeout(600);

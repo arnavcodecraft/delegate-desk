@@ -664,3 +664,25 @@ CREATE TABLE IF NOT EXISTS user_token (
   id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES user(id), kind TEXT NOT NULL,   -- invite | reset
   token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, used_at TEXT, created_at TEXT NOT NULL
 );
+
+-- Conference chat: 'all' (every delegate), 'c:<committee id>' (one committee), 'dm:<reg id>|<reg id>' (two delegates, ids sorted).
+CREATE TABLE IF NOT EXISTS chat_message (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES event(id),
+  channel TEXT NOT NULL,
+  sender_kind TEXT NOT NULL,                   -- delegate | staff
+  sender_id TEXT NOT NULL,                     -- registration id or user id
+  sender_name TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  deleted_at TEXT, deleted_by TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_chat_channel ON chat_message(event_id, channel, created_at);
+CREATE TABLE IF NOT EXISTS chat_block (
+  registration_id TEXT NOT NULL, blocked_id TEXT NOT NULL, created_at TEXT NOT NULL,
+  PRIMARY KEY (registration_id, blocked_id)
+);
+CREATE TABLE IF NOT EXISTS chat_report (
+  id TEXT PRIMARY KEY, event_id TEXT NOT NULL, message_id TEXT NOT NULL, reporter_id TEXT NOT NULL,
+  reason TEXT, created_at TEXT NOT NULL, resolved_at TEXT, resolved_by TEXT
+);

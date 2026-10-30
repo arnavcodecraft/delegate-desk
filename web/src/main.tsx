@@ -26,6 +26,8 @@ import ListConference from './platform/ListConference';
 import { Explore, ConferencePage, Jobs, ApplicationStatus } from './platform/Explore';
 import { StartSession, SessionView, ChairConsole } from './platform/Live';
 import { AccountPage, SetPasswordPage, SignInPage } from './platform/Account';
+import { DelegateChat } from './chat/DelegateChat';
+import { ChatAdmin } from './staff/Chat';
 import { SetupPage } from './platform/Setup';
 import { PrepHome, ResearchHome, ProjectPage, ItemPage } from './prep/Research';
 import { WritePage, CoachPage } from './prep/Write';
@@ -53,6 +55,7 @@ function App() {
       <Route path="/register/:code" element={<Register />} />
       <Route path="/register/:code/delegation" element={<DelegationRegister />} />
       <Route path="/r/:token" element={<Portal />} />
+      <Route path="/r/:token/chat" element={<DelegateChat />} />
       <Route path="/pay/sandbox/:orderId" element={<SandboxPay />} />
       <Route path="/consent/:token" element={<Consent />} />
       <Route path="/privacy" element={<Privacy />} />
@@ -104,6 +107,7 @@ function App() {
       <Route path="/app/applications" element={staff(<Applications />)} />
       <Route path="/app/jobs" element={staff(<JobBoard />)} />
       <Route path="/app/documents" element={staff(<Documents />)} />
+      <Route path="/app/chat" element={staff(<ChatAdmin />)} />
       <Route path="/app/sessions" element={staff(<Sessions />)} />
       <Route path="*" element={<div className="empty"><h1>Page not found</h1><a href="/login">Go to sign-in</a></div>} />
     </Routes>

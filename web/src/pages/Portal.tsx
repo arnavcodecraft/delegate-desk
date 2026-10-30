@@ -115,6 +115,10 @@ export default function Portal() {
           </div>
         </div>
 
+        {conf?.chat?.enabled && !r.cancelled && <div className="card row" style={{ gap: '1rem', alignItems: 'center' }}>
+          <div style={{ flex: 1 }}><h3 style={{ margin: 0 }}>Conference chat</h3><p className="small muted" style={{ margin: '.2rem 0 0' }}>Talk to every committee, your own committee{conf.chat.dms ? ', or message another delegate privately' : ''}.</p></div>
+          <a className="btn primary" href={`/r/${token}/chat`}>Open chat</a>
+        </div>}
         {v.data.checkinCode && <CheckinPass code={v.data.checkinCode} name={r.full_name} />}
         {conf?.positionPapers?.enabled && seat && !r.cancelled && <PositionPaper token={token} conf={conf} onDone={v.reload} />}
         {payment && <PaymentCard token={token} payment={payment} reg={r} pay={pay} onDone={v.reload} />}

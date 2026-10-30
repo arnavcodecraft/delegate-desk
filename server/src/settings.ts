@@ -70,6 +70,8 @@ export interface EventSettings {
   free: boolean;
   paymentMethods: PaymentMethods;
   positionPapers: { enabled: boolean; deadline: string | null };
+  /** Conference chat: an all-committees channel, one group per committee, and (optionally) private messages between delegates. */
+  chat: { enabled: boolean; dms: boolean };
 }
 
 export const defaultEventSettings: EventSettings = {
@@ -109,6 +111,7 @@ export const defaultEventSettings: EventSettings = {
     in_person: { enabled: false, instructions: '' },
   },
   positionPapers: { enabled: false, deadline: null },
+  chat: { enabled: true, dms: true },
 };
 
 export interface OrgSettings {
