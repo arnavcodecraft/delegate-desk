@@ -1,7 +1,7 @@
 # Builds the DelegateDesk apps on GitHub's machines:
 #   Android: an APK (and, if signing secrets are set, a signed APK and a Play Store bundle)
 #   Desktop: a Windows installer, a Mac disk image, and a Linux AppImage and .deb
-# Run it from Actions → Apps → Run workflow, or push a tag like v1.2.0 to publish a GitHub Release with the files.
+# Run it from Actions → Apps → Run workflow, or publish a GitHub Release (or push a tag like v1.2.0) to attach the files to it.
 # The site the apps open: the "app_url" input, else the repository variable APP_URL; if neither is set,
 # the apps ask for the site address on first launch.
 name: Apps
@@ -14,6 +14,8 @@ on:
         default: ''
   push:
     tags: ['v*']
+  release:
+    types: [published]
 
 permissions:
   contents: write
