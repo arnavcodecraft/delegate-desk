@@ -7,6 +7,7 @@ import {
   signUp, signIn, startPersonSession, endPersonSession, currentPerson, requirePerson, verifyEmail, resendVerification,
   forgot, resetWithCode, showCodesOnScreen, changePassword, updateProfile, deleteAccount, participations, personView,
 } from '../services/people.ts';
+import { saved, setSaved, isSaved, cv, addCv, updateCv, removeCv, saveProfileExtras, deleteProfileData } from '../services/profile.ts';
 
 export const meRouter = express.Router();
 
@@ -41,4 +42,14 @@ meRouter.post('/reset', h(async (req, res) => {
 }));
 meRouter.patch('/', h((req) => { const p = requirePerson(req); updateProfile(p, req.body ?? {}); return { person: personView(requirePerson(req)) }; }));
 meRouter.post('/password', h((req) => { const p = requirePerson(req); changePassword(p, String(req.body?.current ?? ''), String(req.body?.next ?? '')); return { ok: true }; }));
-meRouter.post('/delete', h((req, res) => { const p = requirePerson(req); deleteAccount(p, String(req.body?.password ?? '')); endPersonSession(req, res); return { ok: true }; }));
+meRouter.post('/delete', h((req, res) => { const p = requirePerson(req); deleteAccount(p, String(req.body?.password ?? '')); deleteProfileData(p.id); endPersonSession(req, res); return { ok: true }; }));
+
+// Saved conferences, social links and the MUN CV.
+meRouter.get('/saved', h((req) => saved(requirePerson(req))));
+meRouter.get('/saved/:slug', h((req) => { const p = currentPerson(req); return { saved: p ? isSaved(p, String(req.params.slug)) : false, signedIn: !!p }; }));
+meRouter.post('/saved', h((req) => setSaved(requirePerson(req), String(req.body?.slug ?? ''), req.body?.on !== false)));
+meRouter.get('/cv', h((req) => cv(requirePerson(req))));
+meRouter.post('/cv', h((req) => addCv(requirePerson(req), req.body ?? {})));
+meRouter.patch('/cv/:id', h((req) => { updateCv(requirePerson(req), String(req.params.id), req.body ?? {}); return { ok: true }; }));
+meRouter.delete('/cv/:id', h((req) => { removeCv(requirePerson(req), String(req.params.id)); return { ok: true }; }));
+meRouter.post('/profile-extras', h((req) => saveProfileExtras(requirePerson(req), req.body ?? {})));

@@ -415,6 +415,18 @@ await step('delegate account: sign up, confirm the email, see the conference', o
   await again.locator('form').getByRole('button', { name: 'Sign in' }).click();
   await again.waitForURL(/\/account/); await again.waitForSelector('text=Test Model United Nations');
 });
+await step('delegate account: save a conference, build a MUN CV with links', org, async () => {
+  const s = globalThis.student;
+  await s.goto(`${B}/c/${slug}`); await s.getByRole('button', { name: 'Save', exact: true }).click(); await s.waitForSelector('button:has-text("Saved")');
+  await s.goto(`${B}/account`); await s.waitForSelector('text=Saved conferences'); await s.waitForSelector(`.pf-saved-row`);
+  await s.getByLabel('Instagram').fill('@aisha.mun'); await s.getByRole('button', { name: 'Save links' }).click(); await s.waitForSelector('text=Links saved');
+  await s.goto(`${B}/account/cv`); await s.waitForSelector('text=MUN CV');
+  await s.getByRole('button', { name: 'Add an entry' }).first().click();
+  await s.getByLabel('Title').fill('Springdales MUN 2026'); await s.getByLabel('Role').fill('France, UNSC · Best Delegate');
+  await s.getByRole('button', { name: 'Save', exact: true }).click();
+  await s.waitForSelector('.cv-item:has-text("Springdales MUN 2026")'); await s.waitForSelector('.cv-socials:has-text("instagram.com/aisha.mun")');
+  await s.screenshot({ path: `${SHOTS}/11-cv.png`, fullPage: true });
+});
 await step('prep: tools work without AI or an account', org, async () => {
   const s = await newPage('tools visitor');
   await s.goto(`${B}/prep/tools`); await s.waitForSelector('text=Resolution formatter');

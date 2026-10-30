@@ -27,6 +27,7 @@ import { Explore, ConferencePage, Jobs, ApplicationStatus } from './platform/Exp
 import { StartSession, SessionView, ChairConsole } from './platform/Live';
 import { AccountPage, SetPasswordPage, SignInPage } from './platform/Account';
 import { DelegateChat } from './chat/DelegateChat';
+import { CvPage } from './platform/Cv';
 import { ChatAdmin } from './staff/Chat';
 import { SetupPage } from './platform/Setup';
 import { PrepHome, ResearchHome, ProjectPage, ItemPage } from './prep/Research';
@@ -66,6 +67,7 @@ function App() {
       <Route path="/signin" element={<SignInPage />} />
       <Route path="/signup" element={<Navigate to="/login?mode=signup" replace />} />
       <Route path="/account" element={<AccountPage />} />
+      <Route path="/account/cv" element={<CvPage />} />
       <Route path="/setup" element={<SetupPage />} />
       <Route path="/prep" element={<PrepHome />} />
       <Route path="/prep/research" element={<ResearchHome />} />

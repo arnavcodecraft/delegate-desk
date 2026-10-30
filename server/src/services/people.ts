@@ -174,10 +174,10 @@ export function participations(p: Person) {
   for (const w of spaces) {
     inWorkspace(w!, () => {
       const q = (sql: string, ...a: any[]) => all(sql, ...a);
-      for (const r of q(`SELECT r.token, r.ref, r.full_name, r.allot_status, r.payment_status, r.created_at, r.cancelled_at, e.id AS event_id, e.name AS event, e.code, e.start_date, e.end_date, c.name AS committee, po.name AS portfolio
+      for (const r of q(`SELECT r.token, r.ref, r.full_name, r.allot_status, r.payment_status, r.created_at, r.cancelled_at, r.award, e.id AS event_id, e.name AS event, e.code, e.start_date, e.end_date, c.name AS committee, po.name AS portfolio
           FROM registration r JOIN event e ON e.id = r.event_id LEFT JOIN seat s ON s.registration_id = r.id LEFT JOIN portfolio po ON po.id = s.portfolio_id LEFT JOIN committee c ON c.id = po.committee_id
           WHERE lower(r.email) = ? AND r.erased_at IS NULL ORDER BY r.created_at DESC`, p.email))
-        out.push({ kind: 'delegate', link: `/r/${r.token}`, ref: r.ref, event: r.event, code: r.code, slug: slugs.get(r.event_id) ?? null, start: r.start_date, end: r.end_date, committee: r.committee, portfolio: r.portfolio, status: r.cancelled_at ? 'cancelled' : r.allot_status, payment: r.payment_status, at: r.created_at });
+        out.push({ kind: 'delegate', link: `/r/${r.token}`, ref: r.ref, event: r.event, code: r.code, slug: slugs.get(r.event_id) ?? null, start: r.start_date, end: r.end_date, committee: r.committee, portfolio: r.portfolio, award: r.award ?? null, status: r.cancelled_at ? 'cancelled' : r.allot_status, payment: r.payment_status, at: r.created_at });
       for (const a of q(`SELECT a.token, a.role, a.status, a.created_at, a.assigned_title, e.id AS event_id, e.name AS event, e.code, e.start_date, e.end_date FROM role_application a JOIN event e ON e.id = a.event_id WHERE lower(a.email) = ? ORDER BY a.created_at DESC`, p.email))
         out.push({ kind: a.role, link: `/application/${a.token}`, event: a.event, code: a.code, slug: slugs.get(a.event_id) ?? null, start: a.start_date, end: a.end_date, title: a.assigned_title, status: a.status, at: a.created_at });
     });

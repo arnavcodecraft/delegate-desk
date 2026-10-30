@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import {
   Search, MapPin, CalendarDays, Users, Landmark, GraduationCap, Laptop, Plus, ArrowRight, Copy, Check, X, ExternalLink, AtSign, ThumbsUp, Music2, MessageCircle, Globe,
-  BookOpen, Briefcase, Mail, Info, Eye, FileText, Gavel,
+  BookOpen, Briefcase, Mail, Info, Eye, FileText, Gavel, Bookmark,
 } from 'lucide-react';
 import { api, ApiError, qs } from '../api';
 import { inr } from '../format';
@@ -162,6 +162,7 @@ export function ConferencePage() {
               <span><GraduationCap className="icon" />{LEVEL[c.level]}</span>
             </div>
           </div>
+          <SaveButton slug={slug} />
         </div>
       </div>
       <div className="pf-layout">
@@ -386,4 +387,14 @@ export function ApplicationStatus() {
       </div>
     </PlatformShell>
   );
+}
+
+/** Save a conference to the participant's account (signed-out visitors are sent to sign in first). */
+function SaveButton({ slug }: { slug: string }) {
+  const [st, setSt] = useState<{ saved: boolean; signedIn: boolean } | null>(null);
+  useEffect(() => { api.get<any>(`/api/me/saved/${slug}`).then(setSt).catch(() => setSt({ saved: false, signedIn: false })); }, [slug]);
+  if (!st) return null;
+  if (!st.signedIn) return <Link className="pf-btn ghost sm pf-save" to={`/login?next=/c/${slug}`}><Bookmark className="icon" />Save</Link>;
+  return <button className={`pf-btn ghost sm pf-save ${st.saved ? 'on' : ''}`} aria-pressed={st.saved} onClick={async () => { const r = await api.post<any>('/api/me/saved', { slug, on: !st.saved }); setSt({ ...st, saved: r.saved }); }}>
+    <Bookmark className="icon" fill={st.saved ? 'currentColor' : 'none'} />{st.saved ? 'Saved' : 'Save'}</button>;
 }

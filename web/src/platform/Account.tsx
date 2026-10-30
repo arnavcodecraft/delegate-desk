@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Calendar, CheckCircle2, KeyRound, LogOut, Mail, ShieldCheck, Trash2, UserRound } from 'lucide-react';
+import { ArrowRight, Bookmark, Calendar, CheckCircle2, FileText, KeyRound, LogOut, Mail, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { api } from '../api';
 import { PlatformShell, refreshMe, usePerson } from './Shell';
 
@@ -164,6 +164,7 @@ function AccountHome({ me }: { me: { person: any; conferences?: any[] } }) {
             </Link>;
           })}</div>}
       </section>
+      <SavedAndCv />
       <div className="pf-two">
         <section className="pf-card pad">
           <h2 className="pf-h2" style={{ fontSize: 18, marginBottom: 14 }}><UserRound className="icon" style={{ width: 18, height: 18, verticalAlign: -3 }} /> Profile</h2>
@@ -172,6 +173,8 @@ function AccountHome({ me }: { me: { person: any; conferences?: any[] } }) {
             <Field label="City"><input className="pf-input" value={prof.city} onChange={(e) => setProf({ ...prof, city: e.target.value })} /></Field></div>
           <Field label="I am a"><select className="pf-input" value={prof.role} onChange={(e) => setProf({ ...prof, role: e.target.value })}>{Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
           <button className="pf-btn primary sm" onClick={() => go(async () => { await api.patch('/api/me', prof); refreshMe(); }, 'Profile saved.')}>Save profile</button>
+          <hr className="pf-hr" />
+          <SocialLinks onDone={(m) => setMsg(m)} onError={(m) => setErr(m)} />
         </section>
         <section className="pf-card pad">
           <h2 className="pf-h2" style={{ fontSize: 18, marginBottom: 14 }}><KeyRound className="icon" style={{ width: 18, height: 18, verticalAlign: -3 }} /> Password</h2>
@@ -218,4 +221,50 @@ export function SetPasswordPage({ kind }: { kind: 'invite' | 'reset' }) {
       </div>
     </PlatformShell>
   );
+}
+
+/** Conferences the person saved, and the way into their MUN CV. */
+function SavedAndCv() {
+  const [list, setList] = useState<any[] | null>(null);
+  useEffect(() => { api.get<any[]>('/api/me/saved').then(setList).catch(() => setList([])); }, []);
+  return (
+    <div className="pf-two" style={{ marginBottom: 18 }}>
+      <section className="pf-card pad">
+        <h2 className="pf-h2" style={{ fontSize: 18, marginBottom: 10 }}><Bookmark className="icon" style={{ width: 18, height: 18, verticalAlign: -3 }} /> Saved conferences</h2>
+        {!list ? <p className="pf-muted pf-small">Loading…</p> : !list.length ? <p className="pf-muted pf-small" style={{ margin: 0 }}>Press <b>Save</b> on any conference page to keep it here. <Link to="/explore">Explore conferences</Link></p>
+          : <div className="pf-saved">{list.map((c) => <Link key={c.slug} to={`/c/${c.slug}`} className="pf-saved-row">
+            <span className="pf-mine-ic">{c.logo ? <img src={c.logo} alt="" /> : <Calendar className="icon" />}</span>
+            <span style={{ flex: 1, minWidth: 0 }}><b>{c.name}</b><span className="pf-small pf-muted">{[c.city, fmtDate(c.start_date)].filter(Boolean).join(' · ')}</span></span>
+            <button className="pf-btn link" aria-label={`Remove ${c.name} from saved`} onClick={async (e) => { e.preventDefault(); await api.post('/api/me/saved', { slug: c.slug, on: false }); setList(list.filter((x) => x.slug !== c.slug)); }}><Trash2 className="icon" /></button>
+          </Link>)}</div>}
+      </section>
+      <section className="pf-card pad pf-cv-card">
+        <h2 className="pf-h2" style={{ fontSize: 18, marginBottom: 6 }}><FileText className="icon" style={{ width: 18, height: 18, verticalAlign: -3 }} /> Your MUN CV</h2>
+        <p className="pf-muted pf-small" style={{ margin: '0 0 12px' }}>Your conferences on DelegateDesk, awards and portfolios fill in by themselves. Add your other MUNs, chairing and debates, then print it or save it as a PDF for school, college or EB applications.</p>
+        <Link className="pf-btn primary sm" to="/account/cv">Open my MUN CV</Link>
+      </section>
+    </div>
+  );
+}
+
+/** Social links and a short bio, shown on the MUN CV. */
+function SocialLinks({ onDone, onError }: { onDone: (m: string) => void; onError: (m: string) => void }) {
+  const [f, setF] = useState<any>(null);
+  useEffect(() => { api.get<any>('/api/me/cv').then((d) => setF({ socials: { linkedin: '', instagram: '', x: '', website: '', ...d.socials }, bio: d.bio ?? '', headline: d.headline ?? '' })).catch(() => setF({ socials: {}, bio: '', headline: '' })); }, []);
+  if (!f) return null;
+  const s = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, socials: { ...f.socials, [k]: e.target.value } });
+  return <>
+    <h3 style={{ fontSize: 15, margin: '0 0 10px' }}>Social links and bio</h3>
+    <Field label="Headline" hint="one line, e.g. 'Delegate · 6 MUNs · Best Delegate at DPSMUN'"><input className="pf-input" maxLength={120} value={f.headline} onChange={(e) => setF({ ...f, headline: e.target.value })} /></Field>
+    <div className="pf-row2">
+      <Field label="LinkedIn"><input className="pf-input" placeholder="linkedin.com/in/you" value={f.socials.linkedin ?? ''} onChange={s('linkedin')} /></Field>
+      <Field label="Instagram"><input className="pf-input" placeholder="@you" value={f.socials.instagram ?? ''} onChange={s('instagram')} /></Field>
+    </div>
+    <div className="pf-row2">
+      <Field label="X (Twitter)"><input className="pf-input" placeholder="@you" value={f.socials.x ?? ''} onChange={s('x')} /></Field>
+      <Field label="Website"><input className="pf-input" placeholder="yoursite.com" value={f.socials.website ?? ''} onChange={s('website')} /></Field>
+    </div>
+    <Field label="Short bio" hint="up to 600 characters"><textarea className="pf-input" rows={3} maxLength={600} value={f.bio} onChange={(e) => setF({ ...f, bio: e.target.value })} /></Field>
+    <button className="pf-btn ghost sm" onClick={async () => { try { const r = await api.post<any>('/api/me/profile-extras', f); setF({ ...f, socials: { linkedin: '', instagram: '', x: '', website: '', ...r.socials } }); onDone('Links saved.'); } catch (e: any) { onError(e.message); } }}>Save links</button>
+  </>;
 }

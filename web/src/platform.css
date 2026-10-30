@@ -787,3 +787,37 @@
 .eb-note { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: baseline; padding: 8px 10px; border-radius: 10px; background: var(--pf-card-2); font-size: 14px; }
 .eb-note.mine { background: var(--pf-brand-soft); }
 .eb-note time { font-size: 11.5px; color: var(--pf-ink-3); }
+
+/* Saved conferences and the MUN CV */
+.pf-saved { display: grid; gap: 4px; }
+.pf-saved-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 12px; text-decoration: none; color: var(--pf-ink); }
+.pf-saved-row:hover { background: var(--pf-card-2); }
+.pf-saved-row b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-saved-row .pf-mine-ic img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.pf-cv-card { background: linear-gradient(160deg, var(--pf-brand-soft), var(--pf-card)); }
+.cv-tools { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.cv-doc { background: #fff; color: #0b1630; border-radius: 16px; box-shadow: var(--pf-shadow-lg); padding: 44px 48px; max-width: 860px; margin: 0 auto; }
+.cv-head { border-bottom: 2px solid #1f4fe0; padding-bottom: 16px; margin-bottom: 8px; }
+.cv-head h1 { font-family: var(--pf-display); font-size: 32px; letter-spacing: -.02em; margin: 0; color: #0b2a8a; }
+.cv-headline { font-weight: 650; color: #1f4fe0; margin-top: 4px; }
+.cv-meta { color: #4a5874; font-size: 14px; margin-top: 6px; }
+.cv-socials { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 13.5px; }
+.cv-socials a { color: #1f4fe0; display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
+.cv-bio { margin: 10px 0 0; color: #3a4866; font-size: 14.5px; line-height: 1.55; }
+.cv-sec { margin-top: 22px; }
+.cv-sec h2 { font-family: var(--pf-display); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: #1f4fe0; margin: 0 0 10px; }
+.cv-item { padding: 8px 0; border-bottom: 1px solid #edf0f5; position: relative; font-size: 14.5px; }
+.cv-line { display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+.cv-org { color: #4a5874; }
+.cv-when { margin-left: auto; color: #6a7894; font-size: 13px; white-space: nowrap; }
+.cv-role { color: #3a4866; margin-top: 2px; }
+.cv-details { color: #4a5874; font-size: 13.5px; margin-top: 4px; white-space: pre-wrap; }
+.cv-award-ic { color: #b7791f; vertical-align: -2px; margin-right: 6px; }
+.cv-actions { display: flex; gap: 6px; margin-top: 4px; }
+.cv-actions .pf-btn { font-size: 13px; }
+.cv-src { font-size: 11.5px; color: #8592aa; }
+.cv-foot { margin-top: 24px; font-size: 11.5px; color: #8592aa; }
+.cv-form { width: min(560px, 100%); max-height: 90vh; overflow-y: auto; }
+@media (max-width: 640px) { .cv-doc { padding: 28px 20px; } .cv-when { margin-left: 0; width: 100%; } }
+@media print { .no-print, .pf-top, .pf-foot { display: none !important; } .cv-doc { box-shadow: none; padding: 0; max-width: none; } }
+.pf-save { align-self: flex-end; margin-bottom: 6px; } .pf-save.on { color: var(--pf-brand); border-color: var(--pf-brand-line); background: var(--pf-brand-soft); }
