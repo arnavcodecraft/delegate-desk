@@ -2,7 +2,10 @@
   "name": "delegatedesk-desktop",
   "version": "1.0.0",
   "description": "DelegateDesk for Windows, Mac and Linux",
-  "author": "DelegateDesk",
+  "author": {
+    "name": "DelegateDesk",
+    "email": "apps@delegatedesk.app"
+  },
   "license": "UNLICENSED",
   "private": true,
   "main": "main.js",
@@ -18,11 +21,59 @@
     "appId": "app.delegatedesk.desktop",
     "productName": "DelegateDesk",
     "artifactName": "DelegateDesk-${version}-${os}-${arch}.${ext}",
-    "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["main.js", "preload.js", "shell/**/*", "settings.json"],
-    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "build/icon.png" },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true },
-    "mac": { "target": [{ "target": "dmg", "arch": ["universal"] }], "category": "public.app-category.education", "icon": "build/icon.png" },
-    "linux": { "target": ["AppImage", "deb"], "category": "Education", "icon": "build/icon.png", "maintainer": "DelegateDesk" }
-  }
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "shell/**/*",
+      "settings.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.education",
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Education",
+      "icon": "build/icon.png",
+      "maintainer": "DelegateDesk <apps@delegatedesk.app>",
+      "syncDesktopName": true
+    }
+  },
+  "homepage": "https://github.com/arnavcodecraft/delegate-desk",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arnavcodecraft/delegate-desk.git"
+  },
+  "desktopName": "delegatedesk.desktop"
 }
