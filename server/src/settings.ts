@@ -65,6 +65,13 @@ export interface EventSettings {
   applicationDeadline: string | null;
   /** instant: a seat is allotted the moment a delegate registers. review: the team reviews and assigns. */
   allocationMode: 'instant' | 'review';
+  /**
+   * When delegates pay (instant allotment): after_allotment = seat first, then holdHours to pay;
+   * direct = pay while registering, the seat held only directHoldMinutes; before_allotment = pay first, the seat is
+   * given when the payment is confirmed (first paid, first served). Review mode always takes payment after acceptance.
+   */
+  paymentTiming: 'after_allotment' | 'direct' | 'before_allotment';
+  directHoldMinutes: number;
   /** Experience points a delegate needs for each portfolio tier (MUNs + awards + half of other events). */
   tierMinExperience: { high: number; standard: number; low: number };
   free: boolean;
@@ -102,6 +109,8 @@ export const defaultEventSettings: EventSettings = {
   roles: { delegate: true, advisor: false, observer: false, chair: false },
   applicationDeadline: null,
   allocationMode: 'instant',
+  paymentTiming: 'after_allotment',
+  directHoldMinutes: 60,
   tierMinExperience: { high: 3, standard: 0, low: 0 },
   free: false,
   paymentMethods: {
@@ -176,4 +185,9 @@ export function saveOrgSettings(patch: Partial<OrgSettings>) {
   update('organization', org.id, { settings: JSON.stringify(next) });
   audit('settings.update', 'organization', org.id, before, next);
   return next;
+}
+
+/** When an unpaid seat expires: a short window when delegates pay while registering, otherwise the normal hold. */
+export function holdHoursFor(s: EventSettings) {
+  return s.paymentTiming === 'direct' ? Math.max(5, s.directHoldMinutes) / 60 : s.holdHours;
 }

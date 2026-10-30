@@ -569,3 +569,10 @@ a.db-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
 .nav-more > summary .icon { width: 14px; height: 14px; transition: transform .15s; }
 .nav-more[open] > summary .icon { transform: rotate(180deg); }
 .nav-more > summary:hover { color: var(--text-2); }
+/* Payment timing choice */
+.timing-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .6rem; }
+.timing-opt { display: grid; gap: .25rem; padding: .85rem 1rem; border: 1.5px solid var(--border); border-radius: 14px; cursor: pointer; background: var(--surface); }
+.timing-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.timing-opt span { font-size: 13px; color: var(--text-2); line-height: 1.45; }
+.timing-opt.on { border-color: var(--brand); background: var(--brand-soft); box-shadow: 0 0 0 3px rgb(31 79 224 / .12); }
+.timing-opt:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }

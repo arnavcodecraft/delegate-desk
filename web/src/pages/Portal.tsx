@@ -49,6 +49,11 @@ export default function Portal() {
     poll();
     return () => { stop = true; };
   }, [orderId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Conferences where delegates pay while registering (or before allotment): go straight to the payment card.
+  useEffect(() => {
+    const t = v.data?.conference?.paymentTiming;
+    if (sp.get('welcome') === '1' && (t === 'direct' || t === 'before_allotment') && v.data?.payment) setTimeout(() => document.getElementById('pay')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 400);
+  }, [!!v.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (v.loading && !v.data) return <PublicShell title="Your registration"><Loading /></PublicShell>;
   if (v.error) return <PublicShell title="Your registration"><ErrorBox error={v.error} /></PublicShell>;
@@ -105,6 +110,8 @@ export default function Portal() {
               </div>
               {seat.guide_url && <p style={{ marginTop: '.75rem' }}><a href={seat.guide_url} target="_blank" rel="noreferrer">Download the background guide →</a></p>}
             </div>
+          ) : r.allot_status === 'none' && !paid ? (
+            <div className="seat-hero">{welcome && <div className="badge good" style={{ marginBottom: '.5rem' }}>Registered</div>}<div className="committee">Pay to get your seat</div><p className="muted">At this conference seats are given in the order payments are confirmed, using your preferences and experience. Pay below and you get your committee and portfolio straight away.</p></div>
           ) : (
             <div className="seat-hero"><div className="committee">Seat released</div><p className="muted">Your hold expired. Pay below and we will allot the best available seat straight away.</p></div>
           )}

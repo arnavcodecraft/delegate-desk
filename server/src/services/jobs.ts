@@ -45,7 +45,7 @@ export function holdWarnings() {
 
 /** Payment pending after 24 hours, 72 hours and 7 days (configurable), respecting quiet hours and unsubscribes. */
 export function paymentReminders() {
-  const regs = all("SELECT * FROM registration WHERE cancelled_at IS NULL AND allot_status = 'held' AND payment_status IN ('pending','failed') AND total_paise - paid_paise + refunded_paise > 0");
+  const regs = all("SELECT * FROM registration WHERE cancelled_at IS NULL AND allot_status IN ('held','none') AND payment_status IN ('pending','failed') AND total_paise - paid_paise + refunded_paise > 0");
   let n = 0;
   for (const r of regs) {
     const hours = eventSettings(r.event_id).reminderHours;

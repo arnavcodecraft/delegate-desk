@@ -74,7 +74,7 @@ publicRouter.get('/events/:code', h((req) => {
     committees: committees.map((c) => { const x = extra.find((y) => y.id === c.id) ?? {}; return { ...c, type: x.type, topics: JSON.parse(x.topics || '[]'), difficulty: x.difficulty, emblem: x.emblem, full: c.open_seats === 0,
       portfolios: portfolios.filter((p) => p.committee_id === c.id).map((p) => ({ id: p.id, name: p.name, code: p.code, tier: p.tier, open: p.open > 0, minExperience: s.tierMinExperience[p.tier as 'high'] ?? 0 })) }; }),
     tierMinExperience: s.tierMinExperience,
-    classOptions: CLASS_OPTIONS, categories, gstRateBp: s.gstEnabled ? s.gstRateBp : 0, holdHours: s.holdHours, feeModel: s.feeModel,
+    classOptions: CLASS_OPTIONS, categories, gstRateBp: s.gstEnabled ? s.gstRateBp : 0, holdHours: s.holdHours, feeModel: s.feeModel, paymentTiming: s.paymentTiming, directHoldMinutes: s.directHoldMinutes,
     refundWindowDays: s.refundWindowDays, requireMobileOtp: s.requireMobileOtp,
   };
 }));

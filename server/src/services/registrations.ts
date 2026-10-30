@@ -1,7 +1,7 @@
 import { all, one, run, insert, tx, update } from '../db.ts';
 import { audit, diff } from '../audit.ts';
 import { config } from '../config.ts';
-import { eventSettings, getEvent } from '../settings.ts';
+import { eventSettings, getEvent, holdHoursFor } from '../settings.ts';
 import { addHours, ageOn, bad, bp, conflict, ctx, inr, isEmail, isIndianMobile, isIntlMobile, istDate, json, normMobile, now, token, uid, notFound } from '../util.ts';
 import { quote } from './fees.ts';
 import { allocate, seatOf, moveToSeat, experiencePoints, experienceBucket } from './allocation.ts';
@@ -128,9 +128,12 @@ export function register(eventId: string, i: RegInput, o: { source?: string; del
       channel: i.channel ? normChannel(i.channel) : null, motivation: i.motivation?.trim().slice(0, 1500) || null,
     });
     // Review mode: the team scores applications and assigns portfolios later; nothing is payable until then.
+    // Pay before allotment: no seat yet; the seat is given when the payment is confirmed (first paid, first served).
+    const payFirst = s.allocationMode !== 'review' && s.paymentTiming === 'before_allotment' && !s.free && (o.source ?? 'form') === 'form' && q0.totalPaise > 0;
     const alloc: ReturnType<typeof allocate> = s.allocationMode === 'review' && (o.source ?? 'form') !== 'import'
       ? (update('registration', id, { allot_status: 'applied' }), { kind: 'waitlist', position: 0 } as any)
-      : allocate(id);
+      : payFirst ? (update('registration', id, { allot_status: 'none' }), { kind: 'waitlist', position: 0 } as any)
+        : allocate(id);
     // High-demand portfolios can carry a premium; re-quote with it so the fee shown is exact.
     if (alloc.kind === 'seat' && alloc.pick.premiumPaise && s.premiumPricing) {
       const q = quote(eventId, { category, couponCode: i.coupon, groupSize: o.groupSize, premiumPaise: alloc.pick.premiumPaise });
@@ -141,6 +144,7 @@ export function register(eventId: string, i: RegInput, o: { source?: string; del
     const reg = one('SELECT * FROM registration WHERE id = ?', id)!;
     const vars = regVars(reg);
     if (reg.allot_status === 'applied') enqueue('application_received', { to: reg.email, registrationId: id, vars });
+    else if (payFirst) enqueue('registration_pay_first', { to: reg.email, registrationId: id, vars });
     else if (alloc.kind === 'seat' && confirmFree(id)) enqueue('seat_confirmed_free', { to: reg.email, registrationId: id, vars: regVars(one('SELECT * FROM registration WHERE id = ?', id)!) });
     else if (alloc.kind === 'seat') enqueue('registration_saved', { to: reg.email, registrationId: id, vars });
     else enqueue('waitlisted', { to: reg.email, registrationId: id, vars });
@@ -174,7 +178,7 @@ export function portalView(reg: Record<string, any>) {
   const detailsLocked = !!(s.detailsLockAt && s.detailsLockAt <= now());
   const papers = all('SELECT id, file_name, status, score, feedback, submitted_at, reviewed_at FROM position_paper WHERE registration_id = ? ORDER BY submitted_at DESC', reg.id);
   return {
-    conference: { free: s.free, allocationMode: s.allocationMode, positionPapers: s.positionPapers, chat: s.chat, papers, logo: s.profile.logo ? `/api/public/media/${s.profile.logo}` : null, acronym: s.profile.acronym, slug: ev.code.toLowerCase() },
+    conference: { free: s.free, allocationMode: s.allocationMode, positionPapers: s.positionPapers, chat: s.chat, paymentTiming: s.paymentTiming, papers, logo: s.profile.logo ? `/api/public/media/${s.profile.logo}` : null, acronym: s.profile.acronym, slug: ev.code.toLowerCase() },
     event: { name: ev.name, code: ev.code, venue: ev.venue, city: ev.city, start_date: ev.start_date, end_date: ev.end_date, status: ev.status, dressCode: s.dressCode, reportingTime: s.reportingTime },
     registration: {
       ref: reg.ref, full_name: reg.full_name, email: reg.email, mobile: reg.mobile, institution: reg.institution, class_year: reg.class_year, city: reg.city,
@@ -411,7 +415,7 @@ export function acceptApplication(regId: string) {
   if (!reg) throw notFound('Registration');
   if (reg.accepted) throw conflict('Already accepted');
   if (reg.allot_status === 'applied') throw conflict('Accept this application by assigning a seat (Applications)');
-  update('registration', regId, { accepted: 1, hold_expires_at: addHours(now(), eventSettings(reg.event_id).holdHours), updated_at: now() });
+  update('registration', regId, { accepted: 1, hold_expires_at: addHours(now(), holdHoursFor(eventSettings(reg.event_id))), updated_at: now() });
   audit('registration.accept', 'registration', regId);
   enqueue('payment_reminder', { to: reg.email, registrationId: regId, vars: regVars({ ...reg, accepted: 1 }) });
 }

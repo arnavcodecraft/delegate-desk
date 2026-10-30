@@ -10,7 +10,7 @@ interface EventInfo {
   event: { code: string; name: string; venue: string; city: string; start_date: string; end_date: string; status: string };
   org: { name: string; legal_name: string; grievance: string };
   committees: { id: string; name: string; short: string; kind: string; open_seats: number; seats: number; full: boolean; portfolios?: { id: string; name: string; tier: string; open: boolean; minExperience: number }[] }[];
-  classOptions: string[]; categories: string[]; gstRateBp: number; holdHours: number; feeModel: string; refundWindowDays: number; requireMobileOtp: boolean;
+  classOptions: string[]; categories: string[]; gstRateBp: number; holdHours: number; feeModel: string; paymentTiming?: 'after_allotment' | 'direct' | 'before_allotment'; directHoldMinutes?: number; refundWindowDays: number; requireMobileOtp: boolean;
   profile?: { acronym: string; logo: string | null; banner: string | null; country: string; slug: string };
   open?: { delegate: boolean; deadline: string | null; status: string };
   allocationMode?: 'instant' | 'review'; free?: boolean;
@@ -219,8 +219,11 @@ export default function Register() {
           <label className="check"><input type="checkbox" checked={f.whatsapp_consent} onChange={(e) => set('whatsapp_consent', e.target.checked)} /><span className="small">Also send confirmations and reminders on WhatsApp</span></label>
           <label className="check"><input type="checkbox" checked={f.consent} onChange={(e) => set('consent', e.target.checked)} /><span className="small">I agree to the <Link to="/privacy" target="_blank">privacy notice</Link> and the refund policy (refund requests close {ev.refundWindowDays} days before the event).</span></label>
           {err('consent') && <span className="small" style={{ color: 'var(--bad)' }}>{err('consent')}</span>}
-          <button className="btn primary lg block" type="submit" disabled={busy || closed}>{busy ? 'Saving…' : review ? 'Send my application' : ev.free ? 'Register and get my seat' : 'Register and get my portfolio'}</button>
-          <p className="small faint" style={{ margin: 0 }}>{review ? 'You will hear back by email.' : ev.free ? 'Your seat is confirmed straight away.' : `Your seat is held for ${ev.holdHours} hours while you pay.`} Your progress is saved on this device.</p>
+          <button className="btn primary lg block" type="submit" disabled={busy || closed}>{busy ? 'Saving…' : review ? 'Send my application' : ev.free ? 'Register and get my seat' : ev.paymentTiming === 'after_allotment' || !ev.paymentTiming ? 'Register and get my portfolio' : 'Register and pay'}</button>
+          <p className="small faint" style={{ margin: 0 }}>{review ? 'You will hear back by email.' : ev.free ? 'Your seat is confirmed straight away.'
+            : ev.paymentTiming === 'direct' ? `Pay right after registering: your portfolio is held for ${ev.directHoldMinutes ?? 60} minutes while you pay.`
+              : ev.paymentTiming === 'before_allotment' ? 'Pay first: seats are given in the order payments are confirmed, using your preferences and experience.'
+                : `Your seat is held for ${ev.holdHours} hours while you pay.`} Your progress is saved on this device.</p>
         </form>
       </div>
       <p className="small faint" style={{ textAlign: 'center', marginTop: '1rem' }}>{ev.org.legal_name}{ev.org.grievance ? ` · Grievances: ${ev.org.grievance}` : ''}</p>

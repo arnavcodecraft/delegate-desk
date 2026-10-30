@@ -142,9 +142,20 @@ export function PaymentRules({ ownGateways }: { ownGateways: boolean }) {
   const setS = (k: string, v: any) => setSt({ ...s, [k]: v });
   const num = (k: string, lbl: string, hint?: string) => <Field label={lbl} hint={hint}><input type="number" value={s[k]} onChange={(x) => setS(k, Number(x.target.value))} /></Field>;
   const money = (k: string, lbl: string, hint?: string) => <Field label={lbl} hint={hint}><input inputMode="decimal" value={toRupees(s[k])} onChange={(x) => setS(k, toPaise(x.target.value) || 0)} /></Field>;
-  const keys = ['sacCode', 'feeModel', 'applicationFeePaise', 'groupPayment', 'groupDiscount', 'refundWindowDays', 'largeRefundPaise', 'premiumPricing', 'gateways', 'defaultGateway', 'routing'];
+  const keys = ['paymentTiming', 'directHoldMinutes', 'sacCode', 'feeModel', 'applicationFeePaise', 'groupPayment', 'groupDiscount', 'refundWindowDays', 'largeRefundPaise', 'premiumPricing', 'gateways', 'defaultGateway', 'routing'];
   return (
     <div className="stack">
+      <div className="card stack"><h3>When delegates pay</h3>
+        <div className="timing-opts" role="radiogroup" aria-label="When delegates pay">
+          {([
+            ['direct', 'Directly, while registering', `Delegates pay straight after the form. Their portfolio is held for ${s.directHoldMinutes} minutes while they pay.`],
+            ['before_allotment', 'Before allotment', 'Delegates pay first. Seats are given in the order payments are confirmed, using their preferences and experience.'],
+            ['after_allotment', 'After allotment', `Delegates get their portfolio first, then have ${s.holdHours} hours to pay (change this in Settings → Seats & allotment).`],
+          ] as const).map(([v, t, d]) => <label key={v} className={`timing-opt ${s.paymentTiming === v ? 'on' : ''}`}><input type="radio" name="paymentTiming" checked={s.paymentTiming === v} onChange={() => setS('paymentTiming', v)} /><b>{t}</b><span>{d}</span></label>)}
+        </div>
+        {s.paymentTiming === 'direct' && <div className="grid g3">{num('directHoldMinutes', 'Hold while paying (minutes)', 'at least 5')}</div>}
+        {s.allocationMode === 'review' && <p className="small muted" style={{ margin: 0 }}>You review applications first, so delegates pay after you accept them, whatever is chosen here.</p>}
+      </div>
       <div className="card stack"><h3>Payment rules</h3>
         <div className="grid g3">
           <Field label="Fee model"><select value={s.feeModel} onChange={(x) => setS('feeModel', x.target.value)}><option value="full">Pay in full once a seat is held</option><option value="two_stage">Application fee first, balance after acceptance</option></select></Field>

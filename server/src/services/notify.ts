@@ -52,6 +52,10 @@ export const DEFAULT_TEMPLATES: Record<string, Tpl> = {
     subject: 'You are in: {{committee}} – {{portfolio}} ({{ref}})',
     body: `Hi {{name}},\n\nThank you for registering for {{event_name}}. We have provisionally allotted you:\n\nCommittee: {{committee}}\nPortfolio: {{portfolio}}\n\nAmount due: {{amount}}\nPlease pay by {{due_date}} to keep this seat. After that it returns to the pool.\n\nPay now: {{payment_link}}\n\nYour delegate page (no password needed): {{portal_link}}\n\nRegards,\n{{event_name}} Secretariat`,
   },
+  registration_pay_first: {
+    subject: 'Pay to get your seat at {{event_name}} ({{ref}})',
+    body: `Hi {{name}},\n\nThank you for registering for {{event_name}}. At this conference seats are given in the order payments are confirmed, using your committee and portfolio preferences and your experience.\n\nAmount due: {{amount}}\nPay now: {{payment_link}}\n\nAs soon as your payment is confirmed you get your committee and portfolio by email.\n\nYour delegate page (no password needed): {{portal_link}}\n\nRegards,\n{{event_name}} Secretariat`,
+  },
   waitlisted: {
     subject: 'You are on the waitlist for {{event_name}} (position {{waitlist_position}})',
     body: `Hi {{name}},\n\nAll seats in your preferred committees are currently taken, so you are number {{waitlist_position}} on the waitlist. We will email you the moment a seat frees up.\n\nYour delegate page: {{portal_link}}`,

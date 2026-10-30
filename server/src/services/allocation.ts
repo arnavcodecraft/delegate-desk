@@ -1,6 +1,6 @@
 import { all, one, run, insert, tx, update } from '../db.ts';
 import { audit } from '../audit.ts';
-import { eventSettings } from '../settings.ts';
+import { eventSettings, holdHoursFor } from '../settings.ts';
 import { addHours, bad, conflict, ctx, json, now, uid, notFound } from '../util.ts';
 
 export interface SeatPick { seatId: string; committeeId: string; committee: string; committeeShort: string; portfolio: string; tier: string; premiumPaise: number; fallback: boolean }
@@ -95,7 +95,7 @@ export function allocate(regId: string, o: { withFallback?: boolean; reason?: st
         if (confirmed) run("UPDATE seat SET state = 'confirmed' WHERE id = ?", cand.seat_id);
         update('registration', regId, {
           allot_status: confirmed ? 'confirmed' : 'held', waitlist_position: null,
-          hold_expires_at: confirmed ? null : addHours(now(), s.holdHours), updated_at: now(),
+          hold_expires_at: confirmed ? null : addHours(now(), holdHoursFor(s)), updated_at: now(),
         });
         const firstChoice = prefs[0] ? chosen[prefs[0]] : null;
         const notes = [
@@ -171,7 +171,7 @@ export function moveToSeat(regId: string, seatId: string, reason: string, actorR
     const s = eventSettings(reg.event_id);
     update('registration', regId, {
       allot_status: state, waitlist_position: null, updated_at: now(),
-      hold_expires_at: state === 'held' ? reg.hold_expires_at ?? addHours(now(), s.holdHours) : null,
+      hold_expires_at: state === 'held' ? reg.hold_expires_at ?? addHours(now(), holdHoursFor(s)) : null,
     });
     history(regId, seatId, old ? 'swapped' : 'manual', ctx().userId ?? null, reason);
     audit('allotment.move', 'registration', regId, old ? { committee: old.committee, portfolio: old.portfolio } : null, { committee: target.committee, portfolio: target.portfolio, reason });

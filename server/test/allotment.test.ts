@@ -89,3 +89,31 @@ test('a delegate with the wrong portfolio asks for another one in their committe
   assert.equal(seatOf(r.id).name, target.name);
   assert.equal(one('SELECT reason FROM swap_request WHERE id = ?', id).reason, 'wrong_portfolio');
 });
+
+test('payment timing: direct holds the seat briefly; before allotment gives the seat only once paid', async () => {
+  const { saveEventSettings } = await import('../src/settings.ts');
+  const { receive } = await import('../src/services/payments.ts');
+  const { payableNow } = await import('../src/services/fees.ts');
+  const disec = ctx.committeeIds.DISEC;
+  // Direct: seat straight away, held for the short window.
+  saveEventSettings(ctx.eventId, { paymentTiming: 'direct', directHoldMinutes: 60 });
+  const { registration: d } = reg({ preferences: [disec], mun_count: 1 });
+  assert.ok(seatOf(d.id));
+  const mins = (new Date(d.hold_expires_at).getTime() - new Date(d.created_at).getTime()) / 60_000;
+  assert.ok(Math.abs(mins - 60) < 1, `held ${mins} minutes`);
+  // Before allotment: no seat, but payable; paying gives the seat by the usual rules.
+  saveEventSettings(ctx.eventId, { paymentTiming: 'before_allotment' });
+  const { registration: b, allocation } = reg({ preferences: [disec], mun_count: 1 });
+  assert.equal(b.allot_status, 'none');
+  assert.equal(seatOf(b.id), undefined);
+  assert.equal(allocation.kind, 'waitlist');
+  const due = payableNow(b);
+  assert.ok(due > 0, 'a pay-first delegate can pay straight away');
+  assert.equal(one("SELECT template_key FROM notification WHERE registration_id = ? ORDER BY created_at LIMIT 1", b.id).template_key, 'registration_pay_first');
+  asSystem(() => receive(b.id, due, { debitAccount: 'cash', sourceType: 'cash', sourceId: 'test-cash-1', label: 'Cash at desk' }));
+  const after = one('SELECT * FROM registration WHERE id = ?', b.id)!;
+  assert.equal(after.payment_status, 'paid');
+  assert.equal(after.allot_status, 'confirmed');
+  assert.equal(seatOf(b.id).short, 'DISEC');
+  saveEventSettings(ctx.eventId, { paymentTiming: 'after_allotment' });
+});

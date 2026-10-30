@@ -158,6 +158,8 @@ adminRouter.patch('/events/:id', requirePerm('event.config'), h((req) => {
     const clash = Object.keys(b.settings).filter((k) => owned.includes(k));
     if (clash.length) throw bad(`These are changed elsewhere: ${clash.join(', ')}`);
     if (b.settings.holdHours !== undefined && !(Number(b.settings.holdHours) >= 1)) throw bad('The payment window must be at least 1 hour');
+    if (b.settings.paymentTiming !== undefined && !['after_allotment', 'direct', 'before_allotment'].includes(b.settings.paymentTiming)) throw bad('Choose when delegates pay');
+    if (b.settings.directHoldMinutes !== undefined && !(Number(b.settings.directHoldMinutes) >= 5 && Number(b.settings.directHoldMinutes) <= 24 * 60)) throw bad('The hold while paying must be between 5 minutes and 24 hours');
     if (b.settings.tierMinExperience) {
       const t = b.settings.tierMinExperience;
       const ok = (v: unknown) => Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 100;
