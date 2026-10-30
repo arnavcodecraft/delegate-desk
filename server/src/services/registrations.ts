@@ -189,6 +189,9 @@ export function portalView(reg: Record<string, any>) {
     seat: seat ? { committee: seat.committee, short: seat.short, portfolio: seat.portfolio, state: seat.state, guide_url: seat.state === 'confirmed' ? seat.guide_url : null } : null,
     evidence, invoices, refunds, committees,
     swap: one("SELECT * FROM swap_request WHERE registration_id = ? AND status = 'pending'", reg.id) ?? null,
+    lastSwap: one("SELECT status, created_at FROM swap_request WHERE registration_id = ? AND status <> 'pending' ORDER BY created_at DESC LIMIT 1", reg.id) ?? null,
+    changeOptions: seat && !reg.cancelled_at ? changeOptions(reg) : [],
+    swapReasons: SWAP_REASONS,
     feeModel: s.feeModel, refundWindowDays: s.refundWindowDays,
     checkinCode: seat?.state === 'confirmed' ? checkinCode(reg.ref) : null,
   };
@@ -328,13 +331,33 @@ export function delegationView(tok: string) {
 }
 
 // ---------- swaps & acceptance ----------
-export function requestSwap(reg: Record<string, any>, toCommitteeId: string, note: string) {
-  if (!one('SELECT 1 FROM committee WHERE id = ? AND event_id = ?', toCommitteeId, reg.event_id)) throw notFound('Committee');
+export const SWAP_REASONS: Record<string, string> = { wrong_portfolio: 'I was given the wrong portfolio', prefer_other: 'I would prefer another portfolio', experience: 'My experience fits a different portfolio', other: 'Something else' };
+/** A delegate asks for a different portfolio (in their own committee or another one), with a reason. */
+export function requestSwap(reg: Record<string, any>, o: { committee_id: string; portfolio_id?: string | null; reason?: string; note?: string }) {
+  if (!one('SELECT 1 FROM committee WHERE id = ? AND event_id = ?', o.committee_id, reg.event_id)) throw notFound('Committee');
+  if (o.portfolio_id && !one('SELECT 1 FROM portfolio WHERE id = ? AND committee_id = ?', o.portfolio_id, o.committee_id)) throw bad('Pick a portfolio from that committee');
+  const seat = seatOf(reg.id);
+  if (seat && !o.portfolio_id && seat.committee_id === o.committee_id) throw bad('Pick the portfolio you want in your committee, or another committee');
+  if (seat && o.portfolio_id === seat.portfolio_id) throw bad('That is already your portfolio');
   if (one("SELECT 1 FROM swap_request WHERE registration_id = ? AND status = 'pending'", reg.id)) throw conflict('You already have a pending change request');
+  const reason = SWAP_REASONS[o.reason ?? ''] ? o.reason! : 'other';
+  const note = String(o.note ?? '').trim().slice(0, 1000) || null;
   const id = uid();
-  insert('swap_request', { id, registration_id: reg.id, to_committee_id: toCommitteeId, note: note ?? null, status: 'pending', created_at: now() });
-  audit('swap.request', 'registration', reg.id, undefined, { toCommitteeId, note });
+  insert('swap_request', { id, registration_id: reg.id, to_committee_id: o.committee_id, to_portfolio_id: o.portfolio_id || null, reason, note, status: 'pending', created_at: now() });
+  audit('swap.request', 'registration', reg.id, undefined, { toCommitteeId: o.committee_id, toPortfolioId: o.portfolio_id ?? null, reason, note });
+  notifyStaff(['admin', 'secretariat', 'registration_exec'], 'staff_alert', { title: 'Portfolio change requested', message: `${reg.full_name} (${reg.ref}) asked for a change: ${SWAP_REASONS[reason]}. Review it in Committees → Change requests.` }, reg.event_id);
   return id;
+}
+/** Portfolios a delegate could move to: open ones, marked if their experience is short. */
+export function changeOptions(reg: Record<string, any>) {
+  const s = eventSettings(reg.event_id);
+  const points = experiencePoints(reg);
+  const mine = seatOf(reg.id)?.portfolio_id ?? null;
+  const committees = all('SELECT id, name, short FROM committee WHERE event_id = ? ORDER BY sort, name', reg.event_id);
+  const portfolios = all(`SELECT p.id, p.committee_id, p.name, p.tier, (SELECT COUNT(*) FROM seat s WHERE s.portfolio_id = p.id AND s.state = 'open') AS open
+    FROM portfolio p JOIN committee c ON c.id = p.committee_id WHERE c.event_id = ? ORDER BY p.sort, p.name`, reg.event_id);
+  return committees.map((c) => ({ ...c, portfolios: portfolios.filter((p) => p.committee_id === c.id && p.id !== mine && p.open > 0)
+    .map((p) => ({ id: p.id, name: p.name, qualifies: points >= (s.tierMinExperience[p.tier as 'high'] ?? 0), needs: s.tierMinExperience[p.tier as 'high'] ?? 0 })) }));
 }
 
 /** Approve a committee change: move to the best open seat in the target; charge or refund any fee difference. */
@@ -344,8 +367,11 @@ export function decideSwap(swapId: string, approve: boolean, roles: string[], se
     if (!sw || sw.status !== 'pending') throw conflict('Request is not pending');
     update('swap_request', swapId, { status: approve ? 'approved' : 'rejected', decided_by: ctx().userId ?? null });
     if (!approve) return null;
-    const target = seatId ?? one(`SELECT s.id FROM seat s JOIN portfolio p ON p.id = s.portfolio_id WHERE p.committee_id = ? AND s.state = 'open' ORDER BY p.tier = 'standard' DESC, p.sort LIMIT 1`, sw.to_committee_id)?.id;
-    if (!target) throw conflict('No open seat in that committee');
+    // The exact portfolio asked for if it is still open; otherwise the best open seat in that committee.
+    const target = seatId
+      ?? (sw.to_portfolio_id ? one(`SELECT id FROM seat WHERE portfolio_id = ? AND state = 'open' ORDER BY seat_no LIMIT 1`, sw.to_portfolio_id)?.id : null)
+      ?? one(`SELECT s.id FROM seat s JOIN portfolio p ON p.id = s.portfolio_id WHERE p.committee_id = ? AND s.state = 'open' ORDER BY p.tier = 'standard' DESC, p.sort LIMIT 1`, sw.to_committee_id)?.id;
+    if (!target) throw conflict(sw.to_portfolio_id ? 'That portfolio and the rest of the committee are full now' : 'No open seat in that committee');
     return changeAllocation(sw.registration_id, target, `Swap request approved${sw.note ? ': ' + sw.note : ''}`, roles);
   });
 }

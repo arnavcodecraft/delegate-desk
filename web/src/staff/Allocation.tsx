@@ -90,7 +90,11 @@ function Swaps() {
   const toast = useToast();
   return (
     <div className="card flush"><DataTable rows={s.data ?? []} empty="No change requests." columns={[
-      { key: 'created_at', label: 'Requested', render: (r: any) => dt(r.created_at) }, { key: 'ref', label: 'Delegate', render: (r: any) => `${r.full_name} (${r.ref})` }, { key: 'to_committee', label: 'Wants' }, { key: 'note', label: 'Note' }, { key: 'status', label: 'Status', render: (r: any) => <Status value={r.status} /> },
+      { key: 'created_at', label: 'Requested', render: (r: any) => dt(r.created_at) },
+      { key: 'ref', label: 'Delegate', render: (r: any) => <><b>{r.full_name}</b><div className="small faint">{r.ref} · now {r.current ?? 'no seat'} · {r.points} pts</div></> },
+      { key: 'to_committee', label: 'Wants', render: (r: any) => <>{r.to_portfolio ?? 'Any open portfolio'}<div className="small faint">{r.to_committee}{r.to_portfolio && !r.portfolio_open ? ' · now taken' : ''}{!r.qualifies ? ' · above their experience' : ''}</div></> },
+      { key: 'reason', label: 'Why', sort: false, render: (r: any) => <>{r.reason_label ?? '—'}{r.note && <div className="small faint" title={r.note}>{r.note.slice(0, 80)}</div>}</> },
+      { key: 'status', label: 'Status', render: (r: any) => <Status value={r.status} /> },
       { key: 'act', label: '', sort: false, render: (r: any) => r.status === 'pending' && <span className="row">
         <Btn size="sm" kind="good" onClick={async () => { try { await api.post(`/api/admin/swaps/${r.id}`, { approve: true }); toast('Moved', 'ok'); s.reload(); } catch (e: any) { toast(e.message, 'bad'); } }}>Approve</Btn>
         <Btn size="sm" kind="danger" onClick={async () => { await api.post(`/api/admin/swaps/${r.id}`, { approve: false }); s.reload(); }}>Decline</Btn></span> },

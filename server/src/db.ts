@@ -49,6 +49,8 @@ const COLUMNS: [table: string, column: string, ddl: string][] = [
   ['registration', 'other_events', 'INTEGER NOT NULL DEFAULT 0'],       // debates, youth parliaments, Model G20 …
   ['registration', 'awards_count', 'INTEGER NOT NULL DEFAULT 0'],       // awards won at MUNs
   ['registration', 'portfolio_prefs', "TEXT NOT NULL DEFAULT '{}'"],    // committee id → preferred portfolio id
+  ['swap_request', 'to_portfolio_id', 'TEXT'],                          // a specific portfolio the delegate asked for
+  ['swap_request', 'reason', 'TEXT'],                                   // wrong_portfolio | prefer_other | experience | other
 ];
 function migrate(db: DatabaseSync) {
   for (const [table, column, ddl] of COLUMNS) {

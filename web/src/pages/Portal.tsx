@@ -3,7 +3,7 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { api } from '../api';
 import { inr, dt, date, today, label, toPaise } from '../format';
-import { Alert, Btn, ErrorBox, Field, Loading, Status, useAsync, useToast, usePrompt } from '../ui';
+import { Alert, Btn, ErrorBox, Field, Loading, Modal, Status, useAsync, useToast, usePrompt } from '../ui';
 import { PublicShell } from './Register';
 
 declare global { interface Window { Razorpay?: any; Cashfree?: any } }
@@ -26,6 +26,7 @@ function Countdown({ until }: { until: string }) {
 
 export default function Portal() {
   const { token = '' } = useParams();
+  const [change, setChange] = useState(false);
   const [sp, setSp] = useSearchParams();
   const toast = useToast();
   const ask = usePrompt();
@@ -151,13 +152,11 @@ export default function Portal() {
         {!r.cancelled && seat && (
           <div className="card stack">
             <h3>Need a change?</h3>
-            {swap ? <Alert tone="info">Your request to move to another committee is with the secretariat.</Alert> : (
-              <Btn onClick={async () => {
-                const res = await ask({ title: 'Request a committee change', fields: [{ key: 'committee_id', label: 'Move me to', options: committees.filter((c: any) => c.name !== seat.committee).map((c: any) => ({ value: c.id, label: c.name })) }, { key: 'note', label: 'Reason (optional)', type: 'textarea' }], confirm: 'Send request' });
-                if (!res) return;
-                await api.post(`/api/public/r/${token}/swap`, res); toast('Request sent to the secretariat', 'ok'); v.reload();
-              }}>Request a committee change</Btn>
-            )}
+            {swap ? <Alert tone="info">Your change request is with the secretariat. You’ll get an email when they decide.</Alert> : <>
+              {v.data.lastSwap && <p className="small muted" style={{ margin: 0 }}>Your last change request was {v.data.lastSwap.status === 'approved' ? 'approved' : 'declined'}.</p>}
+              <Btn onClick={() => setChange(true)}>Wrong portfolio? Request a change</Btn>
+            </>}
+            {change && <ChangeRequest token={token} options={v.data.changeOptions ?? []} reasons={v.data.swapReasons ?? {}} current={seat} onClose={() => setChange(false)} onDone={() => { setChange(false); toast('Request sent to the secretariat', 'ok'); v.reload(); }} />}
             {paid && <Btn kind="danger" onClick={async () => {
               const res = await ask({ title: 'Request a refund', message: `Refunds follow the event policy and need finance approval. Requests close ${v.data.refundWindowDays} days before the event.`, fields: [{ key: 'reason', label: 'Reason', type: 'textarea', required: true }], confirm: 'Request refund', danger: true });
               if (!res) return;
@@ -411,5 +410,36 @@ function PositionPaper({ token, conf, onDone }: { token: string; conf: any; onDo
         </label>
       )}
     </div>
+  );
+}
+
+/** Ask for a different portfolio: the reason, the committee, the portfolio (only open ones; those above the delegate's experience are greyed out). */
+function ChangeRequest({ token, options, reasons, current, onClose, onDone }: { token: string; options: any[]; reasons: Record<string, string>; current: any; onClose: () => void; onDone: () => void }) {
+  const mineId = options.find((c) => c.name === current.committee)?.id ?? options[0]?.id ?? '';
+  const [f, setF] = useState({ reason: 'wrong_portfolio', committee_id: mineId, portfolio_id: '', note: '' });
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const c = options.find((x) => x.id === f.committee_id);
+  const sameCommittee = c?.name === current.committee;
+  return (
+    <Modal title="Request a portfolio change" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><Btn kind="primary" disabled={busy || (sameCommittee && !f.portfolio_id)} onClick={async () => {
+      setBusy(true); setErr(null);
+      try { await api.post(`/api/public/r/${token}/swap`, f); onDone(); } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+    }}>Send request</Btn></>}>
+      <div className="stack">
+        <p className="small muted" style={{ margin: 0 }}>You now have <b>{current.portfolio}</b> in {current.committee}. The secretariat reviews every request; your seat stays yours until they approve a change.</p>
+        {err && <Alert tone="bad">{err}</Alert>}
+        <Field label="Why do you want a change?"><select value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })}>{Object.entries(reasons).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
+        <Field label="Committee"><select value={f.committee_id} onChange={(e) => setF({ ...f, committee_id: e.target.value, portfolio_id: '' })}>{options.map((o) => <option key={o.id} value={o.id}>{o.name}{o.name === current.committee ? ' (my committee)' : ''}</option>)}</select></Field>
+        <Field label="Portfolio" hint={sameCommittee ? 'pick the one you want' : 'optional'}>
+          <select value={f.portfolio_id} onChange={(e) => setF({ ...f, portfolio_id: e.target.value })}>
+            <option value="">{sameCommittee ? 'Choose…' : 'Any open portfolio'}</option>
+            {(c?.portfolios ?? []).map((p: any) => <option key={p.id} value={p.id} disabled={!p.qualifies}>{p.name}{p.qualifies ? '' : ` (needs ${p.needs}+ experience)`}</option>)}
+          </select>
+          {c && !c.portfolios.length && <span className="hint">No open portfolios in this committee right now.</span>}
+        </Field>
+        <Field label="Anything else? (optional)"><textarea rows={3} maxLength={1000} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="e.g. I asked for France in my form" /></Field>
+      </div>
+    </Modal>
   );
 }

@@ -190,7 +190,7 @@ publicRouter.get('/r/:token/chat/messages', h((req) => delegateRead(regByToken(P
 publicRouter.post('/r/:token/chat', h((req) => delegatePost(regByToken(P(req).token), req.body ?? {})));
 publicRouter.post('/r/:token/chat/block', h((req) => { block(regByToken(P(req).token), String(req.body?.id ?? ''), req.body?.on !== false); return { ok: true }; }));
 publicRouter.post('/r/:token/chat/report', h((req) => { report(regByToken(P(req).token), String(req.body?.messageId ?? ''), String(req.body?.reason ?? '')); return { ok: true }; }));
-publicRouter.post('/r/:token/swap', h((req) => ({ id: requestSwap(regByToken(P(req).token), req.body?.committee_id, req.body?.note) })));
+publicRouter.post('/r/:token/swap', h((req) => ({ id: requestSwap(regByToken(P(req).token), { committee_id: String(req.body?.committee_id ?? ''), portfolio_id: req.body?.portfolio_id ? String(req.body.portfolio_id) : null, reason: req.body?.reason, note: req.body?.note }) })));
 publicRouter.post('/r/:token/withdraw-consent', h((req) => { withdrawConsent(regByToken(P(req).token)); return { ok: true }; }));
 publicRouter.post('/r/:token/cancel', h((req) => { const r = regByToken(P(req).token); cancelRegistration(r.id, 'Cancelled by delegate'); return { ok: true }; }));
 publicRouter.get('/r/:token/invoice/:id', h(async (req, res) => {

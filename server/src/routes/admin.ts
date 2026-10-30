@@ -11,7 +11,7 @@ import {
 import { bad, conflict, ctx, forbidden, json, notFound, now, token, uid, istDate, addHours, isEmail } from '../util.ts';
 import { h, upload, P } from './public.ts';
 import { inventory, addPortfolio, simulate, seatOf, experiencePoints } from '../services/allocation.ts';
-import { staffUpdate, resendEmail, eraseRegistration, register, duplicates, decideSwap, changeAllocation, acceptApplication, sendEventReminders, portalView } from '../services/registrations.ts';
+import { staffUpdate, resendEmail, eraseRegistration, register, duplicates, decideSwap, changeAllocation, acceptApplication, sendEventReminders, portalView, SWAP_REASONS } from '../services/registrations.ts';
 import { cancelRegistration, regVars, cancelEvent, markEventHeld, portalLink } from '../services/payments.ts';
 import { linkReferral } from '../services/referrals.ts';
 import { reconcile } from '../services/commission.ts';
@@ -227,8 +227,17 @@ adminRouter.post('/events/:id/simulate', requirePerm('alloc.config'), h((req) =>
   }
   return simulate(P(req).id, people);
 }));
-adminRouter.get('/events/:id/swaps', requirePerm('alloc.move'), h((req) => all(`SELECT w.*, r.ref, r.full_name, c.name AS to_committee FROM swap_request w JOIN registration r ON r.id = w.registration_id
-  JOIN committee c ON c.id = w.to_committee_id WHERE r.event_id = ? ORDER BY w.created_at DESC`, P(req).id)));
+adminRouter.get('/events/:id/swaps', requirePerm('alloc.move'), h((req) => {
+  const s = eventSettings(P(req).id);
+  return all(`SELECT w.*, r.ref, r.full_name, r.mun_count, r.awards_count, r.other_events, r.experience, c.name AS to_committee, p.name AS to_portfolio, p.tier AS to_tier,
+      (SELECT cp.name || ' · ' || cc.short FROM seat cs JOIN portfolio cp ON cp.id = cs.portfolio_id JOIN committee cc ON cc.id = cp.committee_id WHERE cs.registration_id = r.id) AS current,
+      (SELECT COUNT(*) FROM seat s2 WHERE s2.portfolio_id = w.to_portfolio_id AND s2.state = 'open') AS portfolio_open
+    FROM swap_request w JOIN registration r ON r.id = w.registration_id JOIN committee c ON c.id = w.to_committee_id LEFT JOIN portfolio p ON p.id = w.to_portfolio_id
+    WHERE r.event_id = ? ORDER BY w.status <> 'pending', w.created_at DESC`, P(req).id).map((w) => {
+    const points = experiencePoints(w);
+    return { ...w, points, reason_label: SWAP_REASONS[w.reason] ?? null, qualifies: w.to_tier ? points >= (s.tierMinExperience[w.to_tier as 'high'] ?? 0) : true };
+  });
+}));
 adminRouter.post('/swaps/:id', requirePerm('alloc.move'), h((req) => decideSwap(P(req).id, !!req.body?.approve, req.auth!.roleNames, req.body?.seat_id)));
 
 // ---------- registrations ----------
