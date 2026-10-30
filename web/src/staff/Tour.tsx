@@ -9,9 +9,10 @@ export const DASHBOARD_TOUR: TourStep[] = [
   { target: '[data-tour="priorities"]', title: 'Your next step', body: 'The dashboard always shows the one thing to do next. Press Do it now; the step ticks itself off and the next one appears. All steps are under More details.', path: '/app/overview' },
   { target: '[data-tour="target"]', title: 'Your four numbers', body: 'Applications, seats filled, paid delegates and money collected. Click any of them to see the people behind the number.', path: '/app/overview' },
   { target: '[data-tour="share"]', title: 'Share your link', body: 'Send this to schools and post it. Add ?src=instagram (or whatsapp, school…) to see where applicants come from.', path: '/app/overview' },
-  { target: '[data-tour="nav-manage"]', title: 'Manage the conference', body: 'Applications, delegates, committees and portfolios, study guides and position papers, live sessions with EB marking, lists and check-in.' },
-  { target: '[data-tour="nav-money"]', title: 'Money', body: 'Fees and payment methods (Financials), payment proofs to approve, refunds, expenses and the books. Two-person approval applies whenever someone else can approve.' },
-  { target: '[data-tour="nav-settings"]', title: 'Settings and your team', body: 'Your public page, the Job Board, rules, and Settings → Users & roles to invite your team. Each person gets a link to set their own password.' },
+  { target: '[data-tour="nav-manage"]', title: 'Run the conference', body: 'Applications, delegates, committees and portfolios, live sessions with EB marking, the conference chat and check-in.' },
+  { target: '[data-tour="nav-money"]', title: 'Money', body: 'Fees and how delegates pay (Financials), and payment proofs to approve. Refunds, expenses and the books are under More tools.' },
+  { target: '[data-tour="nav-settings"]', title: 'Settings and your team', body: 'Your public page, the rules, and Settings → Users & roles to invite your team. Each person gets a link to set their own password.' },
+  { target: '[data-tour="nav-more"]', title: 'More tools', body: 'Everything else lives here: documents, lists, emails, refunds, referrals, expenses, books, the Job Board, imports and the audit trail.' },
   { target: '[data-tour="help"]', title: 'Take the tour again', body: 'You can replay this tour any time from here. Good luck with the conference!' },
 ];
 

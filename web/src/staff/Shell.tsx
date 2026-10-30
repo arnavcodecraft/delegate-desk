@@ -5,7 +5,7 @@ import { DASHBOARD_TOUR, Tour, tourSeen } from './Tour';
 import { Alert, Btn, Field, Loading, useAsync, applyTheme, savedTheme, type Theme } from '../ui';
 import {
   LayoutDashboard, Users, ListChecks, Landmark, ScanLine, Mail, Upload, ReceiptText, CreditCard, Handshake, Wallet, BookOpen, Settings,
-  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, GraduationCap, MessagesSquare, type LucideIcon,
+  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, GraduationCap, MessagesSquare, ChevronDown, type LucideIcon,
 } from 'lucide-react';
 
 export interface Me {
@@ -42,7 +42,9 @@ export function StaffGate({ children }: { children: React.ReactNode }) {
   );
 }
 
-const NAV: { group: string; items: { to: string; label: string; perms: string[]; icon: LucideIcon }[] }[] = [
+/** The menu. Everyday screens show; the rest (`more`) fold under "More tools" so the menu stays short. */
+type NavItem = { to: string; label: string; perms: string[]; icon: LucideIcon; more?: boolean };
+const NAV: { group: string; items: NavItem[] }[] = [
   { group: 'Overview', items: [
     { to: '/app/overview', label: 'Dashboard', perms: ['event.config', 'reg.read', 'dashboard.read'], icon: LayoutDashboard },
   ] },
@@ -50,30 +52,28 @@ const NAV: { group: string; items: { to: string; label: string; perms: string[];
     { to: '/app/applications', label: 'Applications', perms: ['reg.read'], icon: Inbox },
     { to: '/app/registrations', label: 'Delegates', perms: ['reg.read'], icon: Users },
     { to: '/app/allocation', label: 'Committees', perms: ['reg.read', 'alloc.config'], icon: Landmark },
-    { to: '/app/documents', label: 'Documents', perms: ['alloc.config', 'lists.read'], icon: FileText },
     { to: '/app/sessions', label: 'Live sessions', perms: ['lists.read', 'attendance.mark'], icon: Radio },
-    { to: '/app/lists', label: 'Lists', perms: ['lists.read'], icon: ListChecks },
-    { to: '/app/checkin', label: 'Check-in', perms: ['attendance.mark'], icon: ScanLine },
-  ] },
-  { group: 'Communicate', items: [
-    { to: '/app/messages', label: 'Communications', perms: ['messages.read', 'templates.manage'], icon: Mail },
     { to: '/app/chat', label: 'Chat', perms: ['messages.read', 'lists.read'], icon: MessagesSquare },
+    { to: '/app/checkin', label: 'Check-in', perms: ['attendance.mark'], icon: ScanLine },
+    { to: '/app/documents', label: 'Documents', perms: ['alloc.config', 'lists.read'], icon: FileText, more: true },
+    { to: '/app/lists', label: 'Lists', perms: ['lists.read'], icon: ListChecks, more: true },
+    { to: '/app/messages', label: 'Emails & messages', perms: ['messages.read', 'templates.manage'], icon: Mail, more: true },
   ] },
   { group: 'Money', items: [
-    { to: '/app/dashboard', label: 'Finance overview', perms: ['dashboard.read'], icon: TrendingUp },
     { to: '/app/financials', label: 'Financials', perms: ['event.config', 'settings.finance', 'payments.read'], icon: Banknote },
     { to: '/app/payments/review', label: 'Payment proofs', perms: ['payments.read'], icon: ReceiptText },
-    { to: '/app/payments', label: 'Payments & refunds', perms: ['payments.read', 'refund.read'], icon: CreditCard },
-    { to: '/app/referrals', label: 'Referrals', perms: ['commission.read', 'referral.link'], icon: Handshake },
-    { to: '/app/expenses', label: 'Expenses', perms: ['expense.read', 'expense.create'], icon: Wallet },
-    { to: '/app/books', label: 'Books', perms: ['books.read'], icon: BookOpen },
+    { to: '/app/dashboard', label: 'Finance overview', perms: ['dashboard.read'], icon: TrendingUp, more: true },
+    { to: '/app/payments', label: 'Payments & refunds', perms: ['payments.read', 'refund.read'], icon: CreditCard, more: true },
+    { to: '/app/referrals', label: 'Referrals', perms: ['commission.read', 'referral.link'], icon: Handshake, more: true },
+    { to: '/app/expenses', label: 'Expenses', perms: ['expense.read', 'expense.create'], icon: Wallet, more: true },
+    { to: '/app/books', label: 'Books', perms: ['books.read'], icon: BookOpen, more: true },
   ] },
   { group: 'Settings', items: [
     { to: '/app/conference', label: 'Conference page', perms: ['event.config'], icon: Image },
-    { to: '/app/jobs', label: 'Job Board', perms: ['event.config'], icon: Briefcase },
     { to: '/app/settings', label: 'Settings', perms: ['event.config', 'settings.org', 'settings.finance', 'users.manage'], icon: Settings },
-    { to: '/app/imports', label: 'Import', perms: ['import.registrations', 'finance.import', 'alloc.config', 'referrer.manage'], icon: Upload },
-    { to: '/app/audit', label: 'Audit trail', perms: ['audit.read'], icon: ShieldCheck },
+    { to: '/app/jobs', label: 'Job Board', perms: ['event.config'], icon: Briefcase, more: true },
+    { to: '/app/imports', label: 'Import', perms: ['import.registrations', 'finance.import', 'alloc.config', 'referrer.manage'], icon: Upload, more: true },
+    { to: '/app/audit', label: 'Audit trail', perms: ['audit.read'], icon: ShieldCheck, more: true },
   ] },
 ];
 
@@ -85,6 +85,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(savedTheme());
   const [assistant, setAssistant] = useState(false);
   const [tour, setTour] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(() => { try { return localStorage.getItem('dd-nav-more') === '1'; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem('dd-nav-more', moreOpen ? '1' : '0'); } catch { /* private mode */ } }, [moreOpen]);
   const ai = useAsync<{ enabled: boolean }>(() => api.get('/api/admin/ai/status'), []);
   const nav = useNavigate();
   const loc = useLocation();
@@ -106,11 +108,21 @@ function Shell({ children }: { children: React.ReactNode }) {
           </div>
         )}
         {!me.events.length && can('event.config') && <NavLink to="/list" className="btn sm primary" style={{ margin: '0 .4rem .5rem' }}><Plus className="icon" />List a conference</NavLink>}
-        {NAV.map((g) => {
-          const items = g.items.filter((i) => can(...i.perms));
-          if (!items.length) return null;
-          return <React.Fragment key={g.group}><div className="group" data-tour={`nav-${g.group.toLowerCase()}`}>{g.group}</div>{items.map((i) => <NavLink key={i.to} to={i.to} end={i.to === '/app/payments'} className={({ isActive }) => `nav ${isActive ? 'active' : ''}`}><i.icon className="icon" aria-hidden />{i.label}</NavLink>)}</React.Fragment>;
-        })}
+        {(() => {
+          const visible = NAV.map((g) => ({ ...g, items: g.items.filter((i) => can(...i.perms)) })).filter((g) => g.items.length);
+          // Roles that only see a few screens get them all; everyone else gets the everyday ones and a "More tools" fold.
+          const fold = visible.reduce((n, g) => n + g.items.length, 0) > 10;
+          const extra = fold ? visible.flatMap((g) => g.items.filter((i) => i.more)) : [];
+          const onExtra = extra.some((i) => loc.pathname === i.to || loc.pathname.startsWith(i.to + '/'));
+          const link = (i: NavItem) => <NavLink key={i.to} to={i.to} end={i.to === '/app/payments'} className={({ isActive }) => `nav ${isActive ? 'active' : ''}`}><i.icon className="icon" aria-hidden />{i.label}</NavLink>;
+          return <>
+            {visible.map((g) => { const items = g.items.filter((i) => !fold || !i.more); return items.length ? <React.Fragment key={g.group}><div className="group" data-tour={`nav-${g.group.toLowerCase()}`}>{g.group}</div>{items.map(link)}</React.Fragment> : null; })}
+            {extra.length > 0 && <details className="nav-more" open={moreOpen || onExtra} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>
+              <summary className="group" data-tour="nav-more">More tools<ChevronDown className="icon" aria-hidden /></summary>
+              {extra.map(link)}
+            </details>}
+          </>;
+        })()}
         <span className="spacer" />
         <div className="side-promo"><b>Prep Studio for delegates</b><p>Free research, writing, practice and the full MUN Masterclass for everyone at your conference.</p><a href="/prep/learn" target="_blank" rel="noreferrer"><GraduationCap className="icon" />Open Prep</a></div>
         <div className="user-box">

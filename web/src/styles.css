@@ -563,3 +563,9 @@ a.db-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
   .ch-mobile-back { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--brand); font: inherit; font-weight: 600; padding: 10px 14px 0; cursor: pointer; }
   .ch-msg { max-width: 88%; }
 }
+/* Sidebar "More tools" fold */
+.nav-more > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+.nav-more > summary::-webkit-details-marker { display: none; }
+.nav-more > summary .icon { width: 14px; height: 14px; transition: transform .15s; }
+.nav-more[open] > summary .icon { transform: rotate(180deg); }
+.nav-more > summary:hover { color: var(--text-2); }
