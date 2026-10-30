@@ -1,7 +1,7 @@
 # Builds the DelegateDesk apps on GitHub's machines:
 #   Android: an APK (and, if signing secrets are set, a signed APK and a Play Store bundle)
 #   Desktop: a Windows installer, a Mac disk image, and a Linux AppImage and .deb
-# Run it from Actions → Apps → Run workflow, or publish a GitHub Release (or push a tag like v1.2.0) to attach the files to it.
+# Run it from Actions → Apps → Run workflow (optionally naming a release to attach the files to), or publish a GitHub Release.
 # The site the apps open: the "app_url" input, else the repository variable APP_URL; if neither is set,
 # the apps ask for the site address on first launch.
 name: Apps
@@ -12,8 +12,10 @@ on:
         description: 'Your DelegateDesk site (https://…). Leave empty to use the APP_URL variable, or to let the apps ask.'
         required: false
         default: ''
-  push:
-    tags: ['v*']
+      release_tag:
+        description: 'Attach the built apps to this existing release (e.g. v1.0.0). Leave empty to only build.'
+        required: false
+        default: ''
   release:
     types: [published]
 
@@ -22,6 +24,8 @@ permissions:
 
 env:
   APP_URL: ${{ github.event.inputs.app_url || vars.APP_URL || '' }}
+  # The release the files go to: the one just published, or the one named when running it by hand.
+  RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.release_tag || '' }}
 
 jobs:
   android:
@@ -41,10 +45,10 @@ jobs:
       - name: App icon and splash screen
         run: npx capacitor-assets generate --android --iconBackgroundColor '#1f4fe0' --iconBackgroundColorDark '#1f4fe0' --splashBackgroundColor '#f6f8fc' --splashBackgroundColorDark '#060b18'
         continue-on-error: true
-      - name: Version from the tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Version from the release
+        if: env.RELEASE_TAG != ''
         run: |
-          V="${GITHUB_REF_NAME#v}"; CODE=$(( $(date +%s) / 60 ))
+          V="${RELEASE_TAG#v}"; CODE=$(( $(date +%s) / 60 ))
           sed -i "s/versionName \".*\"/versionName \"$V\"/; s/versionCode [0-9]*/versionCode $CODE/" android/app/build.gradle
       - name: Build the debug APK
         run: cd android && ./gradlew --no-daemon assembleDebug
@@ -87,9 +91,9 @@ jobs:
         run: |
           rm -rf shell && cp -R ../shell shell
           node -e "require('fs').writeFileSync('settings.json', JSON.stringify({ url: (process.env.APP_URL || '').replace(/\/+$/, '') }))"
-      - name: Version from the tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: npm version --no-git-tag-version "${GITHUB_REF_NAME#v}"
+      - name: Version from the release
+        if: env.RELEASE_TAG != ''
+        run: npm version --no-git-tag-version --allow-same-version "${RELEASE_TAG#v}"
       - name: Build
         run: npx electron-builder --publish never
         env:
@@ -105,7 +109,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event.release.tag_name != '' || github.event.inputs.release_tag != ''
     needs: [android, desktop]
     runs-on: ubuntu-latest
     steps:
@@ -113,6 +117,7 @@ jobs:
         with: { path: files, merge-multiple: true }
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.release.tag_name || github.event.inputs.release_tag }}
           files: files/*
           generate_release_notes: true
           body: |
