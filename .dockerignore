@@ -8,3 +8,4 @@ cloudflare-worker
 e2e/screenshots
 data-server.log
 .git
+apps/*/node_modules

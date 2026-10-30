@@ -30,6 +30,8 @@ import { DelegateChat } from './chat/DelegateChat';
 import { CvPage } from './platform/Cv';
 import { AboutPage, ContactPage, ServicesPage, TeamPage } from './platform/Site';
 import { PlatformInbox } from './staff/Inbox';
+import { registerServiceWorker } from './install';
+import { AppDownloadPage } from './platform/Site';
 import { SocialDashboard } from './staff/Social';
 import { ChatAdmin } from './staff/Chat';
 import { SetupPage } from './platform/Setup';
@@ -67,6 +69,7 @@ function App() {
       <Route path="/team" element={<TeamPage />} />
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/services" element={<ServicesPage />} />
+      <Route path="/get-the-app" element={<AppDownloadPage />} />
       <Route path="/delegation/:token" element={<DelegationPortal />} />
       <Route path="/referrer/:token" element={<ReferrerStatement />} />
       <Route path="/share/:token" element={<SharedList />} />
@@ -125,6 +128,7 @@ function App() {
   );
 }
 
+registerServiceWorker();
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode><BrowserRouter><ToastHost><App /></ToastHost></BrowserRouter></React.StrictMode>,
 );

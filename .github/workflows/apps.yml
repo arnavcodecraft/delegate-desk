@@ -1,0 +1,118 @@
+# Builds the DelegateDesk apps on GitHub's machines:
+#   Android: an APK (and, if signing secrets are set, a signed APK and a Play Store bundle)
+#   Desktop: a Windows installer, a Mac disk image, and a Linux AppImage and .deb
+# Run it from Actions → Apps → Run workflow, or push a tag like v1.2.0 to publish a GitHub Release with the files.
+# The site the apps open: the "app_url" input, else the repository variable APP_URL; if neither is set,
+# the apps ask for the site address on first launch.
+name: Apps
+on:
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: 'Your DelegateDesk site (https://…). Leave empty to use the APP_URL variable, or to let the apps ask.'
+        required: false
+        default: ''
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  APP_URL: ${{ github.event.inputs.app_url || vars.APP_URL || '' }}
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/mobile } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: apps/mobile/package-lock.json }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - run: npm ci
+      - name: Prepare the app (start screen, config)
+        run: node prepare.mjs
+      - name: Create the Android project
+        run: npx cap add android && npx cap sync android
+      - name: App icon and splash screen
+        run: npx capacitor-assets generate --android --iconBackgroundColor '#1f4fe0' --iconBackgroundColorDark '#1f4fe0' --splashBackgroundColor '#f6f8fc' --splashBackgroundColorDark '#060b18'
+        continue-on-error: true
+      - name: Version from the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          V="${GITHUB_REF_NAME#v}"; CODE=$(( $(date +%s) / 60 ))
+          sed -i "s/versionName \".*\"/versionName \"$V\"/; s/versionCode [0-9]*/versionCode $CODE/" android/app/build.gradle
+      - name: Build the debug APK
+        run: cd android && ./gradlew --no-daemon assembleDebug
+      - name: Sign a release APK and Play Store bundle (only when signing secrets are set)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          cd android && ./gradlew --no-daemon assembleRelease bundleRelease
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/zipalign" -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.jks" --ks-pass env:KEYSTORE_PASSWORD --ks-key-alias "$KEY_ALIAS" --key-pass env:KEY_PASSWORD --out app/build/outputs/apk/release/DelegateDesk-release.apk "$RUNNER_TEMP/aligned.apk"
+          jarsigner -keystore "$RUNNER_TEMP/release.jks" -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" -signedjar app/build/outputs/bundle/release/DelegateDesk-release.aab app/build/outputs/bundle/release/app-release.aab "$KEY_ALIAS"
+      - name: Collect the files
+        run: |
+          mkdir -p ../../out
+          cp android/app/build/outputs/apk/debug/app-debug.apk ../../out/DelegateDesk-android.apk
+          cp android/app/build/outputs/apk/release/DelegateDesk-release.apk ../../out/ 2>/dev/null || true
+          cp android/app/build/outputs/bundle/release/DelegateDesk-release.aab ../../out/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: out/*, if-no-files-found: error }
+
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults: { run: { working-directory: apps/desktop, shell: bash } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: apps/desktop/package-lock.json }
+      - run: npm ci
+      - name: Bundle the start screen and the site address
+        run: |
+          rm -rf shell && cp -R ../shell shell
+          node -e "require('fs').writeFileSync('settings.json', JSON.stringify({ url: (process.env.APP_URL || '').replace(/\/+$/, '') }))"
+      - name: Version from the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm version --no-git-tag-version "${GITHUB_REF_NAME#v}"
+      - name: Build
+        run: npx electron-builder --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'   # unsigned builds; add signing certificates later for no-warning installs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/*.dmg
+            apps/desktop/dist/*.AppImage
+            apps/desktop/dist/*.deb
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [android, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: files, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: files/*
+          generate_release_notes: true
+          body: |
+            DelegateDesk apps. Android: DelegateDesk-android.apk. Windows: the .exe installer. Mac: the .dmg. Linux: the AppImage or .deb.
+            The apps are not code-signed yet, so Windows and Mac show a one-time warning: on Windows choose More info → Run anyway; on Mac right-click the app → Open.

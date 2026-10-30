@@ -1,0 +1,19 @@
+{
+  "name": "delegatedesk-mobile",
+  "version": "1.0.0",
+  "description": "DelegateDesk for Android",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "prepare-www": "node prepare.mjs",
+    "android": "npm run prepare-www && npx cap add android && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.0.0"
+  }
+}

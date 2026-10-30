@@ -2,6 +2,9 @@
  * Content for the About, Team and Services pages. Edit this file to change what those pages say.
  * Team: add one entry per person; the Team page shows a friendly empty state until someone is listed.
  */
+/** Where the Android and desktop apps are published (GitHub Releases, built by .github/workflows/apps.yml). */
+export const DOWNLOADS_URL = 'https://github.com/arnavcodecraft/delegate-desk/releases/latest';
+
 export interface TeamMember { name: string; role: string; bio?: string; photo?: string; linkedin?: string }
 
 export const TEAM: TeamMember[] = [

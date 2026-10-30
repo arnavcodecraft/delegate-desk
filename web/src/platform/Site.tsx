@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowRight, BookOpen, Briefcase, CheckCircle2, ClipboardList, Gavel, GraduationCap, Mail, MessagesSquare, PlayCircle, Scale, ShieldCheck, Truck, UserRound, Users, Video } from 'lucide-react';
+import { ArrowRight, BookOpen, Briefcase, CheckCircle2, ClipboardList, Download, Gavel, GraduationCap, Laptop, Mail, MessagesSquare, PlayCircle, Scale, ShieldCheck, Smartphone, Truck, UserRound, Users, Video } from 'lucide-react';
 import { api } from '../api';
 import { PlatformShell } from './Shell';
-import { SERVICE_DETAILS, TEAM } from '../data/site';
+import { DOWNLOADS_URL, SERVICE_DETAILS, TEAM } from '../data/site';
+import { useInstall } from '../install';
 
 const SERVICE_ICON: Record<string, any> = { mentorship: UserRound, recorded: PlayCircle, batch: Video, logistics: Truck, eb: Gavel, consultancy: Scale };
 const ORDER = ['mentorship', 'recorded', 'batch', 'logistics', 'eb', 'consultancy'];
@@ -188,5 +189,39 @@ function ServiceForm({ service, title, onClose }: { service: string; title: stri
         )}
       </div>
     </div>
+  );
+}
+
+/** Get the app: install from the browser, or download the Android and desktop apps. */
+export function AppDownloadPage() {
+  const inst = useInstall();
+  return (
+    <PlatformShell>
+      <section className="st-hero">
+        <div className="pf-eyebrow">Get the app</div>
+        <h1 className="pf-h1 left">DelegateDesk on your phone and computer</h1>
+        <p className="pf-sub left">One app for organisers, chairs and delegates: notifications-ready, full screen, and one tap from your home screen.</p>
+      </section>
+      <section className="st-grid3">
+        <div className="pf-card pad st-card">
+          <Download className="icon st-ic" /><b>Install from your browser</b>
+          <p>Works on Android, iPhone, iPad, Windows, Mac and Linux. Nothing to download from a store.</p>
+          {inst.installed ? <p className="pf-small" style={{ color: 'var(--pf-green)', marginTop: 10 }}><CheckCircle2 className="icon" style={{ width: 16, verticalAlign: -3 }} /> Installed on this device.</p>
+            : inst.canPrompt ? <button className="pf-btn primary sm" style={{ marginTop: 12 }} onClick={() => inst.prompt()}>Install DelegateDesk</button>
+              : inst.ios ? <p className="pf-small" style={{ marginTop: 10 }}>On iPhone or iPad: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>
+                : <p className="pf-small" style={{ marginTop: 10 }}>In Chrome or Edge: open the browser menu and choose <b>Install DelegateDesk</b> (or <b>Add to Home screen</b> on Android).</p>}
+        </div>
+        <div className="pf-card pad st-card">
+          <Smartphone className="icon st-ic" /><b>Android app</b>
+          <p>The APK for Android phones and tablets. Allow installing from your browser when Android asks.</p>
+          <a className="pf-btn ghost sm" style={{ marginTop: 12 }} href={DOWNLOADS_URL} target="_blank" rel="noopener noreferrer">Download for Android</a>
+        </div>
+        <div className="pf-card pad st-card">
+          <Laptop className="icon st-ic" /><b>Windows, Mac and Linux</b>
+          <p>A desktop app with its own window and taskbar icon: an installer for Windows, a disk image for Mac and an AppImage for Linux.</p>
+          <a className="pf-btn ghost sm" style={{ marginTop: 12 }} href={DOWNLOADS_URL} target="_blank" rel="noopener noreferrer">Download for desktop</a>
+        </div>
+      </section>
+    </PlatformShell>
   );
 }

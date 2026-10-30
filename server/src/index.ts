@@ -78,7 +78,11 @@ export function createApp() {
 
   const dist = path.join(config.root, 'web', 'dist');
   if (fs.existsSync(dist)) {
-    app.use(express.static(dist, { index: false, maxAge: '1h' }));
+    app.use(express.static(dist, {
+      index: false, maxAge: '1h',
+      // The service worker and manifest must update promptly; built assets are hashed and can be cached for long.
+      setHeaders: (res, file) => { if (/[\\/](sw\.js|manifest\.webmanifest)$/.test(file)) res.setHeader('cache-control', 'no-cache'); else if (/[\\/]assets[\\/]/.test(file)) res.setHeader('cache-control', 'public, max-age=31536000, immutable'); },
+    }));
     app.get(/.*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')));
   }
 

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'">
+<title>DelegateDesk</title>
+<link rel="stylesheet" href="shell.css">
+</head>
+<body>
+<main class="card">
+  <img src="icon.png" alt="" class="logo">
+  <h1>DelegateDesk</h1>
+  <p id="lead">Enter the address of your DelegateDesk site. You only do this once.</p>
+  <form id="f">
+    <label for="url">Site address</label>
+    <input id="url" type="url" inputmode="url" autocomplete="url" placeholder="https://delegatedesk.example.com" required>
+    <p id="err" class="err" role="alert" hidden></p>
+    <button type="submit">Open DelegateDesk</button>
+  </form>
+  <p class="small">Ask your conference team if you don’t know it. You can change it later from the app menu.</p>
+</main>
+<script src="config.js"></script>
+<script src="shell.js"></script>
+</body>
+</html>

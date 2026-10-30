@@ -56,7 +56,7 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
       <main className="pf-wrap">{children}</main>
       <footer className="pf-foot">
         <div><b>DelegateDesk</b><span>Run your conference. Prepare for committee.</span></div>
-        <nav><Link to="/explore">Explore</Link><Link to="/prep">Prep</Link><Link to="/services">Services</Link><Link to="/list">List your conference</Link><Link to="/about">About</Link><Link to="/team">Team</Link><Link to="/contact">Contact</Link><Link to="/privacy">Privacy</Link></nav>
+        <nav><Link to="/explore">Explore</Link><Link to="/prep">Prep</Link><Link to="/services">Services</Link><Link to="/list">List your conference</Link><Link to="/get-the-app">Get the app</Link><Link to="/about">About</Link><Link to="/team">Team</Link><Link to="/contact">Contact</Link><Link to="/privacy">Privacy</Link></nav>
       </footer>
     </div>
   );

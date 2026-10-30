@@ -17,6 +17,14 @@ Every push runs the type checks, all tests and a production build (GitHub Action
 
 Never commit `.env` or API keys: `.gitignore` keeps them out. Put keys in Render's environment settings or GitHub's Codespaces secrets instead.
 
+
+## Apps: phone and computer
+
+- **Install from the browser (all devices):** open your DelegateDesk site and choose *Install* (Chrome, Edge, Android) or *Share → Add to Home Screen* (iPhone). The site's `/get-the-app` page explains it. This is a full installable app (PWA) with its own icon and window and an offline page.
+- **Android APK and Windows / Mac / Linux apps:** built by GitHub, not on your computer. Go to **Actions → Apps → Run workflow** and enter your site address (or set it once as a repository variable `APP_URL` under Settings → Secrets and variables → Actions → Variables). The files appear under that run's *Artifacts*. Push a tag like `v1.0.0` to publish them as a GitHub Release, which the `/get-the-app` page links to.
+- **Play Store:** create a signing key once (`keytool -genkey -v -keystore release.jks -alias delegatedesk -keyalg RSA -keysize 2048 -validity 10000`), then add the repository secrets `ANDROID_KEYSTORE_BASE64` (the file, base64-encoded), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. The workflow then also produces a signed APK and the `.aab` bundle the Play Console asks for. A Google Play developer account (one-time fee) is needed to publish.
+- The desktop apps are not code-signed yet, so Windows and Mac show a one-time warning on first launch.
+
 ## Quick start
 
 Needs Node.js 22.13 or newer (Windows, macOS or Linux). On Windows you can just double-click `start.bat`: it installs, loads the demo on first run, starts the app and opens the browser.
