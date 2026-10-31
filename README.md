@@ -171,6 +171,19 @@ The conference chat grew into a workspace for everyone at the conference. Each r
 
 The staff pages are **Chat** and **Teamspace** in the dashboard menu. Chairs only ever see their own committee. Private messages between delegates stay private unless reported.
 
+## Audio and video calls, and online meetings
+
+- **Calls in channels:** the phone and camera buttons in a chat start a voice or video call. Everyone who can open that channel sees **Join call** with how many people are in it, and the channel shows a green dot. This works in committee groups, All committees, the Whole team, EB channels and team channels. Calls between two delegates in private messages are **off by default** (many delegates are under 18). Organisers can turn them on, or turn calls off entirely, under Chat → Settings.
+- **Online meetings:** any schedule item can have an online meeting room. You choose who can join by choosing a channel: the whole team, one committee, its EB, everyone, or a team channel. A **Join** button appears from 15 minutes before the start, in the Schedule and in Activity → Coming up.
+- **In a call:**
+  - A camera and microphone preview before joining, then a grid of people.
+  - Mic, camera, screen sharing, raise hand, and the people list. A green ring shows who's speaking.
+  - You can minimise the call to a small window and keep chatting.
+- **Hosts:** the conference team, and whoever started a channel call, can mute everyone, ask one person to mute, lower hands, or remove someone.
+- **How it works:** audio and video go straight between the browsers (WebRTC). The server only introduces people and keeps who is in each call, in memory. Because everyone sends to everyone, a call holds up to **12 people**. A plenary of hundreds needs a streaming service.
+- **Networks:** browsers find a route using public STUN servers (set your own with `STUN_URLS`). On strict school or office networks, add a TURN server with `TURN_URL`, `TURN_USERNAME` and `TURN_PASSWORD`.
+- **Apps:** the Android app asks for camera and microphone permission. The desktop app shares your main screen.
+
 ## Site owner console (`/app/owner`)
 
 For the DelegateDesk team: an admin or superadmin of the main workspace, signed in with two-factor.

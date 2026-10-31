@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, AtSign, Ban, Bell, CalendarDays, Hash, HelpCircle, Megaphone, MessageCircle, MessageSquareReply, MessagesSquare, Plus, Search, ThumbsUp, Users, X, CheckCircle2, MapPin, Star } from 'lucide-react';
+import { ArrowLeft, AtSign, Ban, Bell, CalendarDays, Hash, HelpCircle, Megaphone, MessageCircle, MessageSquareReply, MessagesSquare, Plus, Search, ThumbsUp, Users, X, CheckCircle2, MapPin, Star, Video } from 'lucide-react';
 import { api } from '../api';
 import { ChatPane, chatApi, StatusPicker, formatText } from './ChatPane';
+import { CallButtons, CallRoom, type CallTarget } from '../calls/CallRoom';
 
 const seenKey = (token: string, ch: string) => `dd-chat-seen-${token.slice(0, 8)}-${ch}`;
 const getSeen = (token: string, ch: string) => { try { return localStorage.getItem(seenKey(token, ch)); } catch { return null; } };
@@ -25,6 +26,12 @@ export function DelegateChat() {
   const [mobileList, setMobileList] = useState(true);
   const base = `/api/public/r/${token}/chat`;
   const refresh = () => api.get<any>(base).then((d) => { setInbox(d); setErr(null); }).catch((e) => setErr(e.message));
+  // Calls going on in my channels, and the call I'm in.
+  const callsBase = `/api/public/r/${token}/calls`;
+  const [calls, setCalls] = useState<any[]>([]);
+  const [inCall, setInCall] = useState<CallTarget | null>(null);
+  useEffect(() => { const load = () => api.get<any[]>(callsBase).then(setCalls).catch(() => setCalls([])); load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, [callsBase]);
+  const callFor = (ch: string) => calls.find((c) => c.key === `ch:${ch}`);
   useEffect(() => { refresh(); const t = setInterval(refresh, 8000); return () => clearInterval(t); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
   // The conversation on screen counts as read.
   useEffect(() => { const c = inbox?.channels.find((x: any) => x.key === active); if (c?.latest) setSeen(token, active, c.latest); }, [inbox, active, token]);
@@ -62,7 +69,7 @@ export function DelegateChat() {
             <div className="ch-me">You appear as <b>{inbox.me.name}</b><StatusPicker base={base} status={inbox.me.status} onSaved={refresh} /></div>
             <div className="ch-group-label">Groups</div>
             {inbox.channels.filter((c: any) => c.kind === 'group').map((c: any) => <button key={c.key} className={`ch-item ${active === c.key ? 'on' : ''}`} onClick={() => open(c.key)}>
-              {c.key === 'all' ? <Users size={16} /> : <Hash size={16} />}<span>{c.label}</span>{badge(c)}</button>)}
+              {c.key === 'all' ? <Users size={16} /> : <Hash size={16} />}<span>{c.label}</span>{callFor(c.key) && <i className="call-live" title="Call going on" />}{badge(c)}</button>)}
             {inbox.dms && <>
               <div className="ch-group-label">Private messages <button className="ch-new" onClick={() => setPicker(true)} aria-label="New private message"><Plus size={15} /></button></div>
               {inbox.channels.filter((c: any) => c.kind === 'dm').map((c: any) => <button key={c.key} className={`ch-item ${active === c.key ? 'on' : ''}`} onClick={() => open(c.key)}>
@@ -78,14 +85,18 @@ export function DelegateChat() {
               moderator={active.startsWith('dm:')}
               onReport={async (m) => { const reason = prompt('Why are you reporting this message? (optional)'); if (reason === null) return; await api.post(`${base}/report`, { messageId: m.id, reason }); alert('Reported. The conference team will review it.'); }}
               disabled={isBlocked ? 'You blocked this delegate. Unblock them to send messages.' : null}
-              actions={dmWith ? <button className="ch-block" onClick={async () => { await api.post(`${base}/block`, { id: dmWith, on: !isBlocked }); refresh(); }}><Ban size={14} />{isBlocked ? 'Unblock' : 'Block'}</button> : undefined}
+              actions={<>
+                {!active.startsWith('new:') && (!active.startsWith('dm:') || inbox.dmCalls) && inbox.calls !== false && !isBlocked && <CallButtons joined={inCall?.key === `ch:${active}`} active={callFor(active)} onStart={(kind) => setInCall({ key: `ch:${active}`, title, kind })} />}
+                {dmWith && <button className="ch-block" onClick={async () => { await api.post(`${base}/block`, { id: dmWith, on: !isBlocked }); refresh(); }}><Ban size={14} />{isBlocked ? 'Unblock' : 'Block'}</button>}
+              </>}
             />
           </div>
         </>}
-        {view === 'activity' && <Activity token={token} open={open} inbox={inbox} />}
+        {view === 'activity' && <Activity token={token} open={open} inbox={inbox} onJoin={(s) => setInCall({ key: `mt:${s.id}`, title: s.title, kind: 'video' })} />}
         {view === 'qa' && <Questions token={token} />}
-        {view === 'schedule' && <Schedule url={`/api/public/r/${token}/schedule`} />}
+        {view === 'schedule' && <Schedule url={`/api/public/r/${token}/schedule`} onJoin={(s) => setInCall({ key: `mt:${s.id}`, title: s.title, kind: 'video' })} />}
       </div>
+      {inCall && <CallRoom key={inCall.key} base={callsBase} target={inCall} onClose={() => setInCall(null)} />}
       {picker && <DelegatePicker base={base} onClose={() => setPicker(false)} onPick={(d) => {
         setPicker(false);
         const existing = inbox.channels.find((c: any) => c.with === d.id);
@@ -98,7 +109,7 @@ export function DelegateChat() {
 const ICON: Record<string, typeof Bell> = { mention: AtSign, reply: MessageSquareReply, announcement: Megaphone, answer: CheckCircle2 };
 const VERB: Record<string, string> = { mention: 'mentioned you', reply: 'replied to you', announcement: 'posted an announcement', answer: 'answered your question' };
 
-function Activity({ token, open, inbox }: { token: string; open: (ch: string, thread?: string | null) => void; inbox: any }) {
+function Activity({ token, open, inbox, onJoin }: { token: string; open: (ch: string, thread?: string | null) => void; inbox: any; onJoin: (s: any) => void }) {
   const [d, setD] = useState<any>(null);
   useEffect(() => { const load = () => api.get(`/api/public/r/${token}/activity`).then(setD).catch(() => setD({ items: [], upcoming: [] })); load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, [token]);
   const label = (ch: string) => inbox.channels.find((c: any) => c.key === ch)?.label ?? (ch.startsWith('dm:') ? 'Private message' : 'Chat');
@@ -118,7 +129,7 @@ function Activity({ token, open, inbox }: { token: string; open: (ch: string, th
         </div>
         <aside className="ts-side-card">
           <h3><CalendarDays size={16} /> Coming up</h3>
-          {!d?.upcoming?.length ? <p className="ts-muted">Nothing scheduled yet.</p> : d.upcoming.map((s: any) => <ScheduleRow key={s.id} s={s} compact />)}
+          {!d?.upcoming?.length ? <p className="ts-muted">Nothing scheduled yet.</p> : d.upcoming.map((s: any) => <ScheduleRow key={s.id} s={s} compact actions={<JoinMeeting s={s} onJoin={onJoin} />} />)}
         </aside>
       </div>
     </div>
@@ -176,7 +187,13 @@ export function groupByDay(items: any[]) {
   for (const s of items) { const day = new Date(s.starts_at).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }); const last = g[g.length - 1]; if (last?.day === day) last.items.push(s); else g.push({ day, items: [s] }); }
   return g;
 }
-function Schedule({ url }: { url: string }) {
+/** An online meeting can be joined from 15 minutes before it starts until it ends. */
+export const meetingOpen = (s: any) => { if (!s.call_channel) return false; const t = Date.now(); const st = new Date(s.starts_at).getTime(); const en = s.ends_at ? new Date(s.ends_at).getTime() : st + 3 * 3600_000; return t >= st - 15 * 60_000 && t <= en; };
+export function JoinMeeting({ s, onJoin }: { s: any; onJoin: (s: any) => void }) {
+  if (!s.call_channel) return null;
+  return meetingOpen(s) ? <button type="button" className="call-join" onClick={() => onJoin(s)}><Video size={14} /> Join</button> : <span className="ts-online" title="Online meeting: the Join button appears 15 minutes before"><Video size={13} /> Online</span>;
+}
+function Schedule({ url, onJoin }: { url: string; onJoin: (s: any) => void }) {
   const [items, setItems] = useState<any[] | null>(null);
   const load = () => api.get<any[]>(url).then(setItems).catch(() => setItems([]));
   useEffect(() => { load(); }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -184,8 +201,8 @@ function Schedule({ url }: { url: string }) {
     <div className="ts-view">
       <div className="ts-view-head"><h2>Schedule</h2><p>Committee sessions, ceremonies, breaks and deadlines for you and your committee.</p></div>
       {!items ? <div className="ch-empty">Loading…</div> : !items.length ? <div className="ts-empty"><CalendarDays size={28} /><b>No schedule yet</b><span>The conference team will publish it here.</span></div>
-        : groupByDay(items).map((g) => <section key={g.day} className="ts-day"><h3>{g.day}</h3>{g.items.map((s) => <ScheduleRow key={s.id} s={s} actions={s.kind === 'session' || s.kind === 'break' ? undefined
-          : <button type="button" className={`ts-rsvp ${s.interested ? 'on' : ''}`} aria-pressed={s.interested} onClick={async () => { await api.post(`${url}/${s.id}/interested`, {}); load(); }}><Star size={14} />{s.interested ? 'Interested' : 'Interested?'}{s.going > 0 && <b>{s.going}</b>}</button>} />)}</section>)}
+        : groupByDay(items).map((g) => <section key={g.day} className="ts-day"><h3>{g.day}</h3>{g.items.map((s) => <ScheduleRow key={s.id} s={s} actions={<div className="row" style={{ gap: 6 }}><JoinMeeting s={s} onJoin={onJoin} />{s.kind === 'session' || s.kind === 'break' ? null
+          : <button type="button" className={`ts-rsvp ${s.interested ? 'on' : ''}`} aria-pressed={s.interested} onClick={async () => { await api.post(`${url}/${s.id}/interested`, {}); load(); }}><Star size={14} />{s.interested ? 'Interested' : 'Interested?'}{s.going > 0 && <b>{s.going}</b>}</button>}</div>} />)}</section>)}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // DelegateDesk desktop. The whole website ships inside the app (web/), so it opens straight onto the home page.
 // Server calls (/api, /uploads) are passed on to the DelegateDesk server, set at build time (settings.json, APP_URL)
 // or in App settings, and the sign-in cookies stay in the app's own session.
-const { app, BrowserWindow, Menu, shell, ipcMain, protocol, session } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, protocol, session, desktopCapturer } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 
@@ -80,6 +80,9 @@ else {
   app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
   app.whenReady().then(() => {
     protocol.handle('app', handle);
+    // Calls: camera and microphone for the app's own pages, and screen sharing (the whole main screen).
+    session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => cb(['media', 'display-capture', 'clipboard-sanitized-write', 'notifications', 'fullscreen'].includes(permission)));
+    session.defaultSession.setDisplayMediaRequestHandler((_req, cb) => { desktopCapturer.getSources({ types: ['screen'] }).then((s) => cb(s[0] ? { video: s[0] } : {})).catch(() => cb({})); });
     menu(); createWindow();
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
   });

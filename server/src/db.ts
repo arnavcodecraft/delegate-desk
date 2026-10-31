@@ -59,7 +59,8 @@ const COLUMNS: [table: string, column: string, ddl: string][] = [
   ['chat_message', 'mentions', "TEXT NOT NULL DEFAULT '[]'"],          // [{"id": "d:<reg>" | "u:<user>", "name": "..."}]
   ['chat_message', 'pinned_at', 'TEXT'],
   ['chat_message', 'edited_at', 'TEXT'],
-  ['chat_message', 'updated_at', 'TEXT'],                              // any change: the page refreshes changed messages                                   // wrong_portfolio | prefer_other | experience | other
+  ['chat_message', 'updated_at', 'TEXT'],
+  ['schedule_item', 'call_channel', 'TEXT'],                           // an online meeting: who can join is who can open this channel                              // any change: the page refreshes changed messages                                   // wrong_portfolio | prefer_other | experience | other
 ];
 function migrate(db: DatabaseSync) {
   for (const [table, column, ddl] of COLUMNS) {

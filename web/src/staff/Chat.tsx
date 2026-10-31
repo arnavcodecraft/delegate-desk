@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Hash, Users, Flag, Settings2, Lock, Megaphone, Briefcase } from 'lucide-react';
 import { api } from '../api';
 import { dt } from '../format';
 import { Alert, Btn, Field, Loading, Modal, Switch, Tabs, useAsync, useToast } from '../ui';
 import { PageHead, useStaff } from './Shell';
 import { ChatPane, chatApi, StatusPicker } from '../chat/ChatPane';
+import { CallButtons, CallRoom, type CallTarget } from '../calls/CallRoom';
 
 const seen = (k: string) => { try { return localStorage.getItem(`dd-staff-seen-${k}`) ?? ''; } catch { return ''; } };
 const markSeen = (k: string) => { try { localStorage.setItem(`dd-staff-seen-${k}`, new Date().toISOString()); } catch { /* private mode */ } };
@@ -17,6 +18,11 @@ export function ChatAdmin() {
   const [tab, setTab] = useState<'chat' | 'reports' | 'settings'>('chat');
   const [active, setActive] = useState<string | null>(null);
   const [broadcast, setBroadcast] = useState(false);
+  const callsBase = `/api/admin/events/${eventId}/calls`;
+  const [calls, setCalls] = useState<any[]>([]);
+  const [inCall, setInCall] = useState<CallTarget | null>(null);
+  useEffect(() => { const load = () => api.get<any[]>(callsBase).then(setCalls).catch(() => setCalls([])); load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, [callsBase]);
+  const callFor = (ch: string) => calls.find((c) => c.key === `ch:${ch}`);
   const base = `/api/admin/events/${eventId}/chat`;
   const capi = useMemo(() => chatApi(base, { close: (id) => api.post(`${base}/messages/${id}/close`, {}) }), [base]);
   if (!data.data) return <Loading />;
@@ -37,24 +43,28 @@ export function ChatAdmin() {
         <aside className="ch-side">
           <div className="ch-me">You appear as <b>{d.me.name}</b><StatusPicker base={base} status={d.me.status} onSaved={data.reload} /></div>
           <div className="ch-group-label">Your team</div>
-          {d.team.map((c: any) => <button key={c.key} className={`ch-item ${channel === c.key ? 'on' : ''}`} onClick={() => { markSeen(`${eventId}-${c.key}`); setActive(c.key); }} title={c.description}>{c.key === 'staff' ? <Users size={16} /> : c.key.startsWith('eb:') ? <Lock size={16} /> : <Briefcase size={16} />}<span>{c.label}</span>{c.mention && c.key !== channel && c.mention > seen(`${eventId}-${c.key}`) ? <i className="ch-at" aria-label="You were mentioned">@</i> : <span className="ch-count">{c.count || ''}</span>}</button>)}
+          {d.team.map((c: any) => <button key={c.key} className={`ch-item ${channel === c.key ? 'on' : ''}`} onClick={() => { markSeen(`${eventId}-${c.key}`); setActive(c.key); }} title={c.description}>{c.key === 'staff' ? <Users size={16} /> : c.key.startsWith('eb:') ? <Lock size={16} /> : <Briefcase size={16} />}<span>{c.label}</span>{callFor(c.key) && <i className="call-live" title="Call going on" />}{c.mention && c.key !== channel && c.mention > seen(`${eventId}-${c.key}`) ? <i className="ch-at" aria-label="You were mentioned">@</i> : <span className="ch-count">{c.count || ''}</span>}</button>)}
           <div className="ch-group-label">Delegate groups</div>
-          {d.channels.map((c: any) => <button key={c.key} className={`ch-item ${channel === c.key ? 'on' : ''}`} onClick={() => { markSeen(`${eventId}-${c.key}`); setActive(c.key); }}>{c.key === 'all' ? <Users size={16} /> : <Hash size={16} />}<span>{c.label}</span>{c.mention && c.key !== channel && c.mention > seen(`${eventId}-${c.key}`) ? <i className="ch-at" aria-label="You were mentioned">@</i> : <span className="ch-count">{c.count || ''}</span>}</button>)}
+          {d.channels.map((c: any) => <button key={c.key} className={`ch-item ${channel === c.key ? 'on' : ''}`} onClick={() => { markSeen(`${eventId}-${c.key}`); setActive(c.key); }}>{c.key === 'all' ? <Users size={16} /> : <Hash size={16} />}<span>{c.label}</span>{callFor(c.key) && <i className="call-live" title="Call going on" />}{c.mention && c.key !== channel && c.mention > seen(`${eventId}-${c.key}`) ? <i className="ch-at" aria-label="You were mentioned">@</i> : <span className="ch-count">{c.count || ''}</span>}</button>)}
           {admin && <p className="ch-rules">Set up channels like Logistics or Press under <a href="/app/teamspace?tab=channels">Teamspace → Team channels</a>.</p>}
         </aside>
         <div className="ch-main">
-          <ChatPane key={channel} channel={channel} title={ch?.label ?? ''} api={capi} meWho={d.me.who} rich moderator slowOptions={d.slowOptions} onSlow={(seconds) => api.post(`${base}/slow`, { channel, seconds }).then(() => toast(seconds ? `Slow mode: ${seconds} s` : 'Slow mode off', 'ok'))}
+          <ChatPane key={channel} channel={channel} title={ch?.label ?? ''} api={capi} meWho={d.me.who} rich moderator slowOptions={d.slowOptions} actions={d.settings.calls !== false ? <CallButtons joined={inCall?.key === `ch:${channel}`} active={callFor(channel)} onStart={(kind) => setInCall({ key: `ch:${channel}`, title: ch?.label ?? 'Call', kind })} /> : undefined}
+            onSlow={(seconds) => api.post(`${base}/slow`, { channel, seconds }).then(() => toast(seconds ? `Slow mode: ${seconds} s` : 'Slow mode off', 'ok'))}
             subtitle={ch?.description ?? (channel === 'all' ? 'Every delegate at the conference' : 'Delegates in this committee and its EB')}
             onRemove={isTeam ? undefined : async (m) => { if (!confirm(`Remove this message from ${m.sender_name}?`)) return; try { await api.post(`${base}/messages/${m.id}/remove`); toast('Removed', 'ok'); } catch (e: any) { toast(e.message, 'bad'); } }} />
         </div>
       </div>)}
+      {inCall && <CallRoom key={inCall.key} base={callsBase} target={inCall} onClose={() => setInCall(null)} />}
       {broadcast && <Broadcast base={base} count={d.channels.length} onClose={() => setBroadcast(false)} />}
       {tab === 'reports' && <Reports base={base} onChange={data.reload} />}
       {tab === 'settings' && <div className="card stack">
         <h3><Settings2 className="icon" /> Chat settings</h3>
-        <Switch checked={d.settings.enabled} onChange={async (on) => { await api.post(`${base}/settings`, { enabled: on, dms: d.settings.dms }); toast(on ? 'Chat is on' : 'Chat is off', 'ok'); data.reload(); }} label="Conference chat (All committees and committee groups)" />
-        <Switch checked={d.settings.dms} onChange={async (on) => { await api.post(`${base}/settings`, { enabled: d.settings.enabled, dms: on }); toast(on ? 'Private messages are on' : 'Private messages are off', 'ok'); data.reload(); }} label="Private messages between delegates" />
-        <p className="small muted" style={{ margin: 0 }}>Many delegates are under 18. If your school partners prefer, keep private messages off: delegates can still talk in the groups, where your team can see everything.</p>
+        <Switch checked={d.settings.enabled} onChange={async (on) => { await api.post(`${base}/settings`, { enabled: on }); toast(on ? 'Chat is on' : 'Chat is off', 'ok'); data.reload(); }} label="Conference chat (All committees and committee groups)" />
+        <Switch checked={d.settings.dms} onChange={async (on) => { await api.post(`${base}/settings`, { dms: on }); toast(on ? 'Private messages are on' : 'Private messages are off', 'ok'); data.reload(); }} label="Private messages between delegates" />
+        <Switch checked={d.settings.calls !== false} onChange={async (on) => { await api.post(`${base}/settings`, { calls: on }); toast(on ? 'Calls are on' : 'Calls are off', 'ok'); data.reload(); }} label="Audio and video calls in groups and team channels, and online meetings" />
+        <Switch checked={!!d.settings.dmCalls} onChange={async (on) => { await api.post(`${base}/settings`, { dmCalls: on }); toast(on ? 'Calls in private messages are on' : 'Calls in private messages are off', 'ok'); data.reload(); }} label="Calls between two delegates in private messages" />
+        <p className="small muted" style={{ margin: 0 }}>Many delegates are under 18. If your school partners prefer, keep private messages and private calls off: delegates can still talk and call in the groups, where your team can see who is there.</p>
       </div>}
     </div>
   );

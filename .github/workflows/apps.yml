@@ -45,6 +45,11 @@ jobs:
         run: node prepare.mjs
       - name: Create the Android project
         run: npx cap add android && npx cap sync android
+      - name: Camera and microphone (audio and video calls)
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          for P in CAMERA RECORD_AUDIO MODIFY_AUDIO_SETTINGS; do grep -q "android.permission.$P" $M || sed -i "s#<application#<uses-permission android:name=\"android.permission.$P\" />\n    <application#" $M; done
+          grep -n "permission" $M
       - name: App icon and splash screen
         run: npx capacitor-assets generate --android --iconBackgroundColor '#1f4fe0' --iconBackgroundColorDark '#1f4fe0' --splashBackgroundColor '#060b18' --splashBackgroundColorDark '#060b18'
         continue-on-error: true

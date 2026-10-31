@@ -23,6 +23,7 @@ import { markBounced } from '../services/notify.ts';
 import { hmacHex } from '../services/gateways.ts';
 import { checkUpload } from '../services/scanner.ts';
 import { delegateInbox, delegatePost, directory, block, report, read as chatRead, pins as chatPins, members as chatMembers, react, vote, pin, edit as editMessage, deleteOwn, ping, roster, setStatus, STATUS_PRESETS } from '../services/chat.ts';
+import * as calls from '../services/calls.ts';
 import { delegateActivity, delegateSchedule, delegateQuestions, ask, upvote, rsvp } from '../services/teamspace.ts';
 import { sendOtp, verifyOtp } from '../services/otp.ts';
 import { whatsapp } from '../services/channels.ts';
@@ -206,6 +207,14 @@ publicRouter.get('/r/:token/activity', h((req) => delegateActivity(regByToken(P(
 publicRouter.get('/r/:token/schedule', h((req) => delegateSchedule(regByToken(P(req).token))));
 publicRouter.get('/r/:token/questions', h((req) => delegateQuestions(regByToken(P(req).token))));
 publicRouter.post('/r/:token/questions', h((req) => ({ id: ask(regByToken(P(req).token), req.body ?? {}) })));
+// Audio and video calls, and online meetings, for delegates.
+const ck = (req: express.Request) => String(req.body?.key ?? req.query.key ?? '');
+publicRouter.get('/r/:token/calls', h((req) => calls.activeCalls(DV(req))));
+publicRouter.post('/r/:token/calls/join', h((req) => calls.join(DV(req), ck(req), req.body ?? {})));
+publicRouter.post('/r/:token/calls/poll', h((req) => calls.poll(DV(req), ck(req), String(req.body?.pid ?? ''), req.body?.state ?? {})));
+publicRouter.post('/r/:token/calls/signal', h((req) => calls.signal(DV(req), ck(req), String(req.body?.pid ?? ''), String(req.body?.to ?? ''), String(req.body?.type ?? ''), req.body?.data)));
+publicRouter.post('/r/:token/calls/leave', h((req) => { calls.leave(DV(req), ck(req), String(req.body?.pid ?? '')); return { ok: true }; }));
+publicRouter.post('/r/:token/calls/moderate', h((req) => { calls.moderate(DV(req), ck(req), String(req.body?.pid ?? ''), String(req.body?.action ?? ''), req.body?.target ? String(req.body.target) : undefined); return { ok: true }; }));
 publicRouter.post('/r/:token/schedule/:sid/interested', h((req) => { rsvp(regByToken(P(req).token), P(req).sid); return { ok: true }; }));
 publicRouter.post('/r/:token/questions/:qid/vote', h((req) => { upvote(regByToken(P(req).token), P(req).qid); return { ok: true }; }));
 publicRouter.post('/r/:token/chat', h((req) => delegatePost(regByToken(P(req).token), req.body ?? {})));

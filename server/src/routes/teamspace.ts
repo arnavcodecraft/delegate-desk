@@ -6,6 +6,7 @@ import { forbidden } from '../util.ts';
 import { h, P } from './public.ts';
 import * as chat from '../services/chat.ts';
 import * as ts from '../services/teamspace.ts';
+import * as calls from '../services/calls.ts';
 
 export const teamspaceRouter = express.Router();
 const staff = requirePerm('lists.read', 'messages.read');
@@ -68,3 +69,13 @@ teamspaceRouter.post(`${T}/questions/:qid`, staff, h((req) => { ts.answer(V(req)
 teamspaceRouter.get(`${T}/notes/:cid`, staff, h((req) => ts.notes(V(req), P(req).cid)));
 teamspaceRouter.post(`${T}/notes/:cid`, staff, h((req) => ({ id: ts.saveNote(V(req), P(req).cid, req.body ?? {}) })));
 teamspaceRouter.delete(`${T}/notes/:cid/:nid`, staff, h((req) => { if (!P(req).nid) throw forbidden(); ts.deleteNote(V(req), P(req).cid, P(req).nid); return { ok: true }; }));
+
+// ---------- audio and video calls, and online meetings ----------
+const K = '/events/:id/calls';
+const key = (req: express.Request) => String(req.body?.key ?? req.query.key ?? '');
+teamspaceRouter.get(K, staff, h((req) => calls.activeCalls(V(req))));
+teamspaceRouter.post(`${K}/join`, staff, h((req) => calls.join(V(req), key(req), req.body ?? {})));
+teamspaceRouter.post(`${K}/poll`, staff, h((req) => calls.poll(V(req), key(req), String(req.body?.pid ?? ''), req.body?.state ?? {})));
+teamspaceRouter.post(`${K}/signal`, staff, h((req) => calls.signal(V(req), key(req), String(req.body?.pid ?? ''), String(req.body?.to ?? ''), String(req.body?.type ?? ''), req.body?.data)));
+teamspaceRouter.post(`${K}/leave`, staff, h((req) => { calls.leave(V(req), key(req), String(req.body?.pid ?? '')); return { ok: true }; }));
+teamspaceRouter.post(`${K}/moderate`, staff, h((req) => { calls.moderate(V(req), key(req), String(req.body?.pid ?? ''), String(req.body?.action ?? ''), req.body?.target ? String(req.body.target) : undefined); return { ok: true }; }));

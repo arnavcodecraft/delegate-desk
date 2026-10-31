@@ -199,8 +199,11 @@ organiserRouter.post('/events/:id/chat/messages/:mid/remove', requirePerm('lists
 organiserRouter.get('/events/:id/chat/reports', requirePerm('messages.read', 'event.config'), h((req) => { if (committeeScope(req)) throw forbidden(); return chatReports(P(req).id); }));
 organiserRouter.post('/events/:id/chat/reports/:rid/resolve', requirePerm('messages.read', 'event.config'), h((req) => { if (committeeScope(req)) throw forbidden(); resolveReport(P(req).id, P(req).rid, req.auth!.user.id); return { ok: true }; }));
 organiserRouter.post('/events/:id/chat/settings', requirePerm('event.config'), h((req) => {
-  saveEventSettings(P(req).id, { chat: { enabled: req.body?.enabled !== false, dms: req.body?.dms !== false } });
-  audit('chat.settings', 'event', P(req).id, undefined, { enabled: req.body?.enabled !== false, dms: req.body?.dms !== false });
+  const cur = eventSettings(P(req).id).chat;
+  const b = req.body ?? {};
+  const next = { enabled: b.enabled !== undefined ? b.enabled !== false : cur.enabled, dms: b.dms !== undefined ? b.dms !== false : cur.dms, calls: b.calls !== undefined ? b.calls !== false : cur.calls !== false, dmCalls: b.dmCalls !== undefined ? !!b.dmCalls : !!cur.dmCalls };
+  saveEventSettings(P(req).id, { chat: next });
+  audit('chat.settings', 'event', P(req).id, undefined, next);
   return { ok: true };
 }));
 

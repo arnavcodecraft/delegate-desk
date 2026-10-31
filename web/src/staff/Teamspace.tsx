@@ -3,7 +3,8 @@ import { AtSign, Bell, CalendarDays, CheckCircle2, ClipboardList, EyeOff, Eye, H
 import { api } from '../api';
 import { Alert, Btn, Field, Loading, Modal, Segmented, Tabs, useAsync, useToast } from '../ui';
 import { PageHead, useStaff } from './Shell';
-import { groupByDay, ScheduleRow } from '../chat/DelegateChat';
+import { groupByDay, JoinMeeting, ScheduleRow } from '../chat/DelegateChat';
+import { CallRoom, type CallTarget } from '../calls/CallRoom';
 import { formatText } from '../chat/ChatPane';
 
 type Tab = 'activity' | 'tasks' | 'schedule' | 'qa' | 'notes' | 'channels';
@@ -21,8 +22,11 @@ export function TeamspacePage() {
   // Committees this person runs (a chair: their own), from the chat's EB channels.
   const chat = useAsync<any>(() => api.get(`/api/admin/events/${eventId}/chat`), [eventId]);
   const committees: { id: string; label: string }[] = (chat.data?.team ?? []).filter((c: any) => c.key.startsWith('eb:')).map((c: any) => ({ id: c.key.slice(3), label: c.label.replace(/^EB · /, '') }));
+  const [inCall, setInCall] = useState<CallTarget | null>(null);
   if (!eventId) return <Alert tone="info">Choose a conference first.</Alert>;
   const T = `/api/admin/events/${eventId}/teamspace`;
+  const rooms: { key: string; label: string }[] = [...(chat.data?.team ?? []), ...(chat.data?.channels ?? [])].map((c: any) => ({ key: c.key, label: c.label }));
+  const joinMeeting = (s: any) => setInCall({ key: `mt:${s.id}`, title: s.title, kind: 'video' });
   return (
     <div className="stack">
       <PageHead title="Teamspace" subtitle="Everything your team needs to run the conference together: what needs your attention, a task board, the schedule, delegates’ questions for the EB, and each committee’s EB notebook. Chat lives under Chat." />
@@ -30,9 +34,10 @@ export function TeamspacePage() {
         { key: 'activity', label: 'Activity' }, { key: 'tasks', label: 'Tasks' }, { key: 'schedule', label: 'Schedule' }, { key: 'qa', label: 'Ask the EB' }, { key: 'notes', label: 'EB notebook' },
         ...(admin ? [{ key: 'channels' as const, label: 'Team channels' }] : []),
       ]} />
-      {tab === 'activity' && <ActivityTab T={T} go={setTab} />}
+      {tab === 'activity' && <ActivityTab T={T} go={setTab} onJoin={joinMeeting} />}
       {tab === 'tasks' && <Tasks T={T} committees={committees} />}
-      {tab === 'schedule' && <ScheduleTab T={T} committees={committees} edit={admin} />}
+      {tab === 'schedule' && <ScheduleTab T={T} committees={committees} edit={admin} rooms={rooms} onJoin={joinMeeting} />}
+      {inCall && <CallRoom key={inCall.key} base={`/api/admin/events/${eventId}/calls`} target={inCall} onClose={() => setInCall(null)} />}
       {tab === 'qa' && <QaTab T={T} committees={committees} />}
       {tab === 'notes' && (chat.data ? <Notebook T={T} committees={committees} /> : <Loading />)}
       {tab === 'channels' && admin && <Channels T={T} />}
@@ -43,7 +48,7 @@ export function TeamspacePage() {
 // ---------- activity ----------
 const ICON: Record<string, typeof Bell> = { mention: AtSign, reply: MessageSquareReply, announcement: Megaphone };
 const VERB: Record<string, string> = { mention: 'mentioned you', reply: 'replied to you', announcement: 'posted an announcement' };
-function ActivityTab({ T, go }: { T: string; go: (t: Tab) => void }) {
+function ActivityTab({ T, go, onJoin }: { T: string; go: (t: Tab) => void; onJoin: (s: any) => void }) {
   const d = useAsync<any>(() => api.get(`${T}/activity`), [T]);
   useEffect(() => { const t = setInterval(d.reload, 20000); return () => clearInterval(t); }, [d]);
   if (!d.data) return <Loading />;
@@ -71,7 +76,7 @@ function ActivityTab({ T, go }: { T: string; go: (t: Tab) => void }) {
         </div>
         <div className="card stack tight">
           <div className="row between"><h3 style={{ margin: 0 }}><CalendarDays className="icon" /> Coming up</h3><Btn size="sm" kind="ghost" onClick={() => go('schedule')}>Schedule</Btn></div>
-          {!a.upcoming.length ? <p className="small muted" style={{ margin: 0 }}>Nothing scheduled.</p> : a.upcoming.map((s: any) => <ScheduleRow key={s.id} s={s} compact />)}
+          {!a.upcoming.length ? <p className="small muted" style={{ margin: 0 }}>Nothing scheduled.</p> : a.upcoming.map((s: any) => <ScheduleRow key={s.id} s={s} compact actions={<JoinMeeting s={s} onJoin={onJoin} />} />)}
         </div>
       </div>
     </div>
@@ -187,7 +192,7 @@ function TaskEditor({ T, task, people, committees, buckets, onClose, onSaved }: 
 // ---------- schedule ----------
 const KINDS = [['session', 'Committee session'], ['ceremony', 'Ceremony'], ['break', 'Break'], ['social', 'Social'], ['deadline', 'Deadline'], ['meeting', 'Team meeting']];
 const AUD = [['all', 'Everyone'], ['delegates', 'Delegates only'], ['staff', 'The team only'], ['eb', 'That committee’s EB only']];
-function ScheduleTab({ T, committees, edit }: { T: string; committees: { id: string; label: string }[]; edit: boolean }) {
+function ScheduleTab({ T, committees, edit, rooms, onJoin }: { T: string; committees: { id: string; label: string }[]; edit: boolean; rooms: { key: string; label: string }[]; onJoin: (s: any) => void }) {
   const list = useAsync<any[]>(() => api.get(`${T}/schedule`), [T]);
   const [item, setItem] = useState<any | null>(null);
   const toast = useToast();
@@ -195,14 +200,15 @@ function ScheduleTab({ T, committees, edit }: { T: string; committees: { id: str
   return (
     <div className="stack">
       <div className="row between"><p className="muted" style={{ margin: 0 }}>Delegates see items for everyone or delegates, for all committees or their own, in their Teamspace. The team sees everything.</p>
-        {edit && <Btn kind="primary" icon={Plus} onClick={() => setItem({ title: '', kind: 'session', audience: 'all', committee_id: '', starts_at: '', ends_at: '', location: '', notes: '' })}>Add to schedule</Btn>}</div>
+        {edit && <Btn kind="primary" icon={Plus} onClick={() => setItem({ title: '', kind: 'session', audience: 'all', committee_id: '', starts_at: '', ends_at: '', location: '', notes: '', call_channel: '' })}>Add to schedule</Btn>}</div>
       {!list.data.length ? <div className="card"><p className="muted" style={{ margin: 0 }}><CalendarDays className="icon" /> Nothing scheduled yet.{edit ? ' Add the opening ceremony and the committee sessions.' : ''}</p></div>
         : groupByDay(list.data).map((g) => <section key={g.day} className="card ts-day"><h3>{g.day}</h3>{g.items.map((s) => <ScheduleRow key={s.id} s={s} actions={<div className="row" style={{ gap: 4 }}>
+          <JoinMeeting s={s} onJoin={onJoin} />
           {s.audience !== 'all' && <span className="badge">{AUD.find((a) => a[0] === s.audience)?.[1]}</span>}{s.going > 0 && <span className="badge info">{s.going} interested</span>}
-          {edit && <Btn size="sm" kind="ghost" icon={Pencil} onClick={() => setItem({ ...s, starts_at: toLocal(s.starts_at), ends_at: toLocal(s.ends_at), committee_id: s.committee_id ?? '' })} title="Edit" />}
+          {edit && <Btn size="sm" kind="ghost" icon={Pencil} onClick={() => setItem({ ...s, starts_at: toLocal(s.starts_at), ends_at: toLocal(s.ends_at), committee_id: s.committee_id ?? '', call_channel: s.call_channel ?? '' })} title="Edit" />}
           {edit && <Btn size="sm" kind="ghost" icon={Trash2} onClick={async () => { if (!confirm(`Delete “${s.title}”?`)) return; await api.del(`${T}/schedule/${s.id}`); list.reload(); }} title="Delete" />}</div>} />)}</section>)}
       {item && <Modal title={item.id ? 'Edit schedule item' : 'Add to schedule'} onClose={() => setItem(null)} footer={<><Btn onClick={() => setItem(null)}>Cancel</Btn><Btn kind="primary" onClick={async () => {
-        const body = { ...item, starts_at: fromLocal(item.starts_at), ends_at: fromLocal(item.ends_at), committee_id: item.committee_id || null };
+        const body = { ...item, starts_at: fromLocal(item.starts_at), ends_at: fromLocal(item.ends_at), committee_id: item.committee_id || null, call_channel: item.call_channel || null };
         try { if (item.id) await api.patch(`${T}/schedule/${item.id}`, body); else await api.post(`${T}/schedule`, body); setItem(null); list.reload(); toast('Schedule saved', 'ok'); } catch (e: any) { toast(e.message, 'bad'); }
       }}>Save</Btn></>}>
         <div className="stack">
@@ -215,6 +221,9 @@ function ScheduleTab({ T, committees, edit }: { T: string; committees: { id: str
             <Field label="Committee"><select value={item.committee_id} onChange={(e) => setItem({ ...item, committee_id: e.target.value })}><option value="">All committees</option>{committees.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></Field>
             <Field label="Where"><input value={item.location} maxLength={120} onChange={(e) => setItem({ ...item, location: e.target.value })} placeholder="Main auditorium" /></Field>
           </div>
+          <Field label="Online meeting (audio and video)" hint="People who can open this channel get a Join button from 15 minutes before. Up to 12 people with cameras.">
+            <select value={item.call_channel} onChange={(e) => setItem({ ...item, call_channel: e.target.value })}><option value="">No online meeting</option>{rooms.map((r) => <option key={r.key} value={r.key}>{r.key === 'all' ? 'All delegates (All committees)' : r.label}</option>)}</select>
+          </Field>
           <Field label="Notes"><textarea rows={2} value={item.notes} maxLength={1000} onChange={(e) => setItem({ ...item, notes: e.target.value })} /></Field>
         </div>
       </Modal>}

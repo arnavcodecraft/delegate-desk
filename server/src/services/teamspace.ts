@@ -11,7 +11,7 @@
 import { all, one, run, insert } from '../db.ts';
 import { bad, conflict, forbidden, notFound, now, uid } from '../util.ts';
 import { rateLimit } from '../auth.ts';
-import { announcements, delegateChannels, mentionsAndReplies, staffChannelKeys, type Viewer } from './chat.ts';
+import { announcements, delegateChannels, mayOpen, mentionsAndReplies, staffChannelKeys, type Viewer } from './chat.ts';
 
 type Staff = Extract<Viewer, { kind: 'staff' }>;
 const str = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max);
@@ -136,7 +136,8 @@ export function staffSchedule(v: Staff) {
 /** What a delegate sees: items for everyone or delegates, for all committees or theirs. */
 export function delegateSchedule(reg: Record<string, any>) {
   const seat = seatOf(reg);
-  return going(all(`${scheduleSql} AND s.audience IN ('all', 'delegates') AND (s.committee_id IS NULL OR s.committee_id = ?) ORDER BY s.starts_at`, reg.event_id, seat?.id ?? ''), `d:${reg.id}`);
+  return going(all(`${scheduleSql} AND s.audience IN ('all', 'delegates') AND (s.committee_id IS NULL OR s.committee_id = ?) ORDER BY s.starts_at`, reg.event_id, seat?.id ?? ''), `d:${reg.id}`)
+    .map((s) => ({ ...s, call_channel: s.call_channel && mayOpen({ kind: 'delegate', reg }, s.call_channel) ? s.call_channel : null }));
 }
 /** "Interested" on a schedule item (socials, ceremonies, workshops): toggles, and the team sees the count. */
 export function rsvp(reg: Record<string, any>, id: string) {
@@ -144,6 +145,15 @@ export function rsvp(reg: Record<string, any>, id: string) {
   const who = `d:${reg.id}`;
   if (one('SELECT 1 FROM schedule_rsvp WHERE item_id = ? AND who = ?', id, who)) run('DELETE FROM schedule_rsvp WHERE item_id = ? AND who = ?', id, who);
   else run('INSERT INTO schedule_rsvp (item_id, who, created_at) VALUES (?, ?, ?)', id, who, now());
+}
+/** An online meeting's room: who can join is who can open this channel (the whole team, a committee, its EB, everyone...). */
+function callChannel(eventId: string, v: unknown) {
+  if (!v) return null;
+  const c = String(v);
+  if (c === 'staff' || c === 'all') return c;
+  if (/^(c|eb):/.test(c)) { committeeOf(eventId, c.slice(c.indexOf(':') + 1)); return c; }
+  if (c.startsWith('team:') && one('SELECT 1 FROM team_channel WHERE id = ? AND event_id = ?', c.slice(5), eventId)) return c;
+  throw bad('Choose who can join the meeting');
 }
 function cleanItem(eventId: string, p: any, cur?: any) {
   const title = p.title !== undefined ? str(p.title, 140) : cur?.title;
@@ -160,6 +170,7 @@ function cleanItem(eventId: string, p: any, cur?: any) {
     title, kind, audience, starts_at: starts, ends_at: ends,
     committee_id: p.committee_id !== undefined ? committeeOf(eventId, p.committee_id) : cur?.committee_id ?? null,
     location: p.location !== undefined ? str(p.location, 120) : cur?.location ?? '',
+    call_channel: p.call_channel !== undefined ? callChannel(eventId, p.call_channel) : cur?.call_channel ?? null,
     notes: p.notes !== undefined ? str(p.notes, 1000) : cur?.notes ?? '',
   };
 }
@@ -172,8 +183,8 @@ export function updateScheduleItem(eventId: string, id: string, p: any) {
   const cur = one('SELECT * FROM schedule_item WHERE id = ? AND event_id = ?', id, eventId);
   if (!cur) throw notFound('Schedule item');
   const c = cleanItem(eventId, p, cur);
-  run('UPDATE schedule_item SET title = ?, kind = ?, audience = ?, starts_at = ?, ends_at = ?, committee_id = ?, location = ?, notes = ?, updated_at = ? WHERE id = ?',
-    c.title, c.kind, c.audience, c.starts_at, c.ends_at, c.committee_id, c.location, c.notes, now(), id);
+  run('UPDATE schedule_item SET title = ?, kind = ?, audience = ?, starts_at = ?, ends_at = ?, committee_id = ?, location = ?, notes = ?, call_channel = ?, updated_at = ? WHERE id = ?',
+    c.title, c.kind, c.audience, c.starts_at, c.ends_at, c.committee_id, c.location, c.notes, c.call_channel, now(), id);
 }
 export function deleteScheduleItem(eventId: string, id: string) { run('DELETE FROM schedule_rsvp WHERE item_id = (SELECT id FROM schedule_item WHERE id = ? AND event_id = ?)', id, eventId); run('DELETE FROM schedule_item WHERE id = ? AND event_id = ?', id, eventId); }
 

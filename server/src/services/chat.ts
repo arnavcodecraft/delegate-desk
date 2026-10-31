@@ -31,7 +31,7 @@ const staffViewer = (eventId: string, scope: string[] | null, user?: { id: strin
   ({ kind: 'staff', eventId, user: user ?? { id: 'system', name: 'Team' }, scope, admin: !scope, as });
 
 /** A delegate's seat and display name. */
-function identity(reg: Record<string, any>) {
+export function identity(reg: Record<string, any>) {
   const seat = one(`SELECT p.name AS portfolio, c.id AS committee_id, c.short, c.name AS committee FROM seat s JOIN portfolio p ON p.id = s.portfolio_id
     JOIN committee c ON c.id = p.committee_id WHERE s.registration_id = ?`, reg.id);
   const first = String(reg.full_name ?? '').split(/\s+/)[0];
@@ -62,11 +62,11 @@ function staffMay(v: Extract<Viewer, { kind: 'staff' }>, channel: string) {
   if (!v.scope) return channel === 'all' || channel.startsWith('c:') || channel.startsWith('eb:');
   return (channel.startsWith('c:') && v.scope.includes(channel.slice(2))) || (channel.startsWith('eb:') && v.scope.includes(channel.slice(3)));
 }
-function mayOpen(v: Viewer, channel: string) {
+export function mayOpen(v: Viewer, channel: string) {
   if (v.kind === 'delegate') { if (isTeamChannel(channel)) return false; return delegateMay(v.reg, channel); }
   return staffMay(v, channel);
 }
-function assertOpen(v: Viewer, channel: string) {
+export function assertOpen(v: Viewer, channel: string) {
   if (v.kind === 'delegate') settingsFor(v.reg.event_id);
   if (!mayOpen(v, channel)) {
     if (v.kind === 'staff') throw forbidden(channel.startsWith('dm:') ? 'Private chats are only visible when reported' : channel.startsWith('team:') ? 'Only members of this team channel can open it' : 'You can only see your own committee’s group');
@@ -294,7 +294,7 @@ export function delegateInbox(reg: Record<string, any>) {
     }
   }
   for (const c of channels) c.mention = lastMention(reg.event_id, c.key, `d:${reg.id}`);
-  return { me: { id: reg.id, who: `d:${reg.id}`, name, status: statusOf(reg.event_id, `d:${reg.id}`) }, committee: seat ? { id: seat.committee_id, name: seat.committee, short: seat.short } : null, dms: s.dms, channels, reactions: REACTIONS, blocked: all('SELECT blocked_id FROM chat_block WHERE registration_id = ?', reg.id).map((b) => b.blocked_id) };
+  return { me: { id: reg.id, who: `d:${reg.id}`, name, status: statusOf(reg.event_id, `d:${reg.id}`) }, committee: seat ? { id: seat.committee_id, name: seat.committee, short: seat.short } : null, dms: s.dms, calls: s.calls !== false, dmCalls: !!s.dmCalls, channels, reactions: REACTIONS, blocked: all('SELECT blocked_id FROM chat_block WHERE registration_id = ?', reg.id).map((b) => b.blocked_id) };
 }
 
 /** Delegates someone can start a private chat with: everyone seated at the conference, listed by committee and portfolio. */
