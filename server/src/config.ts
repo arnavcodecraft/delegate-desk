@@ -5,6 +5,10 @@ const root = path.resolve(import.meta.dirname, '../..');
 // Settings can live in a .env file next to package.json (values already in the environment win). Tests never load it.
 if (!process.env.NODE_TEST_CONTEXT && !process.env.DD_NO_ENV_FILE) { try { process.loadEnvFile(path.join(root, '.env')); } catch { /* no .env file */ } }
 
+let aiSwitch = () => true;
+/** The site's own AI on/off switch (set by services/site.ts). */
+export const setAiSwitch = (f: () => boolean) => { aiSwitch = f; };
+
 export const config = {
   root,
   port: Number(process.env.PORT ?? 8080),
@@ -33,7 +37,13 @@ export const config = {
     dir: process.env.BACKUP_DIR ?? path.join(root, 'data', 'backups'), keep: Number(process.env.BACKUP_KEEP ?? 30),
   },
   // AI turns on when Anthropic (Claude) or Google AI Studio (Gemini) credentials are present.
-  ai: { enabled: !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY), baseUrl: process.env.ANTHROPIC_BASE_URL ?? '' },
+  // AI runs when a key is set AND the site owner has not switched it off (owner console → Features).
+  ai: {
+    hasKey: !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY),
+    get enabled(): boolean { return this.hasKey && aiSwitch(); },
+    set enabled(v: boolean) { this.hasKey = v; },
+    baseUrl: process.env.ANTHROPIC_BASE_URL ?? '',
+  },
   google: {
     serviceAccountJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON ?? '', serviceAccountFile: process.env.GOOGLE_SERVICE_ACCOUNT_FILE ?? '',
     tokenUrl: process.env.GOOGLE_TOKEN_URL ?? '', sheetsBase: process.env.GOOGLE_SHEETS_BASE ?? 'https://sheets.googleapis.com',

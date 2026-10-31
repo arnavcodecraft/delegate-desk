@@ -7,6 +7,7 @@ import {
 import { api } from '../api';
 import { nativeApp, serverUrl } from '../native';
 import { applyTheme, savedTheme } from '../ui';
+import { useSite } from '../site';
 
 export interface PfMe { user: { name: string; email: string } | null; perms?: string[]; workspace?: { id: string; name: string }; mfaPending?: boolean }
 let cached: PfMe | null = null;
@@ -87,6 +88,9 @@ export function PlatformShell({ children, bare, dark }: { children: React.ReactN
   const me = useMe();
   const person = usePerson();
   const loc = useLocation();
+  const site = useSite();
+  // Parts of the site the owner has switched off drop out of the menus.
+  const menus = MENUS.map((m) => ({ ...m, items: m.items.filter((it) => site.allows(it.to)) })).filter((m) => m.items.length);
   const [open, setOpen] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
   const navRef = useRef<HTMLElement>(null);
@@ -111,7 +115,7 @@ export function PlatformShell({ children, bare, dark }: { children: React.ReactN
         <nav className="sx-nav" aria-label="Main" ref={navRef}>
           <Link to="/" className="brand"><span className="mark">D</span><span>DelegateDesk</span></Link>
           <div className="sx-menus">
-            {MENUS.map((m) => (
+            {menus.map((m) => (
               <div key={m.key} className={`sx-menu ${open === m.key ? 'open' : ''}`} onMouseEnter={() => setOpen(m.key)} onMouseLeave={() => setOpen(null)}>
                 <button type="button" aria-expanded={open === m.key} onClick={() => setOpen(open === m.key ? null : m.key)}>{m.label}<ChevronDown className="icon" /></button>
                 <div className="sx-drop" role="menu">
@@ -123,7 +127,7 @@ export function PlatformShell({ children, bare, dark }: { children: React.ReactN
               </div>
             ))}
             <Link to="/#pricing" className="sx-link">Pricing</Link>
-            <NavLink to="/download" className="sx-link">Download</NavLink>
+            {site.allows('/download') && <NavLink to="/download" className="sx-link">Download</NavLink>}
           </div>
           <span className="spacer" />
           <ThemeToggle />
@@ -132,7 +136,7 @@ export function PlatformShell({ children, bare, dark }: { children: React.ReactN
           <button className="sx-burger" aria-label={drawer ? 'Close menu' : 'Open menu'} aria-expanded={drawer} onClick={() => setDrawer(!drawer)}>{drawer ? <X className="icon" /> : <Menu className="icon" />}</button>
         </nav>
         {drawer && <div className="sx-drawer">
-          {MENUS.map((m) => <div key={m.key} className="sx-drawer-group"><div className="sx-drawer-k">{m.label}</div>{m.items.map((it) => <Link key={it.t} to={it.to} className="sx-item"><span className="sx-ic"><it.icon className="icon" /></span><span><b>{it.t}</b><small>{it.d}</small></span></Link>)}</div>)}
+          {menus.map((m) => <div key={m.key} className="sx-drawer-group"><div className="sx-drawer-k">{m.label}</div>{m.items.map((it) => <Link key={it.t} to={it.to} className="sx-item"><span className="sx-ic"><it.icon className="icon" /></span><span><b>{it.t}</b><small>{it.d}</small></span></Link>)}</div>)}
           {nativeApp && <div className="sx-drawer-group"><Link to="/app-settings" className="sx-item"><span className="sx-ic"><Settings className="icon" /></span><span><b>App settings</b><small>{serverUrl() ? serverUrl().replace(/^https:\/\//, '') : 'Connect your DelegateDesk server'}</small></span></Link></div>}
           <div className="sx-drawer-cta">{!signedIn && !person?.person && <Link to="/login" className="pf-btn ghost">Sign in</Link>}{signedIn ? <Link to="/app" className="pf-btn primary">Dashboard</Link> : <Link to="/list" className="pf-btn primary">List your conference</Link>}</div>
         </div>}

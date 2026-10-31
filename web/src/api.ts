@@ -29,6 +29,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     throw new ApiError(res.status || 503, 'This site can’t reach the DelegateDesk server, so nothing can be saved. If you run the site, open /setup to see what to fix.');
   }
   if (!res.ok) {
+    if (res.status === 503 && data?.maintenance) window.dispatchEvent(new Event('dd:maintenance'));
     if (res.status === 401 && url.startsWith('/api/') && !url.startsWith('/api/auth') && !url.startsWith('/api/public')) window.dispatchEvent(new CustomEvent('dd:unauthorised', { detail: data }));
     throw new ApiError(res.status, data?.error ?? `Request failed (${res.status})`, data?.details);
   }

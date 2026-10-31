@@ -110,7 +110,7 @@ authRouter.get('/me', h((req) => {
   if (!req.auth) return { user: null };
   const a = req.auth;
   // The platform inbox belongs to the DelegateDesk team (main workspace), not to organisers in their own workspaces.
-  const perms = Object.keys(permissionMatrix()).filter((p) => can(a.roleNames, p) && (p !== 'platform.inbox' || currentWorkspace().id === MAIN.id));
+  const perms = Object.keys(permissionMatrix()).filter((p) => can(a.roleNames, p) && ((p !== 'platform.inbox' && p !== 'platform.owner') || currentWorkspace().id === MAIN.id));
   return {
     user: { id: a.user.id, name: a.user.name, email: a.user.email, totp: !!a.user.totp_enabled },
     roles: a.roles.map((r) => ({ role: r.role, label: ROLE_LABELS[r.role as Role], committee_id: r.committee_id, event_id: r.event_id, referrer_id: r.referrer_id })),

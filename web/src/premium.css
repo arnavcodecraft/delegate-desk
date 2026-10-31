@@ -57,3 +57,59 @@ table thead th { letter-spacing: .02em; }
 /* dark: the ring needs to be visible on dark surfaces */
 :root[data-theme="dark"] { --ring: 0 0 0 1px rgb(150 175 230 / .14); --lift: 0 12px 28px -18px rgb(0 0 0 / .7); --lift-lg: 0 30px 60px -30px rgb(0 0 0 / .8); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ring: 0 0 0 1px rgb(150 175 230 / .14); --lift: 0 12px 28px -18px rgb(0 0 0 / .7); --lift-lg: 0 30px 60px -30px rgb(0 0 0 / .8); } }
+
+/* ---------- site owner console ---------- */
+.own-ic { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); flex: none; }
+.own-maint.on { border-color: color-mix(in srgb, #d97706 55%, var(--border)); box-shadow: 0 0 0 3px rgb(217 119 6 / .12); }
+.own-maint.on .own-ic { background: rgb(217 119 6 / .14); color: #b45309; }
+.own-feats { display: flex; flex-direction: column; }
+.own-feats h3 { margin: 0 0 .4rem; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); }
+.own-feat { display: flex; align-items: center; gap: 1rem; justify-content: space-between; padding: .75rem 0; border-top: 1px solid var(--border); }
+.own-feat:first-of-type { border-top: 0; }
+.own-feat b { display: block; font-weight: 600; }
+.own-feat small { display: block; color: var(--text-2); font-size: 12.5px; margin-top: 2px; }
+.own-feat.off b { color: var(--text-3); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text-3) 50%, transparent); }
+.own-lec { display: flex; align-items: center; gap: .85rem; padding: .75rem 1rem; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.own-lec:first-child { border-top: 0; }
+.own-thumb { width: 96px; aspect-ratio: 16 / 9; border-radius: 9px; overflow: hidden; flex: none; display: grid; place-items: center; color: #fff; font-weight: 800; background: linear-gradient(135deg, color-mix(in srgb, var(--a, #1f4fe0) 55%, #fff), var(--a, #1f4fe0)); }
+.own-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.own-lec-t { flex: 1 1 220px; min-width: 0; }
+.own-lec-t b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.own-lec-t small { color: var(--text-2); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.own-lec-t small i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.own-lec-act { gap: .25rem; }
+.own-edit-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.own-edit-side { position: sticky; top: 1rem; }
+@media (max-width: 1000px) { .own-edit-grid { grid-template-columns: minmax(0, 1fr); } .own-edit-side { position: static; order: -1; } }
+.own-edit h3 { margin: 0; display: flex; align-items: center; gap: .4rem; }
+.own-preview { border-radius: 12px; box-shadow: none; }
+.vl-player iframe { width: 100%; height: 100%; border: 0; display: block; }
+.vl-empty { width: 100%; height: 100%; display: grid; place-content: center; justify-items: center; gap: .5rem; color: #9fb0d6; font-weight: 600; font-size: 14px; }
+.vl-empty .icon { width: 36px; height: 36px; }
+.vl-thumb-blank { width: 100%; height: 100%; display: grid; place-items: center; color: #fff; font-weight: 800; background: linear-gradient(135deg, color-mix(in srgb, var(--a, #1f4fe0) 55%, #fff), var(--a, #1f4fe0)); }
+.own-swatches { gap: .45rem; }
+.own-swatches button { width: 28px; height: 28px; min-height: 0; padding: 0; border-radius: 50%; border: 2px solid transparent; box-shadow: 0 0 0 1px var(--border); cursor: pointer; }
+.own-swatches button.on { border-color: var(--surface); box-shadow: 0 0 0 2px var(--text); }
+.own-av { width: 34px; height: 34px; font-size: 13px; margin-left: .5rem; }
+.own-ch { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto auto auto; gap: .4rem; align-items: center; }
+.own-ch-t { font-variant-numeric: tabular-nums; text-align: center; }
+.own-file { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; padding: .55rem .65rem; border: 1px dashed var(--border-strong); border-radius: 10px; background: var(--surface-2); }
+.own-file img { width: 72px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; }
+.own-file-t { flex: 1 1 140px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.own-bar { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; margin-bottom: 4px; }
+.own-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--brand), #a77bff); transition: width .2s; }
+
+/* ---------- maintenance and switched-off pages ---------- */
+.dd-hold { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: radial-gradient(900px 500px at 50% -10%, rgb(31 79 224 / .14), transparent 70%), var(--bg); color: var(--text); }
+.dd-hold-card { width: min(520px, 100%); text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 22px; padding: 36px 28px; box-shadow: 0 30px 70px -40px rgb(16 36 84 / .45); }
+.dd-hold-ic { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 18px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #0b2a8a, #1f4fe0 55%, #4d84ff); box-shadow: 0 14px 30px -14px rgb(31 79 224 / .8); }
+.dd-hold-ic .icon { width: 30px; height: 30px; }
+.dd-hold-brand { display: inline-flex; gap: 8px; align-items: center; font-weight: 800; color: var(--text-2); font-size: 14px; margin-bottom: 6px; }
+.dd-hold-brand .logo { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; color: #fff; font-size: 12px; background: var(--brand); }
+.dd-hold h1 { font-size: clamp(24px, 5vw, 30px); letter-spacing: -.02em; margin: 0 0 10px; }
+.dd-hold p { color: var(--text-2); }
+.dd-hold-until { font-size: 14px; }
+.dd-hold-row { display: flex; gap: .6rem; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+.dd-owner-banner { position: sticky; top: 0; z-index: 90; display: flex; gap: .5rem; align-items: center; justify-content: center; flex-wrap: wrap; padding: 8px 16px; font-size: 13.5px; font-weight: 600; background: #fef3c7; color: #78350f; border-bottom: 1px solid #fcd34d; }
+.dd-owner-banner a { color: inherit; text-decoration: underline; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

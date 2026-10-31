@@ -5,7 +5,7 @@ import { DASHBOARD_TOUR, Tour, tourSeen } from './Tour';
 import { Alert, Btn, Field, Loading, useAsync, applyTheme, savedTheme, type Theme } from '../ui';
 import {
   LayoutDashboard, Users, ListChecks, Landmark, ScanLine, Mail, Upload, ReceiptText, CreditCard, Handshake, Wallet, BookOpen, Settings,
-  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, GraduationCap, MessagesSquare, ChevronDown, Mailbox as InboxIcon, Megaphone, type LucideIcon,
+  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, GraduationCap, MessagesSquare, ChevronDown, Mailbox as InboxIcon, Megaphone, Power, type LucideIcon,
 } from 'lucide-react';
 
 export interface Me {
@@ -72,6 +72,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
   { group: 'Settings', items: [
     { to: '/app/conference', label: 'Conference page', perms: ['event.config'], icon: Image },
     { to: '/app/settings', label: 'Settings', perms: ['event.config', 'settings.org', 'settings.finance', 'users.manage'], icon: Settings },
+    { to: '/app/owner', label: 'Site owner', perms: ['platform.owner'], icon: Power },
     { to: '/app/inbox', label: 'Inbox', perms: ['platform.inbox'], icon: InboxIcon },
     { to: '/app/jobs', label: 'Job Board', perms: ['event.config'], icon: Briefcase, more: true },
     { to: '/app/imports', label: 'Import', perms: ['import.registrations', 'finance.import', 'alloc.config', 'referrer.manage'], icon: Upload, more: true },

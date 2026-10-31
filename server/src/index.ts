@@ -7,6 +7,8 @@ import { openDb, all } from './db.ts';
 import { seedChart } from './services/ledger.ts';
 import http from 'node:http';
 import { freePort } from './port.ts';
+import { siteGate, lectureMediaDir } from './services/site.ts';
+import { siteRouter, ownerRouter } from './routes/site.ts';
 import { seedTemplates } from './services/notify.ts';
 import { startJobs } from './services/jobs.ts';
 import { sessionMiddleware } from './auth.ts';
@@ -51,6 +53,8 @@ export function createApp() {
   // Every request runs inside one organiser's workspace (its own database and files).
   app.use((req, _res, next) => workspaceStore.run(resolveWorkspace(req), next));
   app.use(sessionMiddleware);
+  // Maintenance mode and switched-off features (the site owner is never blocked).
+  app.use(siteGate);
   // CSRF: state-changing staff calls must carry a custom header that cross-site forms cannot set.
   app.use(['/api/admin', '/api/finance', '/api/auth', '/api/platform', '/api/me', '/api/prep'], (req, _res, next) => {
     if (req.method !== 'GET' && req.headers['x-dd'] !== '1') return next(new HttpError(403, 'Missing request header'));
@@ -70,6 +74,9 @@ export function createApp() {
     mail: { configured: mailConfigured(), provider: mailProvider(), from: config.mailFrom }, codesOnScreen: showCodesOnScreen(),
     ai: config.ai.enabled, aiProvider: config.ai.enabled ? (useGemini() ? 'gemini' : 'anthropic') : null, proxySecret: !!process.env.PROXY_SECRET, production: process.env.NODE_ENV === 'production',
   }));
+  app.use('/api', siteRouter);
+  app.use('/api/owner', ownerRouter);
+  app.use('/media/lectures', express.static(lectureMediaDir(), { maxAge: '7d' }), (_req, res) => { res.status(404).json({ error: 'Not found' }); });
   app.use('/api/public', publicRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/admin', adminRouter);

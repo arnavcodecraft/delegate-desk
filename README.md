@@ -138,6 +138,14 @@ Configuration lives in environment variables or a `.env` file next to `package.j
 
 New organisers collect fees into their own accounts. The deployment's Razorpay/Cashfree keys and the sandbox test gateway are only offered in the original (main) workspace.
 
+## Site owner console (`/app/owner`)
+
+For the DelegateDesk team: an admin or superadmin of the main workspace, signed in with two-factor.
+
+- **Features**: switch parts of the site on or off: listing new conferences, Explore, the Job Board, live sessions, chat, delegate sign-ups, Prep, the Masterclass, video lectures, AI, Services and app downloads. A switched-off feature drops out of the menus, its pages show a short notice, and the server refuses its requests (403). The owner still sees everything. Nothing is deleted.
+- **Maintenance mode**: visitors see a maintenance page with your message and an optional "back by" time, and the API answers 503. Health checks, signing in and the owner's own tools keep working, and the owner can use the whole site.
+- **Videos**: add, edit, reorder, publish or unpublish, and delete tutor lectures. Each lecture can be an uploaded MP4 or WebM (up to 500 MB) or a YouTube, Vimeo or https link. It can also have a poster, WebVTT captions, timed chapters and a transcript. Uploads are checked by their contents, not their names, and stored under `UPLOAD_DIR/lectures`. The three demo lectures are loaded the first time.
+
 ## What is built (by spec section)
 
 | § | Feature | Where |

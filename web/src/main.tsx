@@ -39,6 +39,8 @@ import { registerServiceWorker } from './install';
 import { installNativeFetch } from './native';
 import { AppSettingsPage } from './platform/AppSettings';
 import { VideosPage } from './prep/Videos';
+import { SiteGate } from './site';
+import { OwnerConsole } from './staff/Owner';
 import { AppDownloadPage } from './platform/Site';
 import { SocialDashboard } from './staff/Social';
 import { ChatAdmin } from './staff/Chat';
@@ -134,6 +136,7 @@ function App() {
       <Route path="/app/inbox" element={staff(<PlatformInbox />)} />
       <Route path="/app/social" element={staff(<SocialDashboard />)} />
       <Route path="/app/sessions" element={staff(<Sessions />)} />
+      <Route path="/app/owner" element={staff(<OwnerConsole />)} />
       <Route path="*" element={<div className="empty"><h1>Page not found</h1><a href="/login">Go to sign-in</a></div>} />
     </Routes>
   );
@@ -142,7 +145,7 @@ function App() {
 installNativeFetch();
 registerServiceWorker();
 createRoot(document.getElementById('root')!).render(
-  <React.StrictMode><BrowserRouter><ToastHost><App /></ToastHost></BrowserRouter></React.StrictMode>,
+  <React.StrictMode><BrowserRouter><ToastHost><SiteGate><App /></SiteGate></ToastHost></BrowserRouter></React.StrictMode>,
 );
 
 // The loading screen (in index.html) stays for at least 1.6 seconds on every load, then fades once the app has drawn.
