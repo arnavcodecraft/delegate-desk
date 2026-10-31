@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import {
-  ArrowRight, BookOpen, Briefcase, ChevronDown, Compass, Gavel, GraduationCap, HeartHandshake, Info, LayoutDashboard, Mail, Menu, Plus, Smartphone, Users, Wallet, X, type LucideIcon,
+  ArrowRight, BookOpen, Briefcase, ChevronDown, Compass, Gavel, GraduationCap, HeartHandshake, Info, LayoutDashboard, Mail, Menu, Plus, Settings, Smartphone, Users, Wallet, X, type LucideIcon,
 } from 'lucide-react';
 import { api } from '../api';
+import { nativeApp, serverUrl } from '../native';
 
 export interface PfMe { user: { name: string; email: string } | null; perms?: string[]; workspace?: { id: string; name: string }; mfaPending?: boolean }
 let cached: PfMe | null = null;
@@ -103,6 +104,7 @@ export function PlatformShell({ children, bare }: { children: React.ReactNode; b
         {drawer && <div className="sx-drawer">
           {MENUS.map((m) => <div key={m.key} className="sx-drawer-group"><div className="sx-drawer-k">{m.label}</div>{m.items.map((it) => <Link key={it.t} to={it.to} className="sx-item"><span className="sx-ic"><it.icon className="icon" /></span><span><b>{it.t}</b><small>{it.d}</small></span></Link>)}</div>)}
           <div className="sx-drawer-group"><Link to="/#pricing" className="sx-item"><span className="sx-ic"><Wallet className="icon" /></span><span><b>Pricing</b><small>Free for organisers and delegates</small></span></Link></div>
+          {nativeApp && <div className="sx-drawer-group"><Link to="/app-settings" className="sx-item"><span className="sx-ic"><Settings className="icon" /></span><span><b>App settings</b><small>{serverUrl() ? serverUrl().replace(/^https:\/\//, '') : 'Connect your DelegateDesk server'}</small></span></Link></div>}
           <div className="sx-drawer-cta">{!signedIn && !person?.person && <Link to="/login" className="pf-btn ghost">Sign in</Link>}{signedIn ? <Link to="/app" className="pf-btn primary">Dashboard</Link> : <Link to="/list" className="pf-btn primary">List your conference</Link>}</div>
         </div>}
       </header>
@@ -121,7 +123,7 @@ export function PlatformShell({ children, bare }: { children: React.ReactNode; b
             ['Legal', [['/privacy', 'Privacy']]],
           ].map(([h, links]) => <nav key={h as string} aria-label={h as string}><b>{h as string}</b>{(links as string[][]).map(([to, l]) => <Link key={l} to={to}>{l}</Link>)}</nav>)}
         </div>
-        <div className="sx-foot-bottom"><span>© {new Date().getFullYear()} DelegateDesk</span><span>Made for Model UN</span></div>
+        <div className="sx-foot-bottom"><span>© {new Date().getFullYear()} DelegateDesk</span>{nativeApp ? <Link to="/app-settings">App settings</Link> : <span>Made for Model UN</span>}</div>
       </footer>
     </div>
   );

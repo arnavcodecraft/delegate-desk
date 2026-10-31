@@ -28,7 +28,8 @@
     "files": [
       "main.js",
       "preload.js",
-      "shell/**/*",
+      "icon.png",
+      "web/**/*",
       "settings.json"
     ],
     "win": {

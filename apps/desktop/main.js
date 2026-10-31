@@ -1,54 +1,68 @@
-// DelegateDesk desktop: a window onto the organiser's DelegateDesk site, with its own icon and menu.
-// The site address comes from the build (settings.json, APP_URL) or from the start screen, saved per user.
-const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron');
+// DelegateDesk desktop. The whole website ships inside the app (web/), so it opens straight onto the home page.
+// Server calls (/api, /uploads) are passed on to the DelegateDesk server, set at build time (settings.json, APP_URL)
+// or in App settings, and the sign-in cookies stay in the app's own session.
+const { app, BrowserWindow, Menu, shell, ipcMain, protocol, session } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 
+const WEB = path.join(__dirname, 'web');
+const ORIGIN = 'app://delegatedesk';
 const userFile = () => path.join(app.getPath('userData'), 'settings.json');
 const read = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; } };
-const builtIn = () => read(path.join(__dirname, 'settings.json')).url || '';
-const serverUrl = () => builtIn() || read(userFile()).url || '';
+const serverUrl = () => (read(userFile()).url || read(path.join(__dirname, 'settings.json')).url || '').replace(/\/+$/, '');
 const origin = (u) => { try { return new URL(u).origin; } catch { return null; } };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.woff': 'font/woff', '.txt': 'text/plain' };
+
+protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
+
+async function handle(req) {
+  const u = new URL(req.url);
+  if (/^\/(api|uploads)\//.test(u.pathname)) {
+    const base = serverUrl();
+    if (!base) return new Response(JSON.stringify({ error: 'This app is not connected to a DelegateDesk server yet. Open the DelegateDesk menu, then App settings.' }), { status: 503, headers: { 'content-type': 'application/json' } });
+    const headers = new Headers(req.headers); headers.delete('origin'); headers.delete('referer');
+    const hasBody = !['GET', 'HEAD'].includes(req.method);
+    return session.defaultSession.fetch(base + u.pathname + u.search, { method: req.method, headers, body: hasBody ? req.body : undefined, duplex: hasBody ? 'half' : undefined, credentials: 'include', redirect: 'follow' });
+  }
+  // The website's files; any other path is a page of the site, so it gets index.html.
+  let file = path.normalize(path.join(WEB, decodeURIComponent(u.pathname)));
+  if (!file.startsWith(WEB) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(WEB, 'index.html');
+  const body = fs.readFileSync(file);
+  return new Response(body, { headers: { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache' } });
+}
 
 let win;
-function openShell(change = false) { win.loadFile(path.join(__dirname, 'shell', 'index.html'), change ? { search: 'change=1' } : undefined); }
-function openSite() { const u = serverUrl(); if (u) win.loadURL(u); else openShell(); }
-
+const home = () => win.loadURL(`${ORIGIN}/`);
 function createWindow() {
   win = new BrowserWindow({
-    width: 1320, height: 860, minWidth: 380, minHeight: 560, title: 'DelegateDesk', backgroundColor: '#f6f8fc', show: false,
-    icon: path.join(__dirname, 'shell', 'icon.png'),
+    width: 1320, height: 860, minWidth: 380, minHeight: 560, title: 'DelegateDesk', backgroundColor: '#060b18', show: false,
+    icon: path.join(__dirname, 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true },
   });
   win.once('ready-to-show', () => win.show());
-  // Links to other sites (payment pages excepted, which stay in the window) open in the person's browser.
-  const keep = (url) => { const o = origin(url); return o === origin(serverUrl()) || /razorpay|cashfree/.test(url) || url.startsWith('file:'); };
-  win.webContents.setWindowOpenHandler(({ url }) => { if (keep(url) && origin(url) === origin(serverUrl())) return { action: 'allow' }; shell.openExternal(url); return { action: 'deny' }; });
-  win.webContents.on('will-navigate', (e, url) => { if (!keep(url)) { e.preventDefault(); shell.openExternal(url); } });
-  // No internet or a wrong address: show a clear message instead of a blank window.
-  win.webContents.on('did-fail-load', (_e, code, desc, url, isMain) => {
-    if (!isMain || code === -3) return;
-    dialog.showMessageBox(win, { type: 'warning', title: 'Can’t reach DelegateDesk', message: 'DelegateDesk could not be reached.', detail: `${desc} (${url}). Check your internet connection, or change the site address.`, buttons: ['Try again', 'Change address', 'Close'] })
-      .then(({ response }) => { if (response === 0) openSite(); else if (response === 1) openShell(true); });
-  });
-  openSite();
+  // Links to other sites open in the person's browser (payment pages stay in the window).
+  // (new URL() gives custom schemes a "null" origin, so compare the start of the address.)
+  const inside = (url) => url === ORIGIN || url.startsWith(`${ORIGIN}/`) || /razorpay|cashfree/.test(url);
+  win.webContents.setWindowOpenHandler(({ url }) => { if (inside(url)) return { action: 'allow' }; shell.openExternal(url); return { action: 'deny' }; });
+  win.webContents.on('will-navigate', (e, url) => { if (!inside(url)) { e.preventDefault(); shell.openExternal(url); } });
+  home();
 }
 
 ipcMain.on('dd:set-server', (_e, url) => {
-  const o = origin(url);
-  if (!o) return;
+  const o = url ? origin(url) : '';
+  if (o === null) return;
   fs.mkdirSync(path.dirname(userFile()), { recursive: true });
   fs.writeFileSync(userFile(), JSON.stringify({ url: o }));
-  openSite();
 });
+ipcMain.handle('dd:server', () => serverUrl());
 
 function menu() {
   const isMac = process.platform === 'darwin';
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(isMac ? [{ role: 'appMenu' }] : []),
     { label: 'DelegateDesk', submenu: [
-      { label: 'Home', accelerator: 'CmdOrCtrl+Shift+H', click: () => openSite() },
-      { label: 'Change site address…', enabled: !builtIn(), click: () => openShell(true) },
+      { label: 'Home', accelerator: 'CmdOrCtrl+Shift+H', click: () => home() },
+      { label: 'App settings…', click: () => win.loadURL(`${ORIGIN}/app-settings`) },
       { type: 'separator' }, isMac ? { role: 'close' } : { role: 'quit' },
     ] },
     { role: 'editMenu' },
@@ -64,6 +78,10 @@ function menu() {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
-  app.whenReady().then(() => { menu(); createWindow(); app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); }); });
+  app.whenReady().then(() => {
+    protocol.handle('app', handle);
+    menu(); createWindow();
+    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 }

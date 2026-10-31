@@ -1,3 +1,4 @@
+import { needsServer } from './native';
 export class ApiError extends Error {
   constructor(public status: number, message: string, public details?: any) { super(message); }
 }
@@ -13,6 +14,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     });
   } catch {
     // The browser got no answer at all ("Failed to fetch"): the server is stopped or this device is offline.
+    if (needsServer()) throw new ApiError(0, 'This app is not connected to a DelegateDesk server yet. Open the menu, then App settings, and enter your server address.');
     const local = /^(localhost|127\.|192\.168\.|10\.)/.test(window.location.hostname);
     throw new ApiError(0, navigator.onLine === false ? 'You are offline. Check your internet connection and try again.'
       : local ? 'The DelegateDesk server is not running. Open the DelegateDesk folder, double-click start.bat, keep that black window open, then try again.'

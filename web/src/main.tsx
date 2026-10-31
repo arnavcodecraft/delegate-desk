@@ -35,6 +35,8 @@ import { CvPage } from './platform/Cv';
 import { AboutPage, ContactPage, ServicesPage, TeamPage } from './platform/Site';
 import { PlatformInbox } from './staff/Inbox';
 import { registerServiceWorker } from './install';
+import { installNativeFetch } from './native';
+import { AppSettingsPage } from './platform/AppSettings';
 import { AppDownloadPage } from './platform/Site';
 import { SocialDashboard } from './staff/Social';
 import { ChatAdmin } from './staff/Chat';
@@ -74,6 +76,7 @@ function App() {
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/services" element={<ServicesPage />} />
       <Route path="/get-the-app" element={<AppDownloadPage />} />
+      <Route path="/app-settings" element={<AppSettingsPage />} />
       <Route path="/delegation/:token" element={<DelegationPortal />} />
       <Route path="/referrer/:token" element={<ReferrerStatement />} />
       <Route path="/share/:token" element={<SharedList />} />
@@ -132,6 +135,7 @@ function App() {
   );
 }
 
+installNativeFetch();
 registerServiceWorker();
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode><BrowserRouter><ToastHost><App /></ToastHost></BrowserRouter></React.StrictMode>,

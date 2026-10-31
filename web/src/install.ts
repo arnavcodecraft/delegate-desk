@@ -21,6 +21,6 @@ export function useInstall() {
 
 /** Registers the service worker in production builds (installable app, faster loads, an offline page). */
 export function registerServiceWorker() {
-  if (!('serviceWorker' in navigator) || !import.meta.env.PROD) return;
+  if (!('serviceWorker' in navigator) || !import.meta.env.PROD || window.DD_NATIVE) return;
   window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => { /* not available here */ }); });
 }

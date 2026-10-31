@@ -1,3 +1,4 @@
-// The only bridge from web pages to the app: the start screen can save the site address. Nothing else is exposed.
+// The only bridge from the website to the app: which app this is, and saving the server address. Nothing else.
 const { contextBridge, ipcRenderer } = require('electron');
-contextBridge.exposeInMainWorld('dd', { setServer: (url) => ipcRenderer.send('dd:set-server', String(url || '')) });
+contextBridge.exposeInMainWorld('DD_NATIVE', 'desktop');
+contextBridge.exposeInMainWorld('dd', { setServer: (url) => ipcRenderer.send('dd:set-server', String(url || '')), server: () => ipcRenderer.invoke('dd:server') });

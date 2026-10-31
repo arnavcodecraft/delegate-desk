@@ -2,14 +2,14 @@
 #   Android: an APK (and, if signing secrets are set, a signed APK and a Play Store bundle)
 #   Desktop: a Windows installer, a Mac disk image, and a Linux AppImage and .deb
 # Run it from Actions → Apps → Run workflow (optionally naming a release to attach the files to), or publish a GitHub Release.
-# The site the apps open: the "app_url" input, else the repository variable APP_URL; if neither is set,
-# the apps ask for the site address on first launch.
+# The apps contain the whole website and open on the home page. The DelegateDesk server they talk to is the
+# "app_url" input, else the repository variable APP_URL; if neither is set, people add it in App settings.
 name: Apps
 on:
   workflow_dispatch:
     inputs:
       app_url:
-        description: 'Your DelegateDesk site (https://…). Leave empty to use the APP_URL variable, or to let the apps ask.'
+        description: 'Your DelegateDesk server (https://…). Leave empty to use the APP_URL variable; otherwise people set it in App settings.'
         required: false
         default: ''
       release_tag:
@@ -34,16 +34,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: apps/mobile/package-lock.json }
+        with: { node-version: 22, cache: npm, cache-dependency-path: '**/package-lock.json' }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '21' }
+      - name: Build the website (it ships inside the app)
+        working-directory: .
+        run: npm ci && npm run build
       - run: npm ci
-      - name: Prepare the app (start screen, config)
+      - name: Prepare the app (the website, opening on the home page, and the server address)
         run: node prepare.mjs
       - name: Create the Android project
         run: npx cap add android && npx cap sync android
       - name: App icon and splash screen
-        run: npx capacitor-assets generate --android --iconBackgroundColor '#1f4fe0' --iconBackgroundColorDark '#1f4fe0' --splashBackgroundColor '#f6f8fc' --splashBackgroundColorDark '#060b18'
+        run: npx capacitor-assets generate --android --iconBackgroundColor '#1f4fe0' --iconBackgroundColorDark '#1f4fe0' --splashBackgroundColor '#060b18' --splashBackgroundColorDark '#060b18'
         continue-on-error: true
       - name: Version from the release
         if: env.RELEASE_TAG != ''
@@ -85,11 +88,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: apps/desktop/package-lock.json }
+        with: { node-version: 22, cache: npm, cache-dependency-path: '**/package-lock.json' }
+      - name: Build the website (it ships inside the app)
+        working-directory: .
+        run: npm ci && npm run build
       - run: npm ci
-      - name: Bundle the start screen and the site address
+      - name: Bundle the website and the server address
         run: |
-          rm -rf shell && cp -R ../shell shell
+          rm -rf web && cp -R ../../web/dist web && cp build/icon.png icon.png
           node -e "require('fs').writeFileSync('settings.json', JSON.stringify({ url: (process.env.APP_URL || '').replace(/\/+$/, '') }))"
       - name: Version from the release
         if: env.RELEASE_TAG != ''
