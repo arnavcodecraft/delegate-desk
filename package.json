@@ -17,7 +17,8 @@
     "live": "node scripts/live.mjs",
     "update": "git pull --ff-only && npm install && npm run build",
     "export:landing": "node scripts/export-landing.mjs",
-    "reset": "node scripts/reset-data.mjs"
+    "reset": "node scripts/reset-data.mjs",
+    "stop": "tsx scripts/stop.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",

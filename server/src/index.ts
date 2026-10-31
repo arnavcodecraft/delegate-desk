@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import { config } from './config.ts';
 import { openDb, all } from './db.ts';
 import { seedChart } from './services/ledger.ts';
+import http from 'node:http';
+import { freePort } from './port.ts';
 import { seedTemplates } from './services/notify.ts';
 import { startJobs } from './services/jobs.ts';
 import { sessionMiddleware } from './auth.ts';
@@ -112,11 +114,13 @@ if (/[\\/]index\.ts$/.test(process.argv[1] ?? '')) {
   // A stray error in a background job or a dropped connection is logged; it never takes the whole site down.
   process.on('uncaughtException', (e) => console.error('[uncaught]', e));
   process.on('unhandledRejection', (e) => console.error('[unhandled]', e));
-  boot();
-  if (config.jobsEnabled) startJobs();
-  createApp().listen(config.port, () => console.log(`DelegateDesk running at ${config.baseUrl}`))
-    .on('error', (e: any) => {
-      console.error(e?.code === 'EADDRINUSE' ? `\nPort ${config.port} is already in use: DelegateDesk (or another program) is already running. Close the other window, or set PORT to a different number in .env.\n` : e);
-      process.exit(1);
-    });
+  // The port first, before the databases open: an old server that is paused or stuck can hold them locked.
+  freePort(config.port).then(() => {
+    boot();
+    if (config.jobsEnabled) startJobs();
+    http.createServer(createApp())
+      .on('listening', () => console.log(`DelegateDesk running at ${config.baseUrl}`))
+      .on('error', (e: any) => { console.error(e?.code === 'EADDRINUSE' ? `\nPort ${config.port} became busy. Run "npm run stop", then "npm start" again.\n` : e); process.exit(1); })
+      .listen(config.port);
+  });
 }

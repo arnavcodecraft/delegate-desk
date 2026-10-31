@@ -33,6 +33,7 @@ Needs Node.js 22.13 or newer (Windows, macOS or Linux). On Windows you can just 
 npm install
 npm run seed -- --demo     # optional: demo organisation, event BGYS27, 45 sample delegates, payments, expenses
 npm run reset -- --yes     # delete every conference, account and upload (keeps a backup copy)
+npm run stop               # stop a DelegateDesk server that is stuck or paused (Ctrl+Z) and still holds the port
 npm run build              # build the web app
 npm start                  # http://localhost:8080   (set ALLOW_SANDBOX=1 to use the test gateway in production mode)
 # or: npm run dev          # API on :8080 with reload + Vite on :5173
