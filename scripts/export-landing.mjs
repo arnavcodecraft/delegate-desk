@@ -25,9 +25,9 @@ const html = await page.evaluate(async ({ SITE }) => {
   const matches = (sel) => {
     const parts = sel.split(',').map((x) => x.trim()).filter(Boolean);
     return parts.some((p) => {
-      if (/^(:root|html|body|\*)/.test(p)) return true;
+      if (/^(:root|html|body|\*)/.test(p) || p.includes('hm-globe-fallback')) return true;
       // State classes (an open menu, the selected tab) must survive even if nothing is in that state right now.
-      const clean = p.replace(/\.(open|on|sx-open)\b/g, '').replace(/::?(hover|focus|focus-within|focus-visible|active|visited|disabled|checked|placeholder|before|after|selection|-webkit-[a-z-]+|-moz-[a-z-]+|marker|first-child|last-child|only-child|nth-child\([^)]*\))/g, '').trim();
+      const clean = p.replace(/\.(open|on|sx-open|scrolled)\b/g, '').replace(/:not\(\)/g, '').replace(/::?(hover|focus|focus-within|focus-visible|active|visited|disabled|checked|placeholder|before|after|selection|-webkit-[a-z-]+|-moz-[a-z-]+|marker|first-child|last-child|only-child|nth-child\([^)]*\))/g, '').trim();
       try { return !!document.querySelector(clean || '*'); } catch { return false; }
     });
   };
@@ -54,6 +54,8 @@ const html = await page.evaluate(async ({ SITE }) => {
     } catch { /* leave it */ }
   }
   const doc = document.documentElement.cloneNode(true);
+  // The 3D globe needs the app; the static page shows the drawn globe instead.
+  doc.querySelectorAll('canvas.hm-globe').forEach((c) => { const d = document.createElement('div'); d.className = 'hm-globe-fallback'; c.replaceWith(d); });
   doc.querySelectorAll('script, link[rel="stylesheet"], link[rel="modulepreload"], link[rel="manifest"], style, [data-export="skip"], .sx-drawer, #toast-host').forEach((n) => n.remove());
   doc.querySelectorAll('[class*="toast"]').forEach((n) => { if (!n.closest('.pf')) n.remove(); });
   if (SITE) doc.querySelectorAll('a[href^="/"]').forEach((a) => a.setAttribute('href', SITE + a.getAttribute('href')));
@@ -72,6 +74,8 @@ const js = `<script>
   }));
   const burger = document.querySelector('.sx-burger');
   if (burger) burger.addEventListener('click', () => { document.querySelector('.sx-menus').classList.toggle('sx-open'); });
+  const head = document.querySelector('.sx-dark');
+  if (head) { const f = () => head.classList.toggle('scrolled', scrollY > 40); addEventListener('scroll', f, { passive: true }); f(); }
   const t = document.querySelector('.hm-app-timer'), bar = document.querySelector('.hm-app-bar i');
   let s = 54; setInterval(() => { s = s <= 1 ? 60 : s - 1; if (t) t.textContent = '0:' + String(s).padStart(2, '0'); if (bar) bar.style.width = (s / 60 * 100) + '%'; }, 1000);
 })();

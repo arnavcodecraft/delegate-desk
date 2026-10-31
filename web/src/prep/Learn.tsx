@@ -273,7 +273,7 @@ export function DiscoverPage() {
         <b>Topics you follow</b>
         <div className="pp-chips" style={{ marginTop: 10 }}>{TOPICS.map((t) => <button key={t} className={`pf-pill ${topics.includes(t) ? 'on' : ''}`} onClick={() => setTopics(topics.includes(t) ? topics.filter((x) => x !== t) : [...topics, t].slice(0, 5))}>{t}</button>)}</div>
         <div className="mk-row" style={{ marginTop: 12 }}>
-          <button className="pf-btn primary sm" disabled={busy} onClick={async () => { if (me?.person) await api.patch('/api/me', { prefs: { topics } }).catch(() => {}); load(); }}><Sparkles className="icon" />{topics.length ? 'My briefing' : 'Today’s briefing'}</button>
+          <button className="pf-btn primary ai sm" disabled={busy} onClick={async () => { if (me?.person) await api.patch('/api/me', { prefs: { topics } }).catch(() => {}); load(); }}><Sparkles className="icon" />{topics.length ? 'My briefing' : 'Today’s briefing'}</button>
           {b && <button className="pf-btn ghost sm" disabled={busy} onClick={() => load(true)}><RefreshCw className="icon" />Refresh</button>}
           <span className="pf-small pf-muted">Briefings are cached for the day, so opening one again is free.</span>
         </div>

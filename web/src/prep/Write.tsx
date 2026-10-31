@@ -53,7 +53,7 @@ export function WritePage() {
           </div>}
           <label className="pf-field"><span className="pf-label">Your notes <span className="opt">optional</span></span><textarea className="pf-input" rows={4} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="Points, facts or a stance you want included" /></label>
           <ErrorNote error={err} />
-          {me?.person ? <button className="pf-btn primary" disabled={busy || !f.topic.trim()} onClick={async () => { setErr(null); setBusy(true); setOut(null); try { setOut(await api.post('/api/prep/draft', { kind, ...f, projectId: f.projectId || null })); refreshPrep(); } catch (e: any) { setErr(e.message); } finally { setBusy(false); } }}><Sparkles className="icon" />Write a sourced draft</button>
+          {me?.person ? <button className="pf-btn primary ai" disabled={busy || !f.topic.trim()} onClick={async () => { setErr(null); setBusy(true); setOut(null); try { setOut(await api.post('/api/prep/draft', { kind, ...f, projectId: f.projectId || null })); refreshPrep(); } catch (e: any) { setErr(e.message); } finally { setBusy(false); } }}><Sparkles className="icon" />Write a sourced draft</button>
             : <p className="pf-small pf-muted"><Link to="/account?mode=signup&next=/prep/write">Create a free account</Link> to get AI drafts. The outline on the right works without one.</p>}
         </section>
         <section className="pf-card pad">
@@ -95,7 +95,7 @@ export function CoachPage() {
           <div className="mk-row"><div className="pf-seg"><button className={kind === 'paper' ? 'on' : ''} onClick={() => setKind('paper')}>Position paper</button><button className={kind === 'speech' ? 'on' : ''} onClick={() => setKind('speech')}>Speech</button></div><span style={{ flex: 1 }} /><label className="pf-small">Word limit <input className="mk-score" style={{ width: 80 }} type="number" value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="–" /></label></div>
           <textarea className="pf-input pp-editor" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste or write your position paper or speech here. It stays on this page unless you ask for feedback." />
           <ErrorNote error={err} />
-          {me?.person ? <button className="pf-btn primary" disabled={busy || c.words < 40} onClick={async () => { setErr(null); setBusy(true); try { setFb(await api.post('/api/prep/coach', { text, kind })); refreshPrep(); } catch (e: any) { setErr(e.message); } finally { setBusy(false); } }}><Sparkles className="icon" />Get chair-style feedback</button>
+          {me?.person ? <button className="pf-btn primary ai" disabled={busy || c.words < 40} onClick={async () => { setErr(null); setBusy(true); try { setFb(await api.post('/api/prep/coach', { text, kind })); refreshPrep(); } catch (e: any) { setErr(e.message); } finally { setBusy(false); } }}><Sparkles className="icon" />Get chair-style feedback</button>
             : <p className="pf-small pf-muted"><Link to="/account?mode=signup&next=/prep/coach">Create a free account</Link> for AI feedback. The checks on the right work without one.</p>}
           {busy && <Busy label="Reading it like a chair…" />}
         </section>

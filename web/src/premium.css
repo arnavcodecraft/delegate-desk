@@ -1,0 +1,59 @@
+/*
+ * The premium finish, loaded last: soft rounded controls, layered shadows, pill badges and the aurora gradient
+ * for AI actions. It refines shared components on the public site (.pf-*) and the organiser dashboard.
+ */
+:root {
+  --aurora: linear-gradient(118deg, #ffb36b 0%, #ff7aa8 32%, #a77bff 62%, #5b6cff 100%);
+  --ring: 0 0 0 1px rgb(16 36 84 / .07);
+  --lift: 0 1px 2px rgb(16 36 84 / .05), 0 12px 28px -18px rgb(16 36 84 / .28);
+  --lift-lg: 0 2px 4px rgb(16 36 84 / .04), 0 30px 60px -30px rgb(16 36 84 / .35);
+}
+::selection { background: rgb(91 140 255 / .25); }
+* { scrollbar-width: thin; scrollbar-color: rgb(133 146 170 / .45) transparent; }
+
+/* ---------- public site ---------- */
+.pf-btn { border-radius: 999px; transition: transform .15s, box-shadow .2s, background .2s, border-color .2s, filter .2s; }
+.pf-btn.sm { border-radius: 999px; }
+.pf-btn:hover:not(:disabled):not(.link) { transform: translateY(-1px); }
+.pf-btn.primary { background: linear-gradient(180deg, #4d7dff, var(--pf-brand)); box-shadow: 0 12px 26px -14px rgb(31 79 224 / .95), inset 0 1px 0 rgb(255 255 255 / .28), inset 0 0 0 1px rgb(255 255 255 / .08); }
+.pf-btn.ghost { border-color: transparent; box-shadow: var(--ring), var(--lift); }
+.pf-btn.ghost:hover { box-shadow: 0 0 0 1px var(--pf-line-2), var(--lift); }
+.pf-btn.ai, .btn.ai { position: relative; color: #fff !important; border-color: transparent !important; background-image: var(--aurora) !important; background-size: 150% 150% !important; box-shadow: 0 14px 30px -14px rgb(167 123 255 / .9), inset 0 0 0 1.5px rgb(255 255 255 / .55) !important; animation: pm-aur 8s ease infinite; }
+@keyframes pm-aur { 50% { background-position: 100% 100%; } }
+.pf-card { border-color: transparent; box-shadow: var(--ring), var(--lift); border-radius: 22px; }
+.pf-input { border-radius: 14px; transition: border-color .15s, box-shadow .15s, background .15s; }
+.pf-input:focus { box-shadow: 0 0 0 4px var(--pf-brand-soft); }
+.pf-pill { border-radius: 999px; box-shadow: 0 1px 2px rgb(16 36 84 / .05); }
+.pf-note { border-radius: 14px; }
+.pf-tag { border-radius: 999px; }
+.pf-avatar { box-shadow: 0 0 0 2px var(--pf-card), 0 4px 10px -4px rgb(16 36 84 / .4); }
+
+/* ---------- organiser dashboard ---------- */
+body:not(.pf-body) { background: radial-gradient(1200px 500px at 70% -200px, var(--accent-soft, rgb(31 79 224 / .08)), transparent 70%), var(--bg, #f5f7fb); }
+.card { border-color: transparent; border-radius: 18px; box-shadow: var(--ring), var(--lift); }
+.card-head { border-bottom-color: color-mix(in srgb, var(--border) 70%, transparent); }
+.btn { border-radius: 12px; border-color: transparent; box-shadow: var(--ring), 0 1px 2px rgb(16 36 84 / .06); transition: transform .12s, box-shadow .15s, background .15s, color .15s; }
+.btn:hover:not(:disabled) { box-shadow: 0 0 0 1px var(--border-strong), 0 6px 14px -10px rgb(16 36 84 / .4); }
+.btn.primary { background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 82%, #fff), var(--brand)); box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--brand) 85%, transparent), inset 0 1px 0 rgb(255 255 255 / .25); }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.06); }
+.btn.ghost, .btn.ghost:hover { box-shadow: none; }
+.btn.sm { border-radius: 10px; }
+.btn.lg { border-radius: 14px; }
+.btn.fab { border-radius: 999px; padding: .7rem 1.2rem; }
+input, select, textarea { border-radius: 12px; }
+input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
+input[type=checkbox], input[type=radio] { border-radius: 4px; }
+.badge { padding: .18rem .65rem; font-weight: 600; }
+.side { border-right-color: transparent; box-shadow: 1px 0 0 var(--border), 10px 0 30px -28px rgb(16 36 84 / .4); }
+.side .brand .logo { border-radius: 10px; background: linear-gradient(135deg, #0b2a8a, #1f4fe0 55%, #4d84ff); box-shadow: 0 6px 14px -6px rgb(31 79 224 / .7); }
+.side a.nav { border-radius: 12px; position: relative; }
+.side a.nav.active { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent); }
+.side a.nav.active::before { content: ''; position: absolute; left: -8px; top: 9px; bottom: 9px; width: 3px; border-radius: 3px; background: var(--accent); }
+.modal, [role="dialog"] > .modal-box { border-radius: 22px; }
+table thead th { letter-spacing: .02em; }
+
+@media (prefers-reduced-motion: reduce) { .pf-btn.ai, .btn.ai { animation: none; } .pf-btn:hover, .btn:hover { transform: none; } }
+
+/* dark: the ring needs to be visible on dark surfaces */
+:root[data-theme="dark"] { --ring: 0 0 0 1px rgb(150 175 230 / .14); --lift: 0 12px 28px -18px rgb(0 0 0 / .7); --lift-lg: 0 30px 60px -30px rgb(0 0 0 / .8); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ring: 0 0 0 1px rgb(150 175 230 / .14); --lift: 0 12px 28px -18px rgb(0 0 0 / .7); --lift-lg: 0 30px 60px -30px rgb(0 0 0 / .8); } }

@@ -44,7 +44,7 @@ export function CountriesPage() {
           <tr><td>Shared blocs</td><td colSpan={cmp.length}>{Object.entries(BLOCS).filter(([k]) => cmp.length > 1 && cmp.every((c) => memberByCode(c)?.blocs.includes(k))).map(([, b]) => b.label).join(', ') || 'None'}</td></tr>
         </tbody></table></div>}
         <div className="mk-row" style={{ marginTop: 14 }}>
-          {me?.person ? <button className="pf-btn primary sm" disabled={cmp.length < 2 || busy} onClick={async () => { setErr(null); setBusy(true); try { setAi(await api.post('/api/prep/compare', { countries: cmp.map((c) => memberByCode(c)!.name) })); refreshPrep(); } catch (e: any) { setErr(e.message); } finally { setBusy(false); } }}><Sparkles className="icon" />Population, GDP and HDI with sources</button> : <span className="pf-small pf-muted">Sign in to add sourced figures (population, GDP, HDI).</span>}
+          {me?.person ? <button className="pf-btn primary ai sm" disabled={cmp.length < 2 || busy} onClick={async () => { setErr(null); setBusy(true); try { setAi(await api.post('/api/prep/compare', { countries: cmp.map((c) => memberByCode(c)!.name) })); refreshPrep(); } catch (e: any) { setErr(e.message); } finally { setBusy(false); } }}><Sparkles className="icon" />Population, GDP and HDI with sources</button> : <span className="pf-small pf-muted">Sign in to add sourced figures (population, GDP, HDI).</span>}
         </div>
         <ErrorNote error={err} />{busy && <Busy label="Looking up the latest figures…" />}
         {ai && <div className="pp-answer"><Markdown text={ai.text} /><Sources sources={ai.sources} /></div>}

@@ -57,13 +57,16 @@ const MENUS: { key: string; label: string; items: MenuItem[]; foot?: { to: strin
 ];
 
 /** The public frame: the top bar with menus, the page, and the footer. `bare` lets a page run full width (the home page). */
-export function PlatformShell({ children, bare }: { children: React.ReactNode; bare?: boolean }) {
+export function PlatformShell({ children, bare, dark }: { children: React.ReactNode; bare?: boolean; dark?: boolean }) {
   const me = useMe();
   const person = usePerson();
   const loc = useLocation();
   const [open, setOpen] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
   const navRef = useRef<HTMLElement>(null);
+  // Over a dark hero the header is see-through with light text, and turns solid once the page scrolls.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => { if (!dark) return; const f = () => setScrolled(window.scrollY > 40); f(); window.addEventListener('scroll', f, { passive: true }); return () => window.removeEventListener('scroll', f); }, [dark]);
   useEffect(() => { document.body.classList.add('pf-body'); return () => document.body.classList.remove('pf-body'); }, []);
   useEffect(() => { setOpen(null); setDrawer(false); }, [loc.pathname, loc.hash]);
   useEffect(() => {
@@ -78,7 +81,7 @@ export function PlatformShell({ children, bare }: { children: React.ReactNode; b
   const cta = signedIn ? <Link to="/app" className="sx-cta">Dashboard</Link> : <Link to="/list" className="sx-cta">List your conference</Link>;
   return (
     <div className={`pf ${bare ? 'pf-bare' : ''}`}>
-      <header className="pf-top sx-top">
+      <header className={`pf-top sx-top ${dark ? 'sx-dark' : ''} ${scrolled || drawer || open ? 'scrolled' : ''}`}>
         <nav className="sx-nav" aria-label="Main" ref={navRef}>
           <Link to="/" className="brand"><span className="mark">D</span><span>DelegateDesk</span></Link>
           <div className="sx-menus">

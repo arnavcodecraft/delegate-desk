@@ -147,7 +147,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div className="mobile-bar"><button className="btn sm icon-only" onClick={() => setOpen(!open)} aria-label="Menu"><Menu className="icon" /></button><strong>DelegateDesk</strong></div>
         <main className="main">{children}</main>
       </div>
-      {ai.data?.enabled && eventId && !assistant && <button className="btn primary fab no-print" onClick={() => setAssistant(true)}><Sparkles className="icon" />Ask</button>}
+      {ai.data?.enabled && eventId && !assistant && <button className="btn primary fab ai no-print" onClick={() => setAssistant(true)}><Sparkles className="icon" />Ask</button>}
       {assistant && <Assistant eventId={eventId} onClose={() => setAssistant(false)} />}
       {tour && <Tour steps={DASHBOARD_TOUR} who={me.user!.id} onClose={() => setTour(false)} />}
     </div>

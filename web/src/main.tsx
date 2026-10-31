@@ -8,6 +8,7 @@ import './styles.css';
 import './platform.css';
 import './room.css';
 import './site.css';
+import './premium.css';
 import { applyTheme, savedTheme } from './ui';
 import { ToastHost } from './ui';
 import Register from './pages/Register';

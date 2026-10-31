@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   ArrowRight, Award, BadgeCheck, BookOpen, Calculator, Check, ClipboardList, CreditCard, FileText, Gavel, Globe, GraduationCap, HeartHandshake, IdCard, LayoutDashboard, Laptop,
   ListOrdered, Lock, Mail, MessagesSquare, Minus, Monitor, PenLine, Play, Plus, QrCode, Search, Shuffle, Smartphone, Sparkles, Timer, Trophy, Users, WifiOff, Zap,
+  AlignCenter, AlignLeft, AlignRight, ChevronsUpDown, Filter, Hand, Info, Link2, Loader, MousePointerClick, Ticket, TrendingUp, UploadCloud, X,
 } from 'lucide-react';
 import { api } from '../api';
 import { PlatformShell } from './Shell';
@@ -19,11 +20,14 @@ export function Home() {
   // Links like /#pricing land on the section.
   useEffect(() => { if (loc.hash) setTimeout(() => document.getElementById(loc.hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }, [loc.hash]);
   return (
-    <PlatformShell bare>
-      <Hero />
-      <Proof stats={stats} />
+    <PlatformShell bare dark>
+      <Hero stats={stats} />
+      <Marquee />
+      <Showcase />
+      <Bento />
       <Features />
       <DeepDives />
+      <ActivityWall />
       <Audiences />
       <HowItWorks />
       {confs.length > 0 && <section className="hm-sec" data-export="skip"><div className="hm-in">
@@ -39,72 +43,184 @@ export function Home() {
 }
 
 // ---------- hero ----------
-function Hero() {
+function Hero({ stats }: { stats: any }) {
+  const show = (stats?.delegates ?? 0) >= 100;
   return (
-    <section className="hm-hero">
-      <div className="hm-hero-bg" aria-hidden />
+    <section className="hm-hero dark">
+      <div className="hm-space" aria-hidden />
+      <GlobeCanvas />
       <div className="hm-in hm-hero-in">
-        <Link to="/session" className="hm-badge"><span>New</span>The live committee room: speakers, motions, voting and scores<ArrowRight /></Link>
-        <h1>The all-in-one platform<br />for <span className="hm-grad">Model UN</span>.</h1>
-        <p className="hm-lead">Organisers run applications, allotments, payments and emails from one dashboard. Chairs run committee from one screen. Delegates research, write and practise in one place. One account for all of it.</p>
+        <Link to="/session" className="hm-badge glass"><span>New</span>The live committee room<ArrowRight /></Link>
+        <h1>The all-in-one platform<br />for <span className="hm-aurora">Model UN</span>.</h1>
+        <p className="hm-lead">Organisers run applications, allotments, payments and emails from one dashboard. Chairs run committee from one screen. Delegates research, write and practise in one place.</p>
         <div className="hm-ctas">
-          <Link to="/list" className="hm-btn primary">List your conference free<ArrowRight /></Link>
-          <Link to="/session" className="hm-btn ghost"><Play />Run a live session</Link>
+          <Link to="/list" className="hm-btn aurora">List your conference free<ArrowRight /></Link>
+          <Link to="/session" className="hm-btn glass"><Play />Run a live session</Link>
         </div>
-        <div className="hm-trust"><span><Check />Free for organisers</span><span><Check />No card needed</span><span><Check />Phone, Windows, Mac and Linux</span></div>
-        <HeroVisual />
+        <div className="hm-trust"><span><Check />Free for organisers</span><span><Check />No card needed</span><span><Check />Phone, Windows, Mac and Linux</span>{show && <span><Users />{Number(stats.delegates).toLocaleString('en-IN')} delegates</span>}</div>
+      </div>
+      <div className="hm-hero-cards" aria-hidden>
+        <div className="hm-float g1"><BadgeCheck /><div><b>Seat allotted</b><small>India · UNSC, first preference</small></div></div>
+        <div className="hm-float g2"><CreditCard /><div><b>₹1,600 received</b><small>Payment proof approved</small></div></div>
+        <div className="hm-float g3"><Gavel /><div><b>Moderated caucus passes</b><small>9 for · 3 against</small></div></div>
+      </div>
+      <div className="hm-hero-fade" aria-hidden />
+    </section>
+  );
+}
+
+/** The 3D globe, loaded after the page so it never slows the first paint. Falls back to a drawn sphere. */
+function GlobeCanvas() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'none'>('loading');
+  useEffect(() => {
+    let stop: (() => void) | undefined; let alive = true;
+    const gl = (() => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } })();
+    if (!gl || !ref.current) { setState('none'); return; }
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    import('./globeScene').then(({ mountGlobe }) => { if (alive && ref.current) stop = mountGlobe(ref.current, { reducedMotion: reduced, onReady: () => setState('ready') }); }).catch(() => setState('none'));
+    return () => { alive = false; stop?.(); };
+  }, []);
+  return <><canvas ref={ref} className={`hm-globe ${state}`} aria-hidden />{state !== 'ready' && <div className="hm-globe-fallback" aria-hidden />}</>;
+}
+
+const COMMITTEES = ['UNSC', 'UNHRC', 'DISEC', 'ECOSOC', 'WHO', 'UNEP', 'Lok Sabha', 'International Press', 'Crisis cabinet', 'UNGA', 'IAEA', 'UNICEF', 'Historic Security Council', 'G20'];
+function Marquee() {
+  const row = [...COMMITTEES, ...COMMITTEES];
+  return (
+    <section className="hm-marquee" aria-label="Committees run on DelegateDesk">
+      <p>Every committee, every format</p>
+      <div className="hm-marquee-track"><div>{row.map((c, i) => <span key={i}>{c}</span>)}</div></div>
+    </section>
+  );
+}
+
+/** The chair's committee room, drawn (not screenshotted), with a timer that really ticks. */
+function RoomMock() {
+  const [t, setT] = useState(54);
+  useEffect(() => { const id = setInterval(() => setT((x) => (x <= 1 ? 60 : x - 1)), 1000); return () => clearInterval(id); }, []);
+  const dels = [['India', 'in', 'cur'], ['Japan', 'jp', 'q1'], ['Brazil', 'br', 'q2'], ['Kenya', 'ke', ''], ['France', 'fr', ''], ['Mexico', 'mx', '']];
+  return (
+    <div className="hm-app">
+      <div className="hm-app-side">
+        <div className="hm-app-com"><span className="hm-emb">GA</span><div><b>UNGA</b><small>Education in emergencies</small></div></div>
+        <div className="hm-app-g"><span><em>12</em>Present</span><span><em>8</em>2/3</span><span><em>7</em>1/2+1</span></div>
+        {dels.map(([n, c, st]) => <div key={n} className={`hm-app-del ${st}`}><span className="hm-fl"><Flag code={c} round />{st && <em>{st === 'cur' ? '▶' : st.slice(1)}</em>}</span><span><b>{n}</b>{st && <small>{st === 'cur' ? 'Speaking' : 'On the list'}</small>}</span></div>)}
+      </div>
+      <div className="hm-app-main">
+        <div className="hm-app-tabs"><b>Speakers</b><span>Roll call</span><span>Motions</span><span>Documents</span></div>
+        <div className="hm-app-stage">
+          <small className="hm-app-title">General Speakers' List</small>
+          <div className="hm-app-q"><Flag code="jp" round /><Flag code="br" round /></div>
+          <div className="hm-app-flag"><Flag code="in" round /></div>
+          <b className="hm-app-name">India</b>
+          <div className="hm-app-timer">0:{String(t).padStart(2, '0')}</div>
+          <div className="hm-app-bar"><i style={{ width: `${(t / 60) * 100}%` }} /></div>
+          <div className="hm-app-ctl"><span className="a">Pause</span><span className="b">Next</span><span className="c">RTR</span></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Showcase() {
+  return (
+    <section className="hm-sec hm-show">
+      <div className="hm-in">
+        <div className="hm-head center"><div className="hm-eyebrow">One screen for the dais, one for every delegate</div><h2>Committee, beautifully run</h2><p>The chair runs roll call, the speakers list, motions and voting from a laptop. Delegates follow along, ask to speak and vote from their phones.</p></div>
+        <div className="hm-devices-stage" aria-hidden>
+          <div className="hm-laptop">
+            <div className="hm-laptop-lid"><div className="hm-laptop-screen"><RoomMock /></div><i className="hm-notch" /></div>
+            <div className="hm-laptop-base"><i /></div>
+          </div>
+          <div className="hm-phone">
+            <div className="hm-phone-screen">
+              <div className="hm-ph-top"><span className="hm-ph-dd">DD</span><b>UNGA</b><small>Speakers</small></div>
+              <div className="hm-ph-stage"><Flag code="in" round /><b>India</b><small>Speaking</small><div className="hm-ph-timer">0:54</div><div className="hm-app-bar"><i style={{ width: '88%' }} /></div></div>
+              <div className="hm-ph-me"><Flag code="jp" round /><span><b>Japan</b><small>On the list · #1</small></span></div>
+              <div className="hm-ph-btn"><Hand />On the list</div>
+              <div className="hm-ph-vote"><span>For</span><span>Against</span><span>Abstain</span></div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );
 }
 
-/** A drawn (not screenshotted) version of the chair's room, with a timer that really ticks. */
-function HeroVisual() {
-  const [t, setT] = useState(54);
-  useEffect(() => { const id = setInterval(() => setT((x) => (x <= 1 ? 60 : x - 1)), 1000); return () => clearInterval(id); }, []);
-  const dels = [['India', 'in', 'cur'], ['Japan', 'jp', 'q1'], ['Brazil', 'br', 'q2'], ['Kenya', 'ke', ''], ['France', 'fr', ''], ['Mexico', 'mx', '']];
+/** Floating metric cards: what an organiser sees at a glance. */
+function Bento() {
+  const steps = [[Link2, 'Applied'], [MousePointerClick, 'Allotted'], [null, '2 days'], [CreditCard, 'Paid'], [Ticket, 'Checked in']] as const;
   return (
-    <div className="hm-visual" aria-hidden>
-      <div className="hm-window">
-        <div className="hm-chrome"><i /><i /><i /><span>Live committee room · UNGA</span></div>
-        <div className="hm-app">
-          <div className="hm-app-side">
-            <div className="hm-app-com"><span className="hm-emb">GA</span><div><b>UNGA</b><small>Education in emergencies</small></div></div>
-            <div className="hm-app-g"><span><em>12</em>Present</span><span><em>8</em>2/3</span><span><em>7</em>1/2+1</span></div>
-            {dels.map(([n, c, st]) => <div key={n} className={`hm-app-del ${st}`}><span className="hm-fl"><Flag code={c} round />{st && <em>{st === 'cur' ? '▶' : st.slice(1)}</em>}</span><span><b>{n}</b>{st && <small>{st === 'cur' ? 'Speaking' : 'On the list'}</small>}</span></div>)}
+    <section className="hm-sec alt">
+      <div className="hm-in">
+        <div className="hm-head center"><div className="hm-eyebrow">At a glance</div><h2>Know where every delegate is</h2><p>From the first click on your link to the badge at the door, every step is tracked and every number is one tap away.</p></div>
+        <div className="hm-bento" aria-hidden>
+          <div className="hm-mcard wide">
+            <div className="hm-tile-grad"><Mail /></div>
+            <div className="hm-mcard-body"><span className="hm-k">Applications <Info /></span><div className="hm-big">48% <em><TrendingUp />30% vs last week</em></div></div>
+            <span className="hm-pill">Details</span>
           </div>
-          <div className="hm-app-main">
-            <div className="hm-app-tabs"><b>Speakers</b><span>Roll call</span><span>Motions</span><span>Documents</span></div>
-            <div className="hm-app-stage">
-              <small className="hm-app-title">General Speakers' List</small>
-              <div className="hm-app-q"><Flag code="jp" round /><Flag code="br" round /></div>
-              <div className="hm-app-flag"><Flag code="in" round /></div>
-              <b className="hm-app-name">India</b>
-              <div className="hm-app-timer">0:{String(t).padStart(2, '0')}</div>
-              <div className="hm-app-bar"><i style={{ width: `${(t / 60) * 100}%` }} /></div>
-              <div className="hm-app-ctl"><span className="a">Pause</span><span className="b">Next</span><span className="c">RTR</span></div>
-            </div>
+          <div className="hm-mcard tall">
+            <div className="hm-mcard-head"><div><span className="hm-k">Delegate journey <Info /></span><div className="hm-live"><b>3</b><em>checked in today</em></div></div><span className="hm-pill">Details</span></div>
+            <div className="hm-journey">{steps.map(([I, l], i) => I ? <span key={i} className={`hm-step-dot ${i === steps.length - 1 ? 'done' : ''}`} title={l}><I /><small>{l}</small></span> : <span key={i} className="hm-step-gap"><small>{l}</small><i /></span>)}</div>
+          </div>
+          <div className="hm-mcard small">
+            <div className="hm-tile-soft"><span className="hm-aurora-text">UN</span></div>
+            <div className="hm-mcard-body"><span className="hm-k">Committee rooms <Info /></span><span className="hm-pill">Details</span></div>
+          </div>
+          <div className="hm-mcard small split">
+            <div className="hm-tile-grad"><span className="hm-ring" /></div>
+            <div className="hm-mcard-body center"><span className="hm-caret" /><small>Live now</small></div>
           </div>
         </div>
+        <div className="hm-controls" aria-hidden>
+          <span className="hm-c aurora"><Sparkles />Ask the coach</span>
+          <span className="hm-c chip"><span className="hm-av sm">AM</span>Aarav M.<X /></span>
+          <span className="hm-c dashed"><UploadCloud />Upload position paper</span>
+          <span className="hm-c"><Filter />Committee <em>· 2</em><i className="sep" /><X /></span>
+          <span className="hm-c seg"><span className="on"><AlignLeft /></span><span><AlignCenter /></span><span><AlignRight /></span></span>
+          <span className="hm-c combo"><b>60</b> sec <ChevronsUpDown /><span className="hm-c aurora in">Start caucus</span></span>
+          <span className="hm-c green"><i className="dot" />Online</span>
+          <span className="hm-c blue"><Loader /> Allotting seats</span>
+          <span className="hm-c search">Search delegates<span className="hm-c-ic"><Search /></span></span>
+        </div>
       </div>
-      <div className="hm-float f1"><BadgeCheck /><div><b>Seat allotted</b><small>India · UNSC, from their first preference</small></div></div>
-      <div className="hm-float f2"><CreditCard /><div><b>₹1,600 received</b><small>Payment proof approved</small></div></div>
-      <div className="hm-float f3"><Gavel /><div><b>Moderated caucus passes</b><small>9 for · 3 against</small></div></div>
-    </div>
+    </section>
   );
 }
 
-function Proof({ stats }: { stats: any }) {
-  const items = [
-    { k: 'Conferences', v: stats?.conferences }, { k: 'Delegates', v: stats?.delegates }, { k: 'Organisers', v: stats?.organisers }, { k: 'Countries', v: stats?.countries },
-  ].filter((x) => x.v);
-  // Numbers only help once they are big enough to mean something.
-  const show = (stats?.delegates ?? 0) >= 100;
+/** A moving wall of moments from a conference day. These are examples of what the platform does, not quotes. */
+const MOMENTS: [string, string, string][] = [
+  ['Secretariat', 'Registrations', '312 applications in the first week. Seats were allotted overnight by preference and experience.'],
+  ['UNSC Chair', 'Committee room', 'Moderated caucus on maritime security passed 9 to 3. The speakers list filled in under a minute.'],
+  ['Delegate of Japan', 'Prep', 'Position paper drafted from the research brief, with every source linked.'],
+  ['Finance team', 'Payments', 'Forty payment proofs approved before lunch. Receipts went out automatically.'],
+  ['Vice-Chair, DISEC', 'EB marking', 'Both chairs marked speeches live; the marksheet exported to Excel at the end of session.'],
+  ['Delegate of Kenya', 'Chat', 'Bloc formed by private message during the unmoderated caucus.'],
+  ['Registration desk', 'Check-in', 'QR badges scanned at the door: 420 delegates in 25 minutes.'],
+  ['Secretary-General', 'Certificates', 'Awards and participation certificates emailed the evening the conference closed.'],
+];
+function ActivityWall() {
+  const colA = MOMENTS.filter((_, i) => i % 2 === 0), colB = MOMENTS.filter((_, i) => i % 2 === 1);
+  const Card = ({ m: [who, tag, text] }: { m: [string, string, string] }) => (
+    <div className="hm-moment"><div className="hm-moment-h"><span className="hm-av">{who.split(/[ ,-]+/).filter((w) => /^[A-Z]/.test(w)).slice(0, 2).map((w) => w[0]).join('')}</span><span><b>{who}</b><small>{tag}</small></span></div><p>{text}</p></div>
+  );
   return (
-    <section className="hm-proof">
+    <section className="hm-sec">
       <div className="hm-in">
-        <p>Built for school MUNs, university conferences, MUN societies and the delegates who travel between them.</p>
-        {show && items.length > 0 && <div className="hm-stats">{items.map((x) => <div key={x.k}><b>{Number(x.v).toLocaleString('en-IN')}</b><span>{x.k}</span></div>)}</div>}
+        <div className="hm-wall">
+          <div className="hm-wall-copy">
+            <span className="hm-wall-ic"><Users /></span>
+            <h2>A conference day on DelegateDesk</h2>
+            <p>Every team, every committee and every delegate, working from the same place. These are examples of what happens on the platform during a conference.</p>
+            <Link to="/list" className="hm-btn aurora">Run yours on DelegateDesk<ArrowRight /></Link>
+          </div>
+          <div className="hm-wall-cols" aria-hidden>
+            <div className="hm-wall-col"><div>{[...colA, ...colA].map((m, i) => <Card key={i} m={m} />)}</div></div>
+            <div className="hm-wall-col slow"><div>{[...colB, ...colB].map((m, i) => <Card key={i} m={m} />)}</div></div>
+          </div>
+        </div>
       </div>
     </section>
   );
