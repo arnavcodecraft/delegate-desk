@@ -22,7 +22,8 @@ import { runList } from '../services/lists.ts';
 import { markBounced } from '../services/notify.ts';
 import { hmacHex } from '../services/gateways.ts';
 import { checkUpload } from '../services/scanner.ts';
-import { delegateInbox, delegateRead, delegatePost, directory, block, report } from '../services/chat.ts';
+import { delegateInbox, delegatePost, directory, block, report, read as chatRead, pins as chatPins, members as chatMembers, react, vote, pin, edit as editMessage, deleteOwn, ping, roster, setStatus, STATUS_PRESETS } from '../services/chat.ts';
+import { delegateActivity, delegateSchedule, delegateQuestions, ask, upvote, rsvp } from '../services/teamspace.ts';
 import { sendOtp, verifyOtp } from '../services/otp.ts';
 import { whatsapp } from '../services/channels.ts';
 import { applyDeliveryStatuses } from '../services/notify.ts';
@@ -186,7 +187,27 @@ publicRouter.post('/r/:token/refund-request', h((req) => {
 // Conference chat for delegates (their delegate link is their sign-in).
 publicRouter.get('/r/:token/chat', h((req) => delegateInbox(regByToken(P(req).token))));
 publicRouter.get('/r/:token/chat/directory', h((req) => directory(regByToken(P(req).token))));
-publicRouter.get('/r/:token/chat/messages', h((req) => delegateRead(regByToken(P(req).token), String(req.query.channel ?? 'all'), req.query.since ? String(req.query.since) : null)));
+const DV = (req: express.Request) => ({ kind: 'delegate' as const, reg: regByToken(P(req).token) });
+const qv = (v: unknown) => (v ? String(v) : null);
+publicRouter.get('/r/:token/chat/messages', h((req) => chatRead(DV(req), String(req.query.channel ?? 'all'), { since: qv(req.query.since), thread: qv(req.query.thread), q: qv(req.query.q) })));
+publicRouter.post('/r/:token/chat/ping', h((req) => ping(DV(req), String(req.body?.channel ?? 'all'), !!req.body?.typing)));
+publicRouter.get('/r/:token/chat/roster', h((req) => roster(DV(req), String(req.query.channel ?? 'all'))));
+publicRouter.post('/r/:token/chat/status', h((req) => ({ status: setStatus(DV(req), req.body ?? {}) })));
+publicRouter.get('/r/:token/chat/status-presets', h(() => STATUS_PRESETS));
+publicRouter.get('/r/:token/chat/pins', h((req) => chatPins(DV(req), String(req.query.channel ?? 'all'))));
+publicRouter.get('/r/:token/chat/members', h((req) => chatMembers(DV(req), String(req.query.channel ?? 'all'))));
+publicRouter.post('/r/:token/chat/messages/:mid/react', h((req) => { react(DV(req), P(req).mid, String(req.body?.emoji ?? '')); return { ok: true }; }));
+publicRouter.post('/r/:token/chat/messages/:mid/vote', h((req) => { vote(DV(req), P(req).mid, Number(req.body?.option)); return { ok: true }; }));
+publicRouter.post('/r/:token/chat/messages/:mid/pin', h((req) => { pin(DV(req), P(req).mid, req.body?.on !== false); return { ok: true }; }));
+publicRouter.patch('/r/:token/chat/messages/:mid', h((req) => { editMessage(DV(req), P(req).mid, String(req.body?.body ?? '')); return { ok: true }; }));
+publicRouter.delete('/r/:token/chat/messages/:mid', h((req) => { deleteOwn(DV(req), P(req).mid); return { ok: true }; }));
+// Teamspace for delegates: activity, the schedule and Ask the EB.
+publicRouter.get('/r/:token/activity', h((req) => delegateActivity(regByToken(P(req).token))));
+publicRouter.get('/r/:token/schedule', h((req) => delegateSchedule(regByToken(P(req).token))));
+publicRouter.get('/r/:token/questions', h((req) => delegateQuestions(regByToken(P(req).token))));
+publicRouter.post('/r/:token/questions', h((req) => ({ id: ask(regByToken(P(req).token), req.body ?? {}) })));
+publicRouter.post('/r/:token/schedule/:sid/interested', h((req) => { rsvp(regByToken(P(req).token), P(req).sid); return { ok: true }; }));
+publicRouter.post('/r/:token/questions/:qid/vote', h((req) => { upvote(regByToken(P(req).token), P(req).qid); return { ok: true }; }));
 publicRouter.post('/r/:token/chat', h((req) => delegatePost(regByToken(P(req).token), req.body ?? {})));
 publicRouter.post('/r/:token/chat/block', h((req) => { block(regByToken(P(req).token), String(req.body?.id ?? ''), req.body?.on !== false); return { ok: true }; }));
 publicRouter.post('/r/:token/chat/report', h((req) => { report(regByToken(P(req).token), String(req.body?.messageId ?? ''), String(req.body?.reason ?? '')); return { ok: true }; }));

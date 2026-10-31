@@ -5,7 +5,7 @@ import { DASHBOARD_TOUR, Tour, tourSeen } from './Tour';
 import { Alert, Btn, Field, Loading, useAsync, applyTheme, savedTheme, type Theme } from '../ui';
 import {
   LayoutDashboard, Users, ListChecks, Landmark, ScanLine, Mail, Upload, ReceiptText, CreditCard, Handshake, Wallet, BookOpen, Settings,
-  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, GraduationCap, MessagesSquare, ChevronDown, Mailbox as InboxIcon, Megaphone, Power, type LucideIcon,
+  ShieldCheck, UserRound, LogOut, Menu, Moon, Sun, Monitor, Sparkles, X, SendHorizontal, TrendingUp, Inbox, FileText, Radio, Banknote, Image, Briefcase, Plus, Globe2, CircleHelp, GraduationCap, MessagesSquare, ChevronDown, Mailbox as InboxIcon, Megaphone, Power, LayoutGrid, type LucideIcon,
 } from 'lucide-react';
 
 export interface Me {
@@ -53,6 +53,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { to: '/app/registrations', label: 'Delegates', perms: ['reg.read'], icon: Users },
     { to: '/app/allocation', label: 'Committees', perms: ['reg.read', 'alloc.config'], icon: Landmark },
     { to: '/app/sessions', label: 'Live sessions', perms: ['lists.read', 'attendance.mark'], icon: Radio },
+    { to: '/app/teamspace', label: 'Teamspace', perms: ['messages.read', 'lists.read'], icon: LayoutGrid },
     { to: '/app/chat', label: 'Chat', perms: ['messages.read', 'lists.read'], icon: MessagesSquare },
     { to: '/app/checkin', label: 'Check-in', perms: ['attendance.mark'], icon: ScanLine },
     { to: '/app/documents', label: 'Documents', perms: ['alloc.config', 'lists.read'], icon: FileText, more: true },

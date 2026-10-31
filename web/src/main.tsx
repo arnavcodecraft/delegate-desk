@@ -41,6 +41,7 @@ import { AppSettingsPage } from './platform/AppSettings';
 import { VideosPage } from './prep/Videos';
 import { SiteGate } from './site';
 import { OwnerConsole } from './staff/Owner';
+import { TeamspacePage } from './staff/Teamspace';
 import { AppDownloadPage } from './platform/Site';
 import { SocialDashboard } from './staff/Social';
 import { ChatAdmin } from './staff/Chat';
@@ -137,6 +138,7 @@ function App() {
       <Route path="/app/social" element={staff(<SocialDashboard />)} />
       <Route path="/app/sessions" element={staff(<Sessions />)} />
       <Route path="/app/owner" element={staff(<OwnerConsole />)} />
+      <Route path="/app/teamspace" element={staff(<TeamspacePage />)} />
       <Route path="*" element={<div className="empty"><h1>Page not found</h1><a href="/login">Go to sign-in</a></div>} />
     </Routes>
   );

@@ -19,6 +19,7 @@ import { publicRouter, webhookRouter, serveFile } from './routes/public.ts';
 import { authRouter, adminRouter } from './routes/admin.ts';
 import { financeRouter } from './routes/finance.ts';
 import { organiserRouter } from './routes/organiser.ts';
+import { teamspaceRouter } from './routes/teamspace.ts';
 import { meRouter } from './routes/me.ts';
 import { mailConfigured, mailProvider } from './services/mail.ts';
 import { showCodesOnScreen } from './services/people.ts';
@@ -81,6 +82,7 @@ export function createApp() {
   app.use('/api/auth', authRouter);
   app.use('/api/admin', adminRouter);
   app.use('/api/admin', organiserRouter);
+  app.use('/api/admin', teamspaceRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/live', liveRouter);
   app.use('/api/me', meRouter);

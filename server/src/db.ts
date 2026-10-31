@@ -50,7 +50,16 @@ const COLUMNS: [table: string, column: string, ddl: string][] = [
   ['registration', 'awards_count', 'INTEGER NOT NULL DEFAULT 0'],       // awards won at MUNs
   ['registration', 'portfolio_prefs', "TEXT NOT NULL DEFAULT '{}'"],    // committee id → preferred portfolio id
   ['swap_request', 'to_portfolio_id', 'TEXT'],                          // a specific portfolio the delegate asked for
-  ['swap_request', 'reason', 'TEXT'],                                   // wrong_portfolio | prefer_other | experience | other
+  ['swap_request', 'reason', 'TEXT'],
+  // Teamspace: threads, announcements, polls, pins, edits and mentions on chat messages.
+  ['chat_message', 'parent_id', 'TEXT'],
+  ['chat_message', 'kind', "TEXT NOT NULL DEFAULT 'message'"],         // message | announcement | poll
+  ['chat_message', 'title', 'TEXT'],
+  ['chat_message', 'poll', 'TEXT'],                                    // {"options": [...], "closed": false}
+  ['chat_message', 'mentions', "TEXT NOT NULL DEFAULT '[]'"],          // [{"id": "d:<reg>" | "u:<user>", "name": "..."}]
+  ['chat_message', 'pinned_at', 'TEXT'],
+  ['chat_message', 'edited_at', 'TEXT'],
+  ['chat_message', 'updated_at', 'TEXT'],                              // any change: the page refreshes changed messages                                   // wrong_portfolio | prefer_other | experience | other
 ];
 function migrate(db: DatabaseSync) {
   for (const [table, column, ddl] of COLUMNS) {

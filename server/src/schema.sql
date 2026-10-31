@@ -687,6 +687,51 @@ CREATE TABLE IF NOT EXISTS chat_report (
   reason TEXT, created_at TEXT NOT NULL, resolved_at TEXT, resolved_by TEXT
 );
 
+-- Teamspace (Microsoft Teams-style collaboration): reactions, poll votes, team channels, tasks, schedule, Q&A and the EB notebook.
+CREATE TABLE IF NOT EXISTS chat_reaction (
+  message_id TEXT NOT NULL, who TEXT NOT NULL, emoji TEXT NOT NULL, created_at TEXT NOT NULL,   -- who: d:<registration id> | u:<user id>
+  PRIMARY KEY (message_id, who, emoji)
+);
+CREATE TABLE IF NOT EXISTS chat_vote (
+  message_id TEXT NOT NULL, who TEXT NOT NULL, option INTEGER NOT NULL, created_at TEXT NOT NULL,
+  PRIMARY KEY (message_id, who)
+);
+CREATE TABLE IF NOT EXISTS team_channel (
+  id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES event(id), name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+  created_by TEXT, created_at TEXT NOT NULL, archived_at TEXT
+);
+CREATE TABLE IF NOT EXISTS team_channel_member (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (channel_id, user_id));
+CREATE TABLE IF NOT EXISTS team_task (
+  id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES event(id), title TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'todo',         -- todo | doing | done
+  priority TEXT NOT NULL DEFAULT 'normal',     -- low | normal | high | urgent
+  bucket TEXT NOT NULL DEFAULT 'General',      -- Logistics, Press, Committee prep...
+  committee_id TEXT, assignee_id TEXT, due_at TEXT, checklist TEXT NOT NULL DEFAULT '[]',
+  created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, done_at TEXT
+);
+CREATE TABLE IF NOT EXISTS schedule_item (
+  id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES event(id), title TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'session',        -- session | ceremony | break | social | deadline | meeting
+  audience TEXT NOT NULL DEFAULT 'all',        -- all | delegates | staff | eb
+  committee_id TEXT, starts_at TEXT NOT NULL, ends_at TEXT, location TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS qa_question (
+  id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES event(id), committee_id TEXT NOT NULL, registration_id TEXT NOT NULL,
+  body TEXT NOT NULL, anonymous INTEGER NOT NULL DEFAULT 0, answer TEXT, answered_by TEXT, answered_at TEXT,
+  hidden_at TEXT, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS qa_vote (question_id TEXT NOT NULL, registration_id TEXT NOT NULL, PRIMARY KEY (question_id, registration_id));
+CREATE TABLE IF NOT EXISTS committee_note (
+  id TEXT PRIMARY KEY, event_id TEXT NOT NULL, committee_id TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '',
+  updated_by TEXT, updated_at TEXT NOT NULL, created_at TEXT NOT NULL
+);
+
+-- Discord-style extras: custom status, slow mode per channel, and "Interested" on schedule items.
+CREATE TABLE IF NOT EXISTS chat_status (event_id TEXT NOT NULL, who TEXT NOT NULL, emoji TEXT NOT NULL DEFAULT '', text TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL, PRIMARY KEY (event_id, who));
+CREATE TABLE IF NOT EXISTS chat_channel_setting (event_id TEXT NOT NULL, channel TEXT NOT NULL, slow_seconds INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (event_id, channel));
+CREATE TABLE IF NOT EXISTS schedule_rsvp (item_id TEXT NOT NULL, who TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (item_id, who));
+
 -- Social media planner: posts the team plans or has published, per platform.
 CREATE TABLE IF NOT EXISTS social_post (
   id TEXT PRIMARY KEY, event_id TEXT NOT NULL REFERENCES event(id), platform TEXT NOT NULL, caption TEXT NOT NULL,

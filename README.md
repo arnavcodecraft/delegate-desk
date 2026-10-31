@@ -138,6 +138,39 @@ Configuration lives in environment variables or a `.env` file next to `package.j
 
 New organisers collect fees into their own accounts. The deployment's Razorpay/Cashfree keys and the sandbox test gateway are only offered in the original (main) workspace.
 
+## Teamspace: Teams- and Discord-style collaboration
+
+The conference chat grew into a workspace for everyone at the conference. Each role sees only what it should.
+
+**Everyone, in every chat**
+- Reply in threads, react (👍 ❤️ 😂 😮 👏 🙏 ✅), and @mention people (type `@` to pick from the channel's members).
+- Edit or delete your own messages, search a channel, and see pinned messages.
+- Formatting: `**bold**`, `*italic*`, `` `code` ``, `||spoiler||` and clickable links.
+- See who's online and who's typing, open the member list, and set a custom status such as "✍️ Drafting the resolution".
+- Role tags appear on names: **EB**, **Secretariat** and **Organiser**.
+
+**Delegates** (from their delegate link, `/r/<token>/chat`, with a left rail)
+- **Activity:** mentions, replies, announcements and answers from the EB, plus what's coming up.
+- **Chat:** All committees, their committee and private messages, with an @ badge where they were mentioned.
+- **Ask the EB:** Q&A for their own committee. Delegates can upvote, and can hide their name from other delegates (never from the EB).
+- **Schedule:** the conference calendar, filtered to them, with "Interested" on ceremonies and socials.
+
+**EB (chairs)**
+- A private **EB channel** for each committee, shared with the secretariat.
+- Announcements, polls and pins in their committee group.
+- Answering their committee's questions.
+- A **task board** for their committee.
+- An **EB notebook** of shared pages (session plan, caucus topics, awards shortlist). Two chairs can't overwrite each other's edits without noticing.
+
+**Organisers and the secretariat**
+- The **Whole team** channel and **team channels** (Logistics, Press, IT…) that only the chosen members can open.
+- **Announce to all groups** at once, and **slow mode** for busy delegate groups.
+- The **Planner-style task board** (To do, In progress, Done) with assignee, due date, priority, bucket, committee, checklist and drag and drop.
+- The **schedule editor**, with audiences: everyone, delegates, the team or one committee's EB.
+- Q&A across committees, and **Activity**: mentions, your tasks, waiting questions and what's next.
+
+The staff pages are **Chat** and **Teamspace** in the dashboard menu. Chairs only ever see their own committee. Private messages between delegates stay private unless reported.
+
 ## Site owner console (`/app/owner`)
 
 For the DelegateDesk team: an admin or superadmin of the main workspace, signed in with two-factor.

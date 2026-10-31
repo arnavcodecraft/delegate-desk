@@ -231,7 +231,7 @@ await step('conference chat: All committees, a private message, and the team mod
 });
 async function chatFlow(tokA, tokB) {
   // On a phone the chat opens on the list of conversations; tap one to open it.
-  await delA.goto(`${B}/r/${tokA}/chat`); await delA.waitForSelector('text=Conference chat');
+  await delA.goto(`${B}/r/${tokA}/chat`); await delA.waitForSelector('.ch-item');
   await delA.locator('.ch-item', { hasText: 'All committees' }).click();
   await delA.getByLabel('Message', { exact: true }).fill('Hello from Aisha'); await delA.getByRole('button', { name: 'Send' }).click();
   await delA.waitForSelector('.ch-bubble:has-text("Hello from Aisha")');
@@ -247,7 +247,7 @@ async function chatFlow(tokA, tokB) {
   await delA.locator('.ch-item', { hasText: '(Bilal)' }).first().click(); await delA.waitForSelector('.ch-bubble:has-text("Co-sponsor our paper?")');
   await delA.screenshot({ path: `${SHOTS}/10-chat.png` });
   // The team sees the group message, but not the private one.
-  await org.goto(`${B}/app/chat`); await org.waitForSelector('.ch-bubble:has-text("Hello from Aisha")');
+  await org.goto(`${B}/app/chat`); await org.locator('.ch-item', { hasText: 'All committees' }).click(); await org.waitForSelector('.ch-bubble:has-text("Hello from Aisha")');
   if (await org.locator('.ch-bubble:has-text("Co-sponsor our paper?")').count()) throw new Error('team can read a private message');
   await delA.goto(`${B}/r/${tokA}`); await delB.goto(`${B}/r/${tokB}`);
 }

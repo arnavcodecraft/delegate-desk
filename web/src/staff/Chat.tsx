@@ -1,41 +1,54 @@
-import { useState } from 'react';
-import { Hash, Users, Flag, Settings2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Hash, Users, Flag, Settings2, Lock, Megaphone, Briefcase } from 'lucide-react';
 import { api } from '../api';
 import { dt } from '../format';
-import { Alert, Btn, Loading, Switch, Tabs, useAsync, useToast } from '../ui';
+import { Alert, Btn, Field, Loading, Modal, Switch, Tabs, useAsync, useToast } from '../ui';
 import { PageHead, useStaff } from './Shell';
-import { ChatPane, type ChatMessage } from '../chat/ChatPane';
+import { ChatPane, chatApi, StatusPicker } from '../chat/ChatPane';
+
+const seen = (k: string) => { try { return localStorage.getItem(`dd-staff-seen-${k}`) ?? ''; } catch { return ''; } };
+const markSeen = (k: string) => { try { localStorage.setItem(`dd-staff-seen-${k}`, new Date().toISOString()); } catch { /* private mode */ } };
 
 /** Conference chat for the team: read and post in the group channels, remove messages, handle reports, switch chat on or off. */
 export function ChatAdmin() {
-  const { eventId, can, me } = useStaff();
+  const { eventId, can } = useStaff();
   const toast = useToast();
   const data = useAsync<any>(() => api.get(`/api/admin/events/${eventId}/chat`), [eventId]);
   const [tab, setTab] = useState<'chat' | 'reports' | 'settings'>('chat');
   const [active, setActive] = useState<string | null>(null);
+  const [broadcast, setBroadcast] = useState(false);
+  const base = `/api/admin/events/${eventId}/chat`;
+  const capi = useMemo(() => chatApi(base, { close: (id) => api.post(`${base}/messages/${id}/close`, {}) }), [base]);
   if (!data.data) return <Loading />;
   const d = data.data;
-  const channel = active ?? d.channels[0]?.key ?? null;
-  const ch = d.channels.find((c: any) => c.key === channel);
+  const all = [...d.team, ...d.channels];
+  const channel = active ?? d.team[0]?.key ?? d.channels[0]?.key ?? null;
+  const ch = all.find((c: any) => c.key === channel);
   const admin = can('event.config');
-  const base = `/api/admin/events/${eventId}/chat`;
+  const isTeam = channel === 'staff' || channel?.startsWith('eb:') || channel?.startsWith('team:');
   return (
     <div className="stack">
-      <PageHead title="Chat" subtitle="Delegates talk in an All committees group, a group for each committee, and private messages. You can post in the groups and remove messages; private messages are only visible to you when reported." />
-      {!d.settings.enabled && <Alert tone="warn">Chat is turned off: delegates don't see it. {admin && <>Turn it on under <b>Settings</b> below.</>}</Alert>}
-      <Tabs value={tab} onChange={setTab} tabs={[{ key: 'chat', label: 'Groups' }, ...(admin ? [{ key: 'reports' as const, label: `Reports${d.reports ? ` (${d.reports})` : ''}` }, { key: 'settings' as const, label: 'Settings' }] : [])]} />
+      <PageHead title="Chat" subtitle="Your team’s channels (the whole team, a private EB channel per committee, and channels like Logistics or Press) and the delegate groups. Reply in threads, react, @mention, pin, post announcements and run polls. Private messages between delegates are only visible to you when reported.">
+        {admin && <Btn icon={Megaphone} onClick={() => setBroadcast(true)}>Announce to all groups</Btn>}
+      </PageHead>
+      {!d.settings.enabled && <Alert tone="warn">Chat is turned off for delegates: they don't see it. Your team channels still work. {admin && <>Turn it on under <b>Settings</b> below.</>}</Alert>}
+      <Tabs value={tab} onChange={setTab} tabs={[{ key: 'chat', label: 'Channels' }, ...(admin ? [{ key: 'reports' as const, label: `Reports${d.reports ? ` (${d.reports})` : ''}` }, { key: 'settings' as const, label: 'Settings' }] : [])]} />
       {tab === 'chat' && (!channel ? <Alert tone="info">Add committees first; each one gets its own group.</Alert> : <div className="ch-card ch-shell staff">
         <aside className="ch-side">
-          <div className="ch-group-label">Groups</div>
-          {d.channels.map((c: any) => <button key={c.key} className={`ch-item ${channel === c.key ? 'on' : ''}`} onClick={() => setActive(c.key)}>{c.key === 'all' ? <Users size={16} /> : <Hash size={16} />}<span>{c.label}</span><span className="ch-count">{c.count || ''}</span></button>)}
+          <div className="ch-me">You appear as <b>{d.me.name}</b><StatusPicker base={base} status={d.me.status} onSaved={data.reload} /></div>
+          <div className="ch-group-label">Your team</div>
+          {d.team.map((c: any) => <button key={c.key} className={`ch-item ${channel === c.key ? 'on' : ''}`} onClick={() => { markSeen(`${eventId}-${c.key}`); setActive(c.key); }} title={c.description}>{c.key === 'staff' ? <Users size={16} /> : c.key.startsWith('eb:') ? <Lock size={16} /> : <Briefcase size={16} />}<span>{c.label}</span>{c.mention && c.key !== channel && c.mention > seen(`${eventId}-${c.key}`) ? <i className="ch-at" aria-label="You were mentioned">@</i> : <span className="ch-count">{c.count || ''}</span>}</button>)}
+          <div className="ch-group-label">Delegate groups</div>
+          {d.channels.map((c: any) => <button key={c.key} className={`ch-item ${channel === c.key ? 'on' : ''}`} onClick={() => { markSeen(`${eventId}-${c.key}`); setActive(c.key); }}>{c.key === 'all' ? <Users size={16} /> : <Hash size={16} />}<span>{c.label}</span>{c.mention && c.key !== channel && c.mention > seen(`${eventId}-${c.key}`) ? <i className="ch-at" aria-label="You were mentioned">@</i> : <span className="ch-count">{c.count || ''}</span>}</button>)}
+          {admin && <p className="ch-rules">Set up channels like Logistics or Press under <a href="/app/teamspace?tab=channels">Teamspace → Team channels</a>.</p>}
         </aside>
         <div className="ch-main">
-          <ChatPane key={channel} channel={channel} title={ch?.label ?? ''} subtitle={channel === 'all' ? 'Every delegate at the conference' : 'Delegates in this committee'} meId={me.user!.id}
-            load={(c, since) => api.get<ChatMessage[]>(`${base}/messages?channel=${encodeURIComponent(c)}${since ? `&since=${encodeURIComponent(since)}` : ''}`)}
-            post={async (body) => { await api.post(base, { channel, body }); }}
-            onRemove={async (m) => { if (!confirm(`Remove this message from ${m.sender_name}?`)) return; try { await api.post(`${base}/messages/${m.id}/remove`); toast('Removed', 'ok'); } catch (e: any) { toast(e.message, 'bad'); } }} />
+          <ChatPane key={channel} channel={channel} title={ch?.label ?? ''} api={capi} meWho={d.me.who} rich moderator slowOptions={d.slowOptions} onSlow={(seconds) => api.post(`${base}/slow`, { channel, seconds }).then(() => toast(seconds ? `Slow mode: ${seconds} s` : 'Slow mode off', 'ok'))}
+            subtitle={ch?.description ?? (channel === 'all' ? 'Every delegate at the conference' : 'Delegates in this committee and its EB')}
+            onRemove={isTeam ? undefined : async (m) => { if (!confirm(`Remove this message from ${m.sender_name}?`)) return; try { await api.post(`${base}/messages/${m.id}/remove`); toast('Removed', 'ok'); } catch (e: any) { toast(e.message, 'bad'); } }} />
         </div>
       </div>)}
+      {broadcast && <Broadcast base={base} count={d.channels.length} onClose={() => setBroadcast(false)} />}
       {tab === 'reports' && <Reports base={base} onChange={data.reload} />}
       {tab === 'settings' && <div className="card stack">
         <h3><Settings2 className="icon" /> Chat settings</h3>
@@ -62,4 +75,20 @@ function Reports({ base, onChange }: { base: string; onChange: () => void }) {
         <Btn size="sm" onClick={async () => { await api.post(`${base}/reports/${r.id}/resolve`); list.reload(); onChange(); }}>Mark as handled</Btn>
       </div>}
     </div>))}</div>;
+}
+
+function Broadcast({ base, count, onClose }: { base: string; count: number; onClose: () => void }) {
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  return (
+    <Modal title="Announce to all delegate groups" onClose={onClose} footer={<><Btn onClick={onClose}>Cancel</Btn><Btn kind="primary" icon={Megaphone} disabled={busy || !body.trim()} onClick={async () => { setBusy(true); try { const r = await api.post<any>(`${base}/broadcast`, { title, body }); toast(`Posted in ${r.sent} groups`, 'ok'); onClose(); } catch (e: any) { toast(e.message, 'bad'); } finally { setBusy(false); } }}>Post in {count} groups</Btn></>}>
+      <div className="stack">
+        <Field label="Headline (optional)"><input value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} placeholder="Opening ceremony moved to 9:30" /></Field>
+        <Field label="Announcement"><textarea rows={4} maxLength={2000} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
+        <p className="small muted" style={{ margin: 0 }}>It appears highlighted in All committees and in every committee group, and in each delegate’s Activity.</p>
+      </div>
+    </Modal>
+  );
 }

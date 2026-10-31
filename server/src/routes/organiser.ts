@@ -22,7 +22,7 @@ import { receive } from '../services/payments.ts';
 import { createSession, sessionsFor, sessionRow, rotateChairKey, sessionMarks } from '../services/live.ts';
 import { currentWorkspace } from '../platform.ts';
 import { checkUpload } from '../services/scanner.ts';
-import { staffChannels, staffRead, staffPost, removeMessage, reports as chatReports, resolveReport } from '../services/chat.ts';
+import { removeMessage, reports as chatReports, resolveReport } from '../services/chat.ts';
 import { socialOverview, addPost, updatePost, removePost, campaignTag } from '../services/social.ts';
 
 export const organiserRouter = express.Router();
@@ -194,10 +194,7 @@ organiserRouter.post('/live/:code/awards', requirePerm('attendance.mark'), h((re
 }));
 
 // ---------- conference chat (moderation) ----------
-const chatAs = (req: any) => (committeeScope(req) ? 'EB' : 'Secretariat');
-organiserRouter.get('/events/:id/chat', requirePerm('lists.read', 'messages.read'), h((req) => staffChannels(P(req).id, committeeScope(req))));
-organiserRouter.get('/events/:id/chat/messages', requirePerm('lists.read', 'messages.read'), h((req) => staffRead(P(req).id, String(req.query.channel ?? 'all'), committeeScope(req), req.query.since ? String(req.query.since) : null)));
-organiserRouter.post('/events/:id/chat', requirePerm('lists.read', 'messages.read'), h((req) => staffPost(P(req).id, String(req.body?.channel ?? ''), { id: req.auth!.user.id, name: req.auth!.user.name }, chatAs(req), committeeScope(req), String(req.body?.body ?? ''))));
+// Reading and posting (with threads, reactions, polls and team channels) live in routes/teamspace.ts.
 organiserRouter.post('/events/:id/chat/messages/:mid/remove', requirePerm('lists.read', 'messages.read'), h((req) => { removeMessage(P(req).id, P(req).mid, req.auth!.user.id, committeeScope(req)); audit('chat.remove', 'chat_message', P(req).mid); return { ok: true }; }));
 organiserRouter.get('/events/:id/chat/reports', requirePerm('messages.read', 'event.config'), h((req) => { if (committeeScope(req)) throw forbidden(); return chatReports(P(req).id); }));
 organiserRouter.post('/events/:id/chat/reports/:rid/resolve', requirePerm('messages.read', 'event.config'), h((req) => { if (committeeScope(req)) throw forbidden(); resolveReport(P(req).id, P(req).rid, req.auth!.user.id); return { ok: true }; }));
