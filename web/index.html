@@ -16,50 +16,77 @@
       window.__ddLoadStart = Date.now();
     </script>
     <style>
-      /* The loading screen: shown on every load until the app is ready (and at least a moment, so it never flashes). */
-      #dd-preload { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; background: #f7f9fd; color: #0b1630; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; transition: opacity .45s ease, visibility .45s; }
-      :root[data-theme="dark"] #dd-preload { background: #040817; color: #eef3ff; }
-      @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #dd-preload { background: #040817; color: #eef3ff; } }
-      #dd-preload.done { opacity: 0; visibility: hidden; }
-      .ddp { display: grid; justify-items: center; gap: 22px; text-align: center; padding: 24px; }
-      .ddp-stage { position: relative; width: 168px; height: 168px; }
-      .ddp-globe { position: absolute; inset: 0; animation: ddp-spin 9s linear infinite; }
-      .ddp-globe ellipse, .ddp-globe circle, .ddp-globe path { fill: none; stroke: #1f4fe0; stroke-width: 2; opacity: .35; }
-      .ddp-globe .rim { opacity: .9; stroke-width: 2.5; }
-      :root[data-theme="dark"] .ddp-globe * { stroke: #7aa2ff; }
-      @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ddp-globe * { stroke: #7aa2ff; } }
-      .ddp-gavel { position: absolute; left: 50%; top: 50%; width: 92px; height: 92px; margin: -58px 0 0 -30px; transform-origin: 78% 82%; animation: ddp-strike 1.4s cubic-bezier(.5, 0, .3, 1) infinite; }
-      .ddp-block { position: absolute; left: 50%; bottom: 30px; width: 62px; height: 14px; margin-left: -31px; border-radius: 4px; background: linear-gradient(180deg, #c98a4b, #8a5524); box-shadow: 0 4px 0 #6d3f16; }
-      .ddp-ring { position: absolute; left: 50%; bottom: 36px; width: 20px; height: 8px; margin-left: -10px; border-radius: 50%; border: 2px solid #f2b53a; opacity: 0; animation: ddp-ring 1.4s ease-out infinite; }
-      .ddp-word { display: flex; gap: 10px; align-items: center; font-weight: 800; font-size: 22px; letter-spacing: -.01em; }
-      .ddp-word i { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: #fff; font-style: normal; font-size: 17px; background: linear-gradient(135deg, #0b2a8a, #1f4fe0 55%, #4d84ff); box-shadow: 0 8px 18px -8px rgb(31 79 224 / .8); }
-      .ddp-line { height: 20px; font-size: 14.5px; font-weight: 600; opacity: .62; position: relative; width: 280px; }
-      .ddp-line span { position: absolute; inset: 0; opacity: 0; animation: ddp-say 6.4s infinite; }
-      .ddp-line span:nth-child(2) { animation-delay: 1.6s; } .ddp-line span:nth-child(3) { animation-delay: 3.2s; } .ddp-line span:nth-child(4) { animation-delay: 4.8s; }
-      .ddp-bar { width: 180px; height: 4px; border-radius: 999px; background: rgb(31 79 224 / .15); overflow: hidden; }
-      .ddp-bar i { display: block; height: 100%; width: 40%; border-radius: inherit; background: linear-gradient(90deg, #1f4fe0, #a77bff); animation: ddp-bar 1.3s ease-in-out infinite; }
-      @keyframes ddp-spin { to { transform: rotate(360deg); } }
-      @keyframes ddp-strike { 0%, 100% { transform: rotate(-28deg); } 42% { transform: rotate(-28deg); } 58% { transform: rotate(8deg); } 66% { transform: rotate(2deg); } 78% { transform: rotate(-18deg); } }
-      @keyframes ddp-ring { 0%, 56% { opacity: 0; transform: scale(.6); } 60% { opacity: .9; } 100% { opacity: 0; transform: scale(3.4); } }
-      @keyframes ddp-say { 0% { opacity: 0; transform: translateY(6px); } 5%, 22% { opacity: 1; transform: none; } 27%, 100% { opacity: 0; transform: translateY(-6px); } }
-      @keyframes ddp-bar { 0% { transform: translateX(-110%); } 100% { transform: translateX(260%); } }
-      @media (prefers-reduced-motion: reduce) { .ddp-globe, .ddp-gavel, .ddp-ring, .ddp-bar i { animation: none; } .ddp-line span { animation: none; } .ddp-line span:first-child { opacity: 1; } }
+      /* The loading screen: on every load, the DelegateDesk mark and name fill with water as the app loads. */
+      #dd-preload { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; background: radial-gradient(1200px 700px at 50% 40%, #12286b 0%, #0a1a4d 45%, #060f33 100%); color: #f3efe6; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; transition: opacity .55s ease, visibility .55s, transform .55s ease; }
+      #dd-preload.done { opacity: 0; visibility: hidden; transform: scale(1.03); }
+      .ddp-logo { width: min(560px, 90vw); height: auto; overflow: visible; }
+      .ddp-ghost { fill: rgb(243 239 230 / .13); }
+      .ddp-ghost-line { fill: none; stroke: rgb(243 239 230 / .28); stroke-width: 1.4; }
+      .ddp-water { transition: transform .35s cubic-bezier(.3, .7, .4, 1); }
+      .ddp-wave { animation: ddp-flow 2.6s linear infinite; }
+      .ddp-wave.b { animation-duration: 3.8s; animation-direction: reverse; }
+      .ddp-swash { stroke: #f2b53a; stroke-width: 5; stroke-linecap: round; fill: none; stroke-dasharray: 160; stroke-dashoffset: 160; opacity: 0; transition: stroke-dashoffset .5s ease, opacity .1s; }
+      #dd-preload.full .ddp-swash { stroke-dashoffset: 0; opacity: 1; }
+      .ddp-foot { position: absolute; left: 50%; bottom: max(28px, 6vh); transform: translateX(-50%); display: grid; justify-items: center; gap: 10px; }
+      .ddp-pct { font-size: 26px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; font-stretch: condensed; }
+      .ddp-pct small { font-size: .8em; margin-left: 4px; font-weight: 700; opacity: .85; }
+      .ddp-track { width: 140px; height: 3px; border-radius: 3px; background: rgb(243 239 230 / .2); overflow: hidden; }
+      .ddp-fill { height: 100%; width: 0; background: #f3efe6; border-radius: inherit; transition: width .35s cubic-bezier(.3, .7, .4, 1); }
+      .ddp-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+      @keyframes ddp-flow { from { transform: translateX(0); } to { transform: translateX(-200px); } }
+      @media (prefers-reduced-motion: reduce) { .ddp-wave { animation: none; } }
     </style>
   </head>
   <body>
-    <div id="dd-preload" role="status" aria-live="polite" aria-label="Loading DelegateDesk">
-      <div class="ddp">
-        <div class="ddp-stage" aria-hidden="true">
-          <svg class="ddp-globe" viewBox="0 0 168 168"><circle class="rim" cx="84" cy="84" r="76"/><ellipse cx="84" cy="84" rx="30" ry="76"/><ellipse cx="84" cy="84" rx="56" ry="76"/><path d="M8 84h152M18 46h132M18 122h132"/></svg>
-          <span class="ddp-ring"></span>
-          <span class="ddp-block"></span>
-          <svg class="ddp-gavel" viewBox="0 0 92 92"><rect x="8" y="16" width="42" height="22" rx="6" transform="rotate(-30 29 27)" fill="#8a5524"/><rect x="12" y="20" width="34" height="14" rx="4" transform="rotate(-30 29 27)" fill="#c98a4b"/><rect x="34" y="34" width="8" height="52" rx="4" transform="rotate(-30 38 60)" fill="#a8692f"/></svg>
-        </div>
-        <div class="ddp-word"><i>D</i>DelegateDesk</div>
-        <div class="ddp-line"><span>Calling the roll…</span><span>Opening the speakers list…</span><span>The chair recognises the delegate…</span><span>Order in the committee…</span></div>
-        <div class="ddp-bar"><i></i></div>
-      </div>
+    <div id="dd-preload" role="progressbar" aria-label="Loading DelegateDesk" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <svg class="ddp-logo" viewBox="0 0 560 150" aria-hidden="true">
+        <defs>
+          <clipPath id="ddp-clip">
+            <rect x="8" y="27" width="96" height="96" rx="26" />
+            <text x="128" y="101" font-size="70" font-weight="800" textLength="424" lengthAdjust="spacingAndGlyphs" letter-spacing="-2">DelegateDesk</text>
+          </clipPath>
+          <mask id="ddp-d"><rect x="0" y="0" width="560" height="150" fill="#fff" /><text x="56" y="99" font-size="64" font-weight="800" text-anchor="middle" fill="#000">D</text></mask>
+        </defs>
+        <!-- The empty outline -->
+        <g mask="url(#ddp-d)"><rect class="ddp-ghost" x="8" y="27" width="96" height="96" rx="26" /></g>
+        <text class="ddp-ghost" x="128" y="101" font-size="70" font-weight="800" textLength="424" lengthAdjust="spacingAndGlyphs" letter-spacing="-2">DelegateDesk</text>
+        <rect class="ddp-ghost-line" x="8" y="27" width="96" height="96" rx="26" />
+        <!-- The water, rising as the app loads -->
+        <g clip-path="url(#ddp-clip)">
+          <g mask="url(#ddp-d)">
+            <g class="ddp-water" id="ddp-water" transform="translate(0 130)">
+              <path class="ddp-wave b" fill="#7aa2ff" opacity=".55" d="M0 8 Q 50 -4 100 8 T 200 8 T 300 8 T 400 8 T 500 8 T 600 8 T 700 8 T 800 8 V 200 H 0 Z" />
+              <path class="ddp-wave" fill="#f3efe6" d="M0 12 Q 50 2 100 12 T 200 12 T 300 12 T 400 12 T 500 12 T 600 12 T 700 12 T 800 12 V 200 H 0 Z" />
+            </g>
+          </g>
+        </g>
+        <path class="ddp-swash" d="M396 128 C 450 118, 505 116, 548 122" />
+      </svg>
+      <div class="ddp-foot"><div class="ddp-pct"><span id="ddp-num">0</span><small>%</small></div><div class="ddp-track"><div class="ddp-fill" id="ddp-fill"></div></div></div>
+      <span class="ddp-sr">Loading DelegateDesk</span>
     </div>
+    <script>
+      // The loading screen's progress: it climbs while the app loads, waits for the app (and at least a moment), fills to 100%, then fades.
+      (function () {
+        var el = document.getElementById('dd-preload'), water = document.getElementById('ddp-water'), num = document.getElementById('ddp-num'), fill = document.getElementById('ddp-fill');
+        var MIN = 2200, start = window.__ddLoadStart || Date.now(), pct = 0, ready = false, finished = false;
+        function show(p) {
+          pct = p; var r = Math.round(p);
+          num.textContent = r; fill.style.width = r + '%'; el.setAttribute('aria-valuenow', r);
+          // Water from below the logo (y 130) to above it (y 18).
+          water.setAttribute('transform', 'translate(0 ' + (130 - p * 1.12).toFixed(1) + ')');
+        }
+        var t = setInterval(function () {
+          var e = Date.now() - start;
+          var target = ready && e >= MIN ? 100 : Math.min(94, 94 * (1 - Math.exp(-e / 1300)));
+          var step = Math.max(0.3, (target - pct) * 0.1); show(pct + step > target ? target : pct + step);
+          if (pct >= 100 && !finished) { finished = true; clearInterval(t); el.classList.add('full'); setTimeout(function () { el.classList.add('done'); setTimeout(function () { el.remove(); }, 650); }, 600); }
+        }, 40);
+        window.__ddDone = function () { ready = true; };
+        // Never leave someone stuck behind it.
+        setTimeout(function () { ready = true; }, 9000);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

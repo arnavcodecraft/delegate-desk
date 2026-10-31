@@ -150,11 +150,5 @@ createRoot(document.getElementById('root')!).render(
   <React.StrictMode><BrowserRouter><ToastHost><SiteGate><App /></SiteGate></ToastHost></BrowserRouter></React.StrictMode>,
 );
 
-// The loading screen (in index.html) stays for at least 1.6 seconds on every load, then fades once the app has drawn.
-const MIN_LOADER_MS = 1600;
-requestAnimationFrame(() => requestAnimationFrame(() => {
-  const el = document.getElementById('dd-preload');
-  if (!el) return;
-  const started = (window as any).__ddLoadStart ?? Date.now();
-  setTimeout(() => { el.classList.add('done'); setTimeout(() => el.remove(), 600); }, Math.max(0, MIN_LOADER_MS - (Date.now() - started)));
-}));
+// The loading screen (in index.html) fills to 100% once the app has drawn, then fades.
+requestAnimationFrame(() => requestAnimationFrame(() => (window as any).__ddDone?.()));
