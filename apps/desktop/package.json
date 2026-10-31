@@ -20,7 +20,7 @@
   "build": {
     "appId": "app.delegatedesk.desktop",
     "productName": "DelegateDesk",
-    "artifactName": "DelegateDesk-${version}-${os}-${arch}.${ext}",
+    "artifactName": "DelegateDesk-${os}-${arch}.${ext}",
     "directories": {
       "output": "dist",
       "buildResources": "build"

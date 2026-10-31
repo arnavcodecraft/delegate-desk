@@ -8,13 +8,9 @@ if not exist node_modules (
   call npm install || (pause & exit /b 1)
 )
 if not exist web\dist\index.html call npm run build
-if not exist data\delegatedesk.db (
-  echo Loading demo data...
-  call npm run seed -- --demo
-)
 echo.
 echo DelegateDesk is starting at http://localhost:8080
-echo List a conference at http://localhost:8080/list  -  staff sign-in: desk@example.org / ChangeMe!2026
+echo List your first conference at http://localhost:8080/list
 echo Keep this window open. Close it to stop the app.
 echo.
 start "" cmd /c "timeout /t 6 >nul & start http://localhost:8080/"

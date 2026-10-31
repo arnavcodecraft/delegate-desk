@@ -4,7 +4,7 @@
   "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
   "forwardPorts": [8080],
   "portsAttributes": { "8080": { "label": "DelegateDesk", "onAutoForward": "openBrowser" } },
-  "postCreateCommand": "npm ci && npm run build && npm run seed -- --demo",
+  "postCreateCommand": "npm ci && npm run build",
   "postStartCommand": "git pull --ff-only || true; npm install",
   "postAttachCommand": "ALLOW_SANDBOX=1 ALLOW_DEV_CODES=1 npm start",
   "secrets": {

@@ -9,7 +9,6 @@ import { api } from '../api';
 import { PlatformShell } from './Shell';
 import { Flag } from './art';
 import { ConfCard } from './Explore';
-import { DOWNLOADS_URL } from '../data/site';
 
 /** The home page: what DelegateDesk is, who it is for, and how to start. */
 export function Home() {
@@ -378,7 +377,7 @@ function Apps() {
     <section className="hm-sec">
       <div className="hm-in hm-apps">
         <div><div className="hm-eyebrow">Apps</div><h2>On every device in the room</h2><p>Install it on Android, Windows, Mac or Linux, or add it to your home screen from the browser. Chairs, delegates and organisers all use the same app.</p>
-          <div className="hm-ctas left"><a className="hm-btn primary" href={DOWNLOADS_URL} target="_blank" rel="noopener noreferrer"><Smartphone />Download the apps</a><Link to="/get-the-app" className="hm-btn ghost">Which one do I need?</Link></div></div>
+          <div className="hm-ctas left"><Link className="hm-btn primary" to="/download"><Smartphone />Download the apps</Link><Link to="/download" className="hm-btn ghost">Which one do I need?</Link></div></div>
         <div className="hm-devices" aria-hidden>{([['Android', Smartphone], ['Windows', Monitor], ['macOS', Laptop], ['Linux', Monitor], ['Web', Globe]] as const).map(([d, I]) => <span key={d}><I />{d}</span>)}</div>
       </div>
     </section>

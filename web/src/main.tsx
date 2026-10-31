@@ -77,6 +77,7 @@ function App() {
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/services" element={<ServicesPage />} />
       <Route path="/get-the-app" element={<AppDownloadPage />} />
+      <Route path="/download" element={<AppDownloadPage />} />
       <Route path="/app-settings" element={<AppSettingsPage />} />
       <Route path="/delegation/:token" element={<DelegationPortal />} />
       <Route path="/referrer/:token" element={<ReferrerStatement />} />

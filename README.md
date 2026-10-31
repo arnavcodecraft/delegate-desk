@@ -10,7 +10,7 @@ GitHub stores the code; a Node.js host runs it. Pick one:
 | Option | What you get | How |
 |---|---|---|
 | **Render (recommended for a live site)** | A permanent public address that redeploys every time you push to GitHub | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/arnavcodecraft/delegate-desk) Fill in `BASE_URL` (the address Render gives you, or your Cloudflare address), `GEMINI_API_KEY`, and `BREVO_API_KEY` + `MAIL_FROM` for sign-up emails. Leave `PROXY_SECRET` empty unless you put Cloudflare Pages in front. |
-| **GitHub Codespaces** | The whole app running inside GitHub, for you and your team to try | On the repository page: **Code → Codespaces → Create codespace**. It installs, loads the demo data and opens the app. Add `GEMINI_API_KEY` under Settings → Secrets and variables → Codespaces for AI. |
+| **GitHub Codespaces** | The whole app running inside GitHub, for you and your team to try | On the repository page: **Code → Codespaces → Create codespace**. It installs and opens the app, empty and ready for your first conference. Add `GEMINI_API_KEY` under Settings → Secrets and variables → Codespaces for AI. |
 | **Your own PC** | Free, from a download of this repository | Download the ZIP (Code → Download ZIP), unzip, double-click `start.bat`. Add a `.env` with `GEMINI_API_KEY=…` for AI. |
 
 Every push runs the type checks, all tests and a production build (GitHub Actions, `.github/workflows/ci.yml`).
@@ -27,11 +27,12 @@ Never commit `.env` or API keys: `.gitignore` keeps them out. Put keys in Render
 
 ## Quick start
 
-Needs Node.js 22.13 or newer (Windows, macOS or Linux). On Windows you can just double-click `start.bat`: it installs, loads the demo on first run, starts the app and opens the browser.
+Needs Node.js 22.13 or newer (Windows, macOS or Linux). On Windows you can just double-click `start.bat`: it installs, starts the app (empty, ready for your first conference) and opens the browser.
 
 ```bash
 npm install
-npm run seed -- --demo     # demo organisation, event BGYS27, 45 sample delegates, payments, expenses
+npm run seed -- --demo     # optional: demo organisation, event BGYS27, 45 sample delegates, payments, expenses
+npm run reset -- --yes     # delete every conference, account and upload (keeps a backup copy)
 npm run build              # build the web app
 npm start                  # http://localhost:8080   (set ALLOW_SANDBOX=1 to use the test gateway in production mode)
 # or: npm run dev          # API on :8080 with reload + Vite on :5173

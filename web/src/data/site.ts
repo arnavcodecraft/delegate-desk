@@ -8,7 +8,7 @@ export const DOWNLOADS_URL = 'https://github.com/arnavcodecraft/delegate-desk/re
 export interface TeamMember { name: string; role: string; bio?: string; photo?: string; linkedin?: string }
 
 export const TEAM: TeamMember[] = [
-  // { name: 'Your Name', role: 'Founder', bio: 'One or two lines about you.', photo: '/team/you.jpg', linkedin: 'https://www.linkedin.com/in/you' },
+  { name: 'Arnav Gupta', role: 'Founder & Managing Director', bio: 'Started DelegateDesk to give Model UN organisers, chairs and delegates one place to run conferences and prepare for committee.', photo: '/team/arnav-gupta.jpg' },
 ];
 
 export const SERVICE_DETAILS: Record<string, { tagline: string; points: string[]; ask: ('role' | 'when' | 'size' | 'conference' | 'city' | 'level')[] }> = {

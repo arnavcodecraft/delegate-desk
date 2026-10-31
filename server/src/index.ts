@@ -54,6 +54,10 @@ export function createApp() {
     if (req.method !== 'GET' && req.headers['x-dd'] !== '1') return next(new HttpError(403, 'Missing request header'));
     next();
   });
+  // App downloads from this site: each link sends the file straight from the latest release (no repository page).
+  const DOWNLOADS: Record<string, string> = { android: 'DelegateDesk-android.apk', windows: 'DelegateDesk-win-x64.exe', mac: 'DelegateDesk-mac-universal.dmg', linux: 'DelegateDesk-linux-x86_64.AppImage', 'linux-deb': 'DelegateDesk-linux-amd64.deb' };
+  const downloadBase = (process.env.DOWNLOAD_BASE || 'https://github.com/arnavcodecraft/delegate-desk/releases/latest/download').replace(/\/+$/, '');
+  app.get('/download/:platform', (req, res, next) => { const f = DOWNLOADS[req.params.platform]; if (!f) return next(); res.redirect(302, `${downloadBase}/${f}`); });
   app.get('/api/health', (_req, res) => res.json({ ok: true, app: 'delegatedesk', version: VERSION, time: new Date().toISOString() }));
   // Behind Cloudflare Pages: with PROXY_SECRET set, only requests forwarded by the Pages worker are served.
   if (process.env.PROXY_SECRET) app.use('/api', (req, _res, next) => (req.headers['x-proxy-secret'] === process.env.PROXY_SECRET ? next() : next(new HttpError(403, 'Use the site address, not the server address'))));

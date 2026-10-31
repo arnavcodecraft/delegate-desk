@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowRight, BookOpen, Briefcase, CheckCircle2, ClipboardList, Download, Gavel, GraduationCap, Laptop, Mail, MessagesSquare, PlayCircle, Scale, ShieldCheck, Smartphone, Truck, UserRound, Users, Video } from 'lucide-react';
+import { ArrowRight, BookOpen, Briefcase, CheckCircle2, ClipboardList, Download, Gavel, Globe, GraduationCap, Laptop, Mail, MessagesSquare, PlayCircle, Scale, ShieldCheck, Smartphone, Truck, UserRound, Users, Video } from 'lucide-react';
 import { api } from '../api';
 import { PlatformShell } from './Shell';
-import { DOWNLOADS_URL, SERVICE_DETAILS, TEAM } from '../data/site';
+import { SERVICE_DETAILS, TEAM } from '../data/site';
 import { useInstall } from '../install';
 
 const SERVICE_ICON: Record<string, any> = { mentorship: UserRound, recorded: PlayCircle, batch: Video, logistics: Truck, eb: Gavel, consultancy: Scale };
@@ -57,7 +57,7 @@ export function TeamPage() {
       </section>
       {TEAM.length ? <section className="st-team">{TEAM.map((m) => (
         <div key={m.name} className="pf-card pad st-person">
-          <div className="st-photo">{m.photo ? <img src={m.photo} alt="" /> : <span>{m.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('')}</span>}</div>
+          <div className="st-photo"><span>{m.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('')}</span>{m.photo && <img src={m.photo} alt={m.name} onError={(e) => { e.currentTarget.style.display = 'none'; }} />}</div>
           <b>{m.name}</b><span className="pf-small pf-muted">{m.role}</span>
           {m.bio && <p className="pf-small">{m.bio}</p>}
           {m.linkedin && <a className="pf-small" href={m.linkedin} target="_blank" rel="noopener noreferrer">LinkedIn</a>}
@@ -193,34 +193,64 @@ function ServiceForm({ service, title, onClose }: { service: string; title: stri
 }
 
 /** Get the app: install from the browser, or download the Android and desktop apps. */
+type Plat = 'android' | 'windows' | 'mac' | 'linux' | 'ios' | 'other';
+const detect = (): Plat => {
+  const ua = navigator.userAgent;
+  if (/android/i.test(ua)) return 'android';
+  if (/iphone|ipad|ipod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+  if (/windows/i.test(ua)) return 'windows';
+  if (/mac os x|macintosh/i.test(ua)) return 'mac';
+  if (/linux/i.test(ua)) return 'linux';
+  return 'other';
+};
+const PLATFORMS: { key: Exclude<Plat, 'ios' | 'other'>; name: string; file: string; note: string; icon: any; extra?: { href: string; label: string } }[] = [
+  { key: 'android', name: 'Android', file: 'APK · phones and tablets', note: 'Open the file when it finishes. If Android asks, allow installing apps from your browser.', icon: Smartphone },
+  { key: 'windows', name: 'Windows', file: 'Installer (.exe) · Windows 10 and 11', note: 'If Windows shows “Windows protected your PC”, choose More info, then Run anyway.', icon: Laptop },
+  { key: 'mac', name: 'macOS', file: 'Disk image (.dmg) · Apple silicon and Intel', note: 'Drag DelegateDesk to Applications. The first time, right-click the app and choose Open.', icon: Laptop },
+  { key: 'linux', name: 'Linux', file: 'AppImage · most distributions', note: 'Make the file executable (chmod +x), then open it.', icon: Laptop, extra: { href: '/download/linux-deb', label: 'or the .deb for Ubuntu and Debian' } },
+];
+
+/** Download the apps from this site. Each button sends the file straight to the device. */
 export function AppDownloadPage() {
   const inst = useInstall();
+  const plat = useMemo(detect, []);
+  const mine = PLATFORMS.find((p) => p.key === plat);
   return (
     <PlatformShell>
-      <section className="st-hero">
-        <div className="pf-eyebrow">Get the app</div>
-        <h1 className="pf-h1 left">DelegateDesk on your phone and computer</h1>
-        <p className="pf-sub left">One app for organisers, chairs and delegates: notifications-ready, full screen, and one tap from your home screen.</p>
+      <section className="dl-hero">
+        <div className="pf-eyebrow">Download</div>
+        <h1 className="pf-h1">DelegateDesk for every device</h1>
+        <p className="pf-sub">The same app for organisers, chairs and delegates. It opens straight onto DelegateDesk: no setup, no store account.</p>
+        <div className="dl-main">
+          {mine ? <a className="pf-btn primary dl-big" href={`/download/${mine.key}`}><Download className="icon" />Download for {mine.name}</a>
+            : plat === 'ios' ? <div className="pf-note"><span>On iPhone and iPad, add DelegateDesk to your home screen: tap <b>Share</b>, then <b>Add to Home Screen</b>.</span></div>
+              : null}
+          {mine && <p className="pf-small pf-muted" style={{ margin: '10px 0 0' }}>{mine.file}</p>}
+        </div>
       </section>
-      <section className="st-grid3">
-        <div className="pf-card pad st-card">
-          <Download className="icon st-ic" /><b>Install from your browser</b>
-          <p>Works on Android, iPhone, iPad, Windows, Mac and Linux. Nothing to download from a store.</p>
-          {inst.installed ? <p className="pf-small" style={{ color: 'var(--pf-green)', marginTop: 10 }}><CheckCircle2 className="icon" style={{ width: 16, verticalAlign: -3 }} /> Installed on this device.</p>
-            : inst.canPrompt ? <button className="pf-btn primary sm" style={{ marginTop: 12 }} onClick={() => inst.prompt()}>Install DelegateDesk</button>
-              : inst.ios ? <p className="pf-small" style={{ marginTop: 10 }}>On iPhone or iPad: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>
-                : <p className="pf-small" style={{ marginTop: 10 }}>In Chrome or Edge: open the browser menu and choose <b>Install DelegateDesk</b> (or <b>Add to Home screen</b> on Android).</p>}
+      <section className="dl-grid">
+        {PLATFORMS.map((p) => (
+          <div key={p.key} className={`pf-card pad dl-card ${p.key === plat ? 'mine' : ''}`}>
+            <div className="dl-card-h"><span className="dl-ic"><p.icon className="icon" /></span><span><b>{p.name}</b><small>{p.file}</small></span>{p.key === plat && <span className="pf-tag green">This device</span>}</div>
+            <p>{p.note}</p>
+            <div className="dl-card-f"><a className={`pf-btn ${p.key === plat ? 'primary' : 'ghost'} sm`} href={`/download/${p.key}`}><Download className="icon" />Download</a>{p.extra && <a className="pf-btn link" href={p.extra.href}>{p.extra.label}</a>}</div>
+          </div>
+        ))}
+        <div className="pf-card pad dl-card">
+          <div className="dl-card-h"><span className="dl-ic"><Globe className="icon" /></span><span><b>Any browser</b><small>Install from the web · iPhone, iPad, Chromebook</small></span></div>
+          <p>Add DelegateDesk to your home screen or desktop straight from the browser. It updates by itself.</p>
+          <div className="dl-card-f">{inst.installed ? <span className="pf-small" style={{ color: 'var(--pf-green)' }}><CheckCircle2 className="icon" style={{ width: 16, verticalAlign: -3 }} /> Installed on this device</span>
+            : inst.canPrompt ? <button className="pf-btn ghost sm" onClick={() => inst.prompt()}><Download className="icon" />Install</button>
+              : <span className="pf-small pf-muted">{inst.ios ? 'Tap Share, then Add to Home Screen.' : 'Browser menu → Install DelegateDesk.'}</span>}</div>
         </div>
-        <div className="pf-card pad st-card">
-          <Smartphone className="icon st-ic" /><b>Android app</b>
-          <p>The APK for Android phones and tablets. Allow installing from your browser when Android asks.</p>
-          <a className="pf-btn ghost sm" style={{ marginTop: 12 }} href={DOWNLOADS_URL} target="_blank" rel="noopener noreferrer">Download for Android</a>
-        </div>
-        <div className="pf-card pad st-card">
-          <Laptop className="icon st-ic" /><b>Windows, Mac and Linux</b>
-          <p>A desktop app with its own window and taskbar icon: an installer for Windows, a disk image for Mac and an AppImage for Linux.</p>
-          <a className="pf-btn ghost sm" style={{ marginTop: 12 }} href={DOWNLOADS_URL} target="_blank" rel="noopener noreferrer">Download for desktop</a>
-        </div>
+      </section>
+      <section className="dl-faq pf-card pad">
+        <b>Good to know</b>
+        <ul>
+          <li>The apps open on the DelegateDesk home page. Sign in once and your conferences, Prep work and live sessions are there.</li>
+          <li>Prep and the MUN Masterclass work even with a weak connection; conference features need the internet.</li>
+          <li>The apps are not code-signed yet, so Windows and macOS show a one-time warning. The steps above get you past it.</li>
+        </ul>
       </section>
     </PlatformShell>
   );

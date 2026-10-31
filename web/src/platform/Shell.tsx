@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import {
-  ArrowRight, BookOpen, Briefcase, ChevronDown, Compass, Gavel, GraduationCap, HeartHandshake, Info, LayoutDashboard, Mail, Menu, Plus, Settings, Smartphone, Users, Wallet, X, type LucideIcon,
+  ArrowRight, BookOpen, Briefcase, ChevronDown, CircleHelp, Compass, Gavel, Globe2, GraduationCap, HeartHandshake, IdCard, Info, LayoutDashboard, Mail, Menu, MessageSquareText, Moon, Newspaper,
+  PenLine, Plus, Radio, Search, Settings, ShieldCheck, Smartphone, Sun, Swords, UserRound, Users, Wallet, Wrench, X, type LucideIcon,
 } from 'lucide-react';
 import { api } from '../api';
 import { nativeApp, serverUrl } from '../native';
+import { applyTheme, savedTheme } from '../ui';
 
 export interface PfMe { user: { name: string; email: string } | null; perms?: string[]; workspace?: { id: string; name: string }; mfaPending?: boolean }
 let cached: PfMe | null = null;
@@ -41,22 +43,45 @@ const MENUS: { key: string; label: string; items: MenuItem[]; foot?: { to: strin
     { to: '/session', icon: Gavel, t: 'Live committee room', d: 'Roll call, speakers, motions, voting and scores' },
     { to: '/prep', icon: GraduationCap, t: 'Prep studio', d: 'Research, papers, speeches and practice' },
     { to: '/prep/learn', icon: BookOpen, t: 'MUN Masterclass', d: 'The complete course, free for everyone' },
-    { to: '/get-the-app', icon: Smartphone, t: 'Apps', d: 'Android, Windows, Mac, Linux and the web' },
+    { to: '/download', icon: Smartphone, t: 'Download the apps', d: 'Android, Windows, Mac and Linux' },
+    { to: '/#pricing', icon: Wallet, t: 'Pricing', d: 'Free for organisers and delegates' },
   ], foot: { to: '/#features', t: 'See every feature' } },
+  { key: 'delegates', label: 'Delegates', items: [
+    { to: '/prep/research', icon: Search, t: 'Research', d: 'Briefs with sources you can check' },
+    { to: '/prep/write', icon: PenLine, t: 'Write', d: 'Position papers, speeches, resolutions' },
+    { to: '/prep/coach', icon: MessageSquareText, t: 'Coach', d: 'Chair-style feedback on your drafts' },
+    { to: '/prep/practice', icon: Swords, t: 'Practice', d: 'Negotiate, crisis and mock debates' },
+    { to: '/prep/countries', icon: Globe2, t: 'Countries', d: 'All 193 members, blocs and comparisons' },
+    { to: '/prep/tools', icon: Wrench, t: 'MUN tools', d: 'Timer, vote and quorum calculators' },
+    { to: '/prep/discover', icon: Newspaper, t: 'Daily briefing', d: 'World news for your agenda' },
+    { to: '/account/cv', icon: IdCard, t: 'MUN CV', d: 'A CV that fills itself in' },
+  ], foot: { to: '/prep', t: 'Open Prep' } },
   { key: 'conferences', label: 'Conferences', items: [
     { to: '/explore', icon: Compass, t: 'Explore conferences', d: 'Find and apply to conferences near you' },
     { to: '/jobs', icon: Briefcase, t: 'Job Board', d: 'Chair, press and secretariat roles' },
+    { to: '/session', icon: Radio, t: 'Join a live session', d: 'Enter the code your chair gives you' },
     { to: '/list', icon: Plus, t: 'List your conference', d: 'Free, live in about ten minutes' },
+    { to: '/account', icon: UserRound, t: 'My account', d: 'Your registrations, saved events and CV' },
   ] },
   { key: 'company', label: 'Company', items: [
-    { to: '/services', icon: HeartHandshake, t: 'Services', d: 'Mentorship, classes, logistics, EB, legal and finance' },
     { to: '/about', icon: Info, t: 'About', d: 'Why we are building DelegateDesk' },
     { to: '/team', icon: Users, t: 'Team', d: 'The people behind it' },
+    { to: '/services', icon: HeartHandshake, t: 'Services', d: 'Mentorship, classes, logistics, EB, legal and finance' },
     { to: '/contact', icon: Mail, t: 'Contact', d: 'Questions, partnerships and support' },
+    { to: '/#faq', icon: CircleHelp, t: 'FAQ', d: 'Answers to common questions' },
+    { to: '/privacy', icon: ShieldCheck, t: 'Privacy', d: 'How we look after your data' },
   ] },
 ];
 
 /** The public frame: the top bar with menus, the page, and the footer. `bare` lets a page run full width (the home page). */
+/** Switch between light and dark (starts from whatever the device is showing). */
+function ThemeToggle() {
+  const effective = (): 'light' | 'dark' => { const t = savedTheme(); return t === 'system' ? (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t; };
+  const [t, setT] = useState(effective);
+  const I = t === 'dark' ? Sun : Moon;
+  return <button type="button" className="sx-theme" onClick={() => { const n = t === 'dark' ? 'light' : 'dark'; applyTheme(n); setT(n); }} aria-label={t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={t === 'dark' ? 'Light mode' : 'Dark mode'}><I className="icon" /></button>;
+}
+
 export function PlatformShell({ children, bare, dark }: { children: React.ReactNode; bare?: boolean; dark?: boolean }) {
   const me = useMe();
   const person = usePerson();
@@ -96,17 +121,17 @@ export function PlatformShell({ children, bare, dark }: { children: React.ReactN
                 </div>
               </div>
             ))}
-            <NavLink to="/prep" className="sx-link">Prep</NavLink>
             <Link to="/#pricing" className="sx-link">Pricing</Link>
+            <NavLink to="/download" className="sx-link">Download</NavLink>
           </div>
           <span className="spacer" />
+          <ThemeToggle />
           {account}
           {cta}
           <button className="sx-burger" aria-label={drawer ? 'Close menu' : 'Open menu'} aria-expanded={drawer} onClick={() => setDrawer(!drawer)}>{drawer ? <X className="icon" /> : <Menu className="icon" />}</button>
         </nav>
         {drawer && <div className="sx-drawer">
           {MENUS.map((m) => <div key={m.key} className="sx-drawer-group"><div className="sx-drawer-k">{m.label}</div>{m.items.map((it) => <Link key={it.t} to={it.to} className="sx-item"><span className="sx-ic"><it.icon className="icon" /></span><span><b>{it.t}</b><small>{it.d}</small></span></Link>)}</div>)}
-          <div className="sx-drawer-group"><Link to="/#pricing" className="sx-item"><span className="sx-ic"><Wallet className="icon" /></span><span><b>Pricing</b><small>Free for organisers and delegates</small></span></Link></div>
           {nativeApp && <div className="sx-drawer-group"><Link to="/app-settings" className="sx-item"><span className="sx-ic"><Settings className="icon" /></span><span><b>App settings</b><small>{serverUrl() ? serverUrl().replace(/^https:\/\//, '') : 'Connect your DelegateDesk server'}</small></span></Link></div>}
           <div className="sx-drawer-cta">{!signedIn && !person?.person && <Link to="/login" className="pf-btn ghost">Sign in</Link>}{signedIn ? <Link to="/app" className="pf-btn primary">Dashboard</Link> : <Link to="/list" className="pf-btn primary">List your conference</Link>}</div>
         </div>}
@@ -117,13 +142,13 @@ export function PlatformShell({ children, bare, dark }: { children: React.ReactN
           <div className="sx-foot-brand">
             <Link to="/" className="brand"><span className="mark">D</span><span>DelegateDesk</span></Link>
             <p>Run your conference. Prepare for committee. One account for organisers, delegates and chairs.</p>
-            <Link to="/get-the-app" className="sx-foot-app"><Smartphone className="icon" />Get the app</Link>
+            <Link to="/download" className="sx-foot-app"><Smartphone className="icon" />Get the app</Link>
           </div>
           {[
-            ['Product', [['/list', 'Organiser dashboard'], ['/session', 'Live committee room'], ['/prep', 'Prep studio'], ['/prep/learn', 'MUN Masterclass'], ['/get-the-app', 'Apps']]],
+            ['Product', [['/list', 'Organiser dashboard'], ['/session', 'Live committee room'], ['/prep', 'Prep studio'], ['/prep/learn', 'MUN Masterclass'], ['/download', 'Download the apps'], ['/#pricing', 'Pricing']]],
+            ['Delegates', [['/prep/research', 'Research'], ['/prep/write', 'Write'], ['/prep/practice', 'Practice'], ['/prep/countries', 'Countries'], ['/account/cv', 'MUN CV']]],
             ['Conferences', [['/explore', 'Explore'], ['/jobs', 'Job Board'], ['/list', 'List your conference'], ['/login', 'Sign in']]],
-            ['Company', [['/about', 'About'], ['/team', 'Team'], ['/services', 'Services'], ['/contact', 'Contact']]],
-            ['Legal', [['/privacy', 'Privacy']]],
+            ['Company', [['/about', 'About'], ['/team', 'Team'], ['/services', 'Services'], ['/contact', 'Contact'], ['/privacy', 'Privacy']]],
           ].map(([h, links]) => <nav key={h as string} aria-label={h as string}><b>{h as string}</b>{(links as string[][]).map(([to, l]) => <Link key={l} to={to}>{l}</Link>)}</nav>)}
         </div>
         <div className="sx-foot-bottom"><span>© {new Date().getFullYear()} DelegateDesk</span>{nativeApp ? <Link to="/app-settings">App settings</Link> : <span>Made for Model UN</span>}</div>
