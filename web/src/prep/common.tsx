@@ -18,7 +18,7 @@ export function usePrepMeta() {
 }
 export const refreshPrep = () => window.dispatchEvent(new Event('dd:prep'));
 
-const NAV: [string, string][] = [['/prep', 'Overview'], ['/prep/research', 'Research'], ['/prep/write', 'Write'], ['/prep/coach', 'Coach'], ['/prep/practice', 'Practice'], ['/prep/learn', 'Learn'], ['/prep/discover', 'Discover'], ['/prep/countries', 'Countries'], ['/prep/tools', 'Tools']];
+const NAV: [string, string][] = [['/prep', 'Overview'], ['/prep/research', 'Research'], ['/prep/write', 'Write'], ['/prep/coach', 'Coach'], ['/prep/practice', 'Practice'], ['/prep/learn', 'Learn'], ['/prep/videos', 'Videos'], ['/prep/discover', 'Discover'], ['/prep/countries', 'Countries'], ['/prep/tools', 'Tools']];
 export function PrepShell({ children, title, subtitle, actions }: { children: React.ReactNode; title?: string; subtitle?: React.ReactNode; actions?: React.ReactNode }) {
   return (
     <PlatformShell>

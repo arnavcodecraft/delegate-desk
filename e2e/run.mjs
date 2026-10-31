@@ -498,6 +498,17 @@ await step('home page: hero, menus, audiences, pricing and FAQ', org, async () =
   if (await m.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw new Error('home page scrolls sideways on a phone');
 });
 
+await step('video lectures: three tutors, captions and chapters', org, async () => {
+  const v = await newPage('videos');
+  await v.goto(`${B}/prep/videos`); await v.waitForSelector('.vl-item >> nth=2');
+  if (await v.locator('.vl-item').count() !== 3) throw new Error('expected three lectures');
+  const ok = await v.evaluate(async () => { const el = document.querySelector('video'); el.muted = true; await el.play(); await new Promise((r) => setTimeout(r, 1200)); return el.currentTime > 0.3 && el.textTracks.length === 1; });
+  if (!ok) throw new Error('the lecture video did not play');
+  await v.locator('.vl-chapters button').nth(2).click(); await v.waitForTimeout(400);
+  if (await v.evaluate(() => document.querySelector('video').currentTime) < 5) throw new Error('chapter did not seek');
+  await v.locator('.vl-item').nth(2).click(); await v.waitForSelector('text=Sara Thomas');
+});
+
 // ============ demo workspace: every role, every screen ============
 async function signIn(email) {
   const p = await newPage(email);

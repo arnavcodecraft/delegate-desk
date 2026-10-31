@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import {
   ArrowRight, BookOpen, Briefcase, ChevronDown, CircleHelp, Compass, Gavel, Globe2, GraduationCap, HeartHandshake, IdCard, Info, LayoutDashboard, Mail, Menu, MessageSquareText, Moon, Newspaper,
-  PenLine, Plus, Radio, Search, Settings, ShieldCheck, Smartphone, Sun, Swords, UserRound, Users, Wallet, Wrench, X, type LucideIcon,
+  PenLine, PlayCircle, Plus, Radio, Search, Settings, ShieldCheck, Smartphone, Sun, Swords, UserRound, Users, Wallet, Wrench, X, type LucideIcon,
 } from 'lucide-react';
 import { api } from '../api';
 import { nativeApp, serverUrl } from '../native';
@@ -47,6 +47,7 @@ const MENUS: { key: string; label: string; items: MenuItem[]; foot?: { to: strin
     { to: '/#pricing', icon: Wallet, t: 'Pricing', d: 'Free for organisers and delegates' },
   ], foot: { to: '/#features', t: 'See every feature' } },
   { key: 'delegates', label: 'Delegates', items: [
+    { to: '/prep/videos', icon: PlayCircle, t: 'Video lectures', d: 'Procedure, writing and speaking, by tutors' },
     { to: '/prep/research', icon: Search, t: 'Research', d: 'Briefs with sources you can check' },
     { to: '/prep/write', icon: PenLine, t: 'Write', d: 'Position papers, speeches, resolutions' },
     { to: '/prep/coach', icon: MessageSquareText, t: 'Coach', d: 'Chair-style feedback on your drafts' },

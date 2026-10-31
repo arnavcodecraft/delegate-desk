@@ -38,6 +38,7 @@ import { PlatformInbox } from './staff/Inbox';
 import { registerServiceWorker } from './install';
 import { installNativeFetch } from './native';
 import { AppSettingsPage } from './platform/AppSettings';
+import { VideosPage } from './prep/Videos';
 import { AppDownloadPage } from './platform/Site';
 import { SocialDashboard } from './staff/Social';
 import { ChatAdmin } from './staff/Chat';
@@ -96,6 +97,7 @@ function App() {
       <Route path="/prep/coach" element={<CoachPage />} />
       <Route path="/prep/practice" element={<PracticePage />} />
       <Route path="/prep/learn" element={<LearnHome />} />
+      <Route path="/prep/videos" element={<VideosPage />} />
       <Route path="/prep/learn/exam" element={<ExamPage />} />
       <Route path="/prep/learn/certificate" element={<CertificatePage />} />
       <Route path="/prep/learn/:id" element={<LessonPage />} />
@@ -142,3 +144,12 @@ registerServiceWorker();
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode><BrowserRouter><ToastHost><App /></ToastHost></BrowserRouter></React.StrictMode>,
 );
+
+// The loading screen (in index.html) stays for at least 1.6 seconds on every load, then fades once the app has drawn.
+const MIN_LOADER_MS = 1600;
+requestAnimationFrame(() => requestAnimationFrame(() => {
+  const el = document.getElementById('dd-preload');
+  if (!el) return;
+  const started = (window as any).__ddLoadStart ?? Date.now();
+  setTimeout(() => { el.classList.add('done'); setTimeout(() => el.remove(), 600); }, Math.max(0, MIN_LOADER_MS - (Date.now() - started)));
+}));
