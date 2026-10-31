@@ -403,7 +403,7 @@ await step('organiser cannot see the demo organiser\'s conference', org, async (
 
 await step('one account, both roles: the organiser opens their delegate profile and comes back', org, async () => {
   await org.goto(B + '/app/overview'); await org.getByTestId('delegate-profile').click();
-  await org.waitForSelector('text=/Hello, /'); await org.waitForSelector('text=MUN CV');
+  await org.waitForSelector('text=/Hello, /'); await org.waitForSelector('main >> text=MUN CV');
   await org.locator('.pf-pagehead').getByRole('link', { name: 'Organiser dashboard' }).click(); await org.waitForURL(/\/app/);
 });
 
@@ -429,7 +429,7 @@ await step('delegate account: save a conference, build a MUN CV with links', org
   await s.goto(`${B}/c/${slug}`); await s.getByRole('button', { name: 'Save', exact: true }).click(); await s.waitForSelector('button:has-text("Saved")');
   await s.goto(`${B}/account`); await s.waitForSelector('text=Saved conferences'); await s.waitForSelector(`.pf-saved-row`);
   await s.getByLabel('Instagram').fill('@aisha.mun'); await s.getByRole('button', { name: 'Save links' }).click(); await s.waitForSelector('text=Links saved');
-  await s.goto(`${B}/account/cv`); await s.waitForSelector('text=MUN CV');
+  await s.goto(`${B}/account/cv`); await s.waitForSelector('main >> text=MUN CV');
   await s.getByRole('button', { name: 'Add an entry' }).first().click();
   await s.getByLabel('Title').fill('Springdales MUN 2026'); await s.getByLabel('Role').fill('France, UNSC · Best Delegate');
   await s.getByRole('button', { name: 'Save', exact: true }).click();
@@ -467,7 +467,7 @@ await step('anyone can run a session at /session; a delegate joins and asks to s
   await p.goto(`${B}/session`); await p.getByRole('button', { name: 'New session' }).click();
   await p.locator('.pf-editor input.pf-input').first().fill('General Assembly');
   await p.getByRole('button', { name: /^P5/ }).click(); await p.getByRole('button', { name: 'Add committee' }).click();
-  await p.waitForURL(/\/chair/); await p.waitForSelector('.rm-code'); const sc = (await p.locator('.rm-code').innerText()).trim();
+  await p.waitForURL(/\/chair/); await p.waitForSelector('.rm-code'); const sc = (await p.locator('.rm-code').innerText()).match(/\b[A-Z2-9]{6}\b/)[0];
   await p.getByRole('tab', { name: 'Roll call' }).click(); await p.getByRole('button', { name: 'All present' }).click(); await p.getByRole('button', { name: 'Finish roll call' }).click();
   const d = await newPage('session delegate', true); await d.goto(`${B}/session/${sc}`); await d.getByRole('button', { name: /France/ }).click();
   await d.getByRole('button', { name: 'Ask to speak' }).click(); await p.waitForSelector('text=Asking to speak', { timeout: 6000 });
@@ -476,10 +476,10 @@ await step('anyone can run a session at /session; a delegate joins and asks to s
   await p.waitForSelector('.rm-now h1:has-text("France")'); await p.getByRole('button', { name: 'Start' }).click(); await p.waitForSelector('button:has-text("Pause")');
   await d.waitForSelector('.rd-stage h1:has-text("France")', { timeout: 6000 });
   // Room chat: the delegate writes to everyone, the chair reads it.
-  await d.getByRole('button', { name: 'Chat' }).click(); await d.locator('.rm-chat-item', { hasText: 'Everyone' }).click(); await d.getByLabel('Message…').fill('France requests a moderated caucus.'); await d.getByRole('button', { name: 'Send' }).click();
+  await d.getByRole('button', { name: 'Chat' }).click(); await d.getByLabel('Message…').fill('France requests a moderated caucus.'); await d.getByRole('button', { name: 'Send' }).click();
   await p.getByRole('button', { name: 'Chat' }).click(); await p.waitForSelector('text=France requests a moderated caucus.', { timeout: 8000 }); await p.keyboard.press('Escape');
   // Settings save instantly and delegates submit a working paper.
-  await p.getByTestId('room-settings').click(); await p.locator('.rm-set-nav > button', { hasText: 'Voting' }).click(); await p.getByRole('button', { name: /2\/3 Supermajority/ }).click();
+  await p.getByTestId('room-settings').click(); await p.locator('.rm-set-nav > button', { hasText: 'Voting' }).click(); await p.getByRole('radio', { name: /2\/3 Supermajority/ }).click();
   await p.waitForSelector('.rm-choice.on:has-text("2/3 Supermajority")'); await p.keyboard.press('Escape'); await p.locator('.rm-settings .rm-x').click().catch(() => {});
   await d.keyboard.press('Escape'); await d.getByRole('button', { name: 'Documents' }).click(); await d.getByRole('button', { name: /Submit new/ }).click();
   await d.getByLabel('Title *').fill('WP 1: Ocean data sharing'); await d.getByRole('button', { name: 'Submit', exact: true }).click(); await d.waitForSelector('text=WP 1: Ocean data sharing');
@@ -504,7 +504,7 @@ async function signIn(email) {
   await p.goto(`${B}/login`); await p.getByLabel('Email').fill(email); await p.getByLabel('Password').fill('ChangeMe!2026'); await p.getByRole('button', { name: 'Sign in' }).click();
   await p.waitForTimeout(900);
   if (await p.getByLabel('6-digit code').count()) { const sec = (await p.locator('.mono').first().innerText()).trim(); await p.getByLabel('6-digit code').fill(totp(sec)); await p.getByRole('button', { name: /Turn on/ }).click(); }
-  await p.waitForURL(/\/app/); return p;
+  await p.waitForURL(/\/app/); await p.waitForSelector('.side a.nav'); return p;
 }
 for (const email of ['admin@example.org', 'cfo@example.org', 'accounts@example.org', 'desk@example.org', 'chair.unsc@example.org', 'auditor@example.org']) {
   const p = await signIn(email);

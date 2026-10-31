@@ -18,7 +18,7 @@
 .pf-btn.primary { background: linear-gradient(180deg, #4d7dff, var(--pf-brand)); box-shadow: 0 12px 26px -14px rgb(31 79 224 / .95), inset 0 1px 0 rgb(255 255 255 / .28), inset 0 0 0 1px rgb(255 255 255 / .08); }
 .pf-btn.ghost { border-color: transparent; box-shadow: var(--ring), var(--lift); }
 .pf-btn.ghost:hover { box-shadow: 0 0 0 1px var(--pf-line-2), var(--lift); }
-.pf-btn.ai, .btn.ai { position: relative; color: #fff !important; border-color: transparent !important; background-image: var(--aurora) !important; background-size: 150% 150% !important; box-shadow: 0 14px 30px -14px rgb(167 123 255 / .9), inset 0 0 0 1.5px rgb(255 255 255 / .55) !important; animation: pm-aur 8s ease infinite; }
+.pf-btn.ai, .btn.ai { color: #fff !important; border-color: transparent !important; background-image: var(--aurora) !important; background-size: 150% 150% !important; box-shadow: 0 14px 30px -14px rgb(167 123 255 / .9), inset 0 0 0 1.5px rgb(255 255 255 / .55) !important; animation: pm-aur 8s ease infinite; }
 @keyframes pm-aur { 50% { background-position: 100% 100%; } }
 .pf-card { border-color: transparent; box-shadow: var(--ring), var(--lift); border-radius: 22px; }
 .pf-input { border-radius: 14px; transition: border-color .15s, box-shadow .15s, background .15s; }
